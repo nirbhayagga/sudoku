@@ -56,7 +56,7 @@
     for (let i = 0; i < 81; i++) cellNotes.push(new Set());
 
     // ── State ──────────────────────────────────────────────────────────
-    let mode = 'solver';
+    let mode = 'play';
     let solved = false;
     let solverExampleIdx = 0;
 
@@ -559,6 +559,13 @@
         renderNotes(action.idx);
         wrappers[action.idx].classList.remove('user-error', 'correct-check');
         recheckAllConflicts();
+
+        // Move selection to the undone cell
+        if (isTouchDevice) {
+            selectCellTouch(action.idx);
+        } else {
+            inputs[action.idx].focus();
+        }
         updateDigitHighlight();
         debounceSave();
     }
@@ -573,6 +580,13 @@
         renderNotes(action.idx);
         wrappers[action.idx].classList.remove('user-error', 'correct-check');
         recheckAllConflicts();
+
+        // Move selection to the redone cell
+        if (isTouchDevice) {
+            selectCellTouch(action.idx);
+        } else {
+            inputs[action.idx].focus();
+        }
         updateDigitHighlight();
         debounceSave();
     }
@@ -1373,5 +1387,5 @@
     // ══════════════════════════════════════════════════════════════════
 
     buildGrid();
-    inputs[0].focus();
+    switchMode('play');
 })();
