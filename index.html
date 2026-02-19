@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport"
+    content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="description"
+    content="Lightning-fast Sudoku solver and player with puzzle generation, pencil marks, hints, and more.">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#0a0a0f">
+  <title>Sudoku</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+  <header class="header">
+    <h1>Sudoku</h1>
+    <p id="subtitle">Constraint propagation &amp; backtracking — solves in &lt;1 ms</p>
+  </header>
+
+  <!-- Mode Toggle -->
+  <div class="mode-toggle" id="mode-toggle">
+    <button class="mode-tab active" data-mode="solver" id="tab-solver">Solver</button>
+    <button class="mode-tab" data-mode="play" id="tab-play">Play</button>
+    <div class="mode-indicator" id="mode-indicator"></div>
+  </div>
+
+  <main class="card" id="app">
+    <!-- 9x9 Grid -->
+    <div class="grid-container" id="grid"></div>
+
+    <!-- Solver Mode Controls -->
+    <div class="controls" id="solver-controls">
+      <button class="btn btn-primary" id="btn-solve" title="Solve (Enter)">Solve</button>
+      <button class="btn" id="btn-example" title="Load example puzzle">Example</button>
+      <button class="btn" id="btn-paste" title="Import from text (Ctrl+I)">Import</button>
+      <button class="btn btn-danger" id="btn-clear" title="Clear grid (Esc)">Clear</button>
+    </div>
+
+    <!-- Play Mode Controls -->
+    <div class="controls" id="play-controls" style="display:none;">
+      <div class="difficulty-selector" id="difficulty-selector">
+        <button class="diff-btn active" data-diff="easy">Easy</button>
+        <button class="diff-btn" data-diff="medium">Medium</button>
+        <button class="diff-btn" data-diff="hard">Hard</button>
+        <button class="diff-btn" data-diff="expert">Expert</button>
+        <button class="diff-btn" data-diff="evil">Evil</button>
+        <button class="diff-btn diff-nightmare" data-diff="nightmare">Nightmare</button>
+      </div>
+      <div class="play-buttons">
+        <button class="btn btn-primary" id="btn-new-game">New Game</button>
+        <button class="btn btn-hint" id="btn-hint" title="Reveal one cell (H)">Hint</button>
+        <button class="btn" id="btn-notes-toggle" title="Toggle notes mode (N)">Notes: OFF</button>
+        <button class="btn" id="btn-check" title="Check for errors (Enter)">Check</button>
+        <button class="btn" id="btn-undo" title="Undo (Ctrl+Z)">Undo</button>
+        <button class="btn" id="btn-redo" title="Redo (Ctrl+Y)">Redo</button>
+        <button class="btn btn-danger" id="btn-reset" title="Reset to start (Esc)">Reset</button>
+      </div>
+    </div>
+
+    <!-- Status bar -->
+    <div class="status-bar">
+      <span class="status-msg" id="status">Click a cell and type a digit</span>
+      <div class="status-right">
+        <button class="stats-btn" id="btn-stats" title="View stats" style="display:none;">Stats</button>
+        <span class="game-timer" id="game-timer"></span>
+        <span class="solve-time" id="solve-time"></span>
+      </div>
+    </div>
+
+    <!-- On-screen number pad (mobile/tablet) -->
+    <div class="numpad" id="numpad">
+      <div class="numpad-row">
+        <button class="numpad-btn" data-digit="1">1</button>
+        <button class="numpad-btn" data-digit="2">2</button>
+        <button class="numpad-btn" data-digit="3">3</button>
+        <button class="numpad-btn" data-digit="4">4</button>
+        <button class="numpad-btn" data-digit="5">5</button>
+        <button class="numpad-btn" data-digit="6">6</button>
+        <button class="numpad-btn" data-digit="7">7</button>
+        <button class="numpad-btn" data-digit="8">8</button>
+        <button class="numpad-btn" data-digit="9">9</button>
+      </div>
+      <div class="numpad-row numpad-actions">
+        <button class="numpad-btn numpad-erase" data-digit="0">Erase</button>
+        <button class="numpad-btn numpad-notes" id="numpad-notes">Notes</button>
+      </div>
+    </div>
+  </main>
+
+  <!-- Paste/Import Modal -->
+  <div class="modal-overlay" id="modal-overlay">
+    <div class="modal">
+      <h2>Import Puzzle</h2>
+      <p>Paste an 81-character string using digits 1-9 and 0 or . for empty cells.<br>
+        You can also paste 9 lines of 9 digits.</p>
+      <textarea id="import-text"
+        placeholder="530070000600195000098000060800060003400803001700020006060000280000419005000080079"
+        spellcheck="false"></textarea>
+      <div class="modal-actions">
+        <button class="btn" id="btn-modal-cancel">Cancel</button>
+        <button class="btn btn-primary" id="btn-modal-import">Import</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Win overlay -->
+  <div class="win-overlay" id="win-overlay">
+    <div class="win-card">
+      <div class="win-icon">&#10003;</div>
+      <h2>Puzzle Complete!</h2>
+      <p id="win-details"></p>
+      <button class="btn btn-primary" id="btn-win-new">New Game</button>
+    </div>
+  </div>
+
+  <!-- Stats Modal -->
+  <div class="modal-overlay" id="stats-overlay">
+    <div class="modal stats-modal">
+      <h2>Statistics</h2>
+      <div id="stats-content"></div>
+      <div class="modal-actions">
+        <button class="btn btn-danger" id="btn-stats-reset">Reset Stats</button>
+        <button class="btn btn-primary" id="btn-stats-close">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Keyboard shortcuts -->
+  <details class="shortcuts">
+    <summary>Keyboard shortcuts</summary>
+    <div class="shortcuts-list">
+      <span class="shortcut"><kbd>1</kbd>-<kbd>9</kbd> Digit / Note</span>
+      <span class="shortcut"><kbd>0</kbd>/<kbd>Del</kbd> Clear cell</span>
+      <span class="shortcut"><kbd>Arrows</kbd> Navigate</span>
+      <span class="shortcut"><kbd>Enter</kbd> Solve / Check</span>
+      <span class="shortcut"><kbd>Esc</kbd> Clear / Reset</span>
+      <span class="shortcut"><kbd>N</kbd> Toggle notes</span>
+      <span class="shortcut"><kbd>H</kbd> Hint</span>
+      <span class="shortcut"><kbd>Ctrl+Z</kbd> Undo</span>
+      <span class="shortcut"><kbd>Ctrl+Y</kbd> Redo</span>
+      <span class="shortcut"><kbd>Ctrl+I</kbd> Import</span>
+    </div>
+  </details>
+
+  <script src="solver.js"></script>
+  <script src="generator.js"></script>
+  <script src="puzzle-bank.js"></script>
+  <script src="app.js"></script>
+</body>
+
+</html>
