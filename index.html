@@ -17,14 +17,39 @@
 <body>
 
   <header class="header">
-    <h1>Sudoku</h1>
-    <p id="subtitle">Constraint propagation &amp; backtracking — solves in &lt;1 ms</p>
+    <div class="header-top">
+      <div class="header-spacer"></div>
+      <div class="header-title">
+        <h1>Sudoku</h1>
+        <p id="subtitle">Select a difficulty and start playing</p>
+      </div>
+      <div class="theme-picker" id="theme-picker">
+        <button class="theme-btn" id="theme-toggle" title="Change theme" aria-label="Change theme">🎨</button>
+        <div class="theme-dropdown" id="theme-dropdown">
+          <button class="theme-option active" data-theme="midnight">
+            <span class="theme-swatch" style="background:#0a0a0f;border-color:#6366f1"></span>Midnight
+          </button>
+          <button class="theme-option" data-theme="sakura">
+            <span class="theme-swatch" style="background:#fef7f0;border-color:#ec4899"></span>Sakura
+          </button>
+          <button class="theme-option" data-theme="ocean">
+            <span class="theme-swatch" style="background:#0b1628;border-color:#06b6d4"></span>Ocean
+          </button>
+          <button class="theme-option" data-theme="forest">
+            <span class="theme-swatch" style="background:#091209;border-color:#22c55e"></span>Forest
+          </button>
+          <button class="theme-option" data-theme="arctic">
+            <span class="theme-swatch" style="background:#f8fafc;border-color:#6366f1"></span>Arctic
+          </button>
+        </div>
+      </div>
+    </div>
   </header>
 
   <!-- Mode Toggle -->
   <div class="mode-toggle" id="mode-toggle">
-    <button class="mode-tab active" data-mode="solver" id="tab-solver">Solver</button>
-    <button class="mode-tab" data-mode="play" id="tab-play">Play</button>
+    <button class="mode-tab active" data-mode="play" id="tab-play">Play</button>
+    <button class="mode-tab" data-mode="solver" id="tab-solver">Solver</button>
     <div class="mode-indicator" id="mode-indicator"></div>
   </div>
 

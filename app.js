@@ -46,6 +46,10 @@
     const btnStatsClose = document.getElementById('btn-stats-close');
     const btnStatsReset = document.getElementById('btn-stats-reset');
 
+    // Theme picker
+    const themeToggle = document.getElementById('theme-toggle');
+    const themeDropdown = document.getElementById('theme-dropdown');
+
     // ── Cell Data Structures ───────────────────────────────────────────
     // Each cell is a wrapper div containing an input and a notes grid
     const wrappers = [];    // 81 wrapper divs
@@ -821,9 +825,16 @@
             const clueCount = currentPuzzle.replace(/0/g, '').length;
             setStatus(`${label} — ${clueCount} clues`);
 
-            // Focus first empty cell
+            // Select first empty cell
             for (let i = 0; i < 81; i++) {
-                if (!inputs[i].value) { inputs[i].focus(); break; }
+                if (!inputs[i].value) {
+                    if (isTouchDevice) {
+                        selectCellTouch(i);
+                    } else {
+                        inputs[i].focus();
+                    }
+                    break;
+                }
             }
 
             deleteSavedGame();
@@ -844,7 +855,7 @@
             if (currentPuzzle[i] === '0') {
                 inputs[i].value = '';
                 wrappers[i].classList.remove('given', 'locked');
-                inputs[i].readOnly = false;
+                inputs[i].readOnly = isTouchDevice; // keep readOnly on touch
                 clearCellNotes(i);
             }
         }
@@ -1189,8 +1200,14 @@
     function switchMode(newMode) {
         if (newMode === mode) return;
 
-        // Save current play game before switching
-        if (mode === 'play' && gameActive) saveGame();
+        // Capture grid state before clearing (for Play → Solver puzzle retention)
+        let gridSnapshot = null;
+        if (mode === 'play' && newMode === 'solver') {
+            gridSnapshot = readGrid();
+            if (gameActive) saveGame();
+        } else if (mode === 'play' && gameActive) {
+            saveGame();
+        }
 
         mode = newMode;
         stopTimer();
@@ -1205,7 +1222,7 @@
 
         tabSolver.classList.toggle('active', mode === 'solver');
         tabPlay.classList.toggle('active', mode === 'play');
-        modeIndicator.classList.toggle('play', mode === 'play');
+        modeIndicator.classList.toggle('solver', mode === 'solver');
 
         solverControls.style.display = mode === 'solver' ? 'flex' : 'none';
         playControls.style.display = mode === 'play' ? 'flex' : 'none';
@@ -1214,7 +1231,14 @@
         if (mode === 'solver') {
             subtitleEl.textContent = 'Constraint propagation & backtracking — solves in <1 ms';
             gameTimerEl.textContent = '';
-            setStatus('Click a cell and type a digit');
+
+            // Restore the Play puzzle into Solver so user can solve it
+            if (gridSnapshot && gridSnapshot.replace(/0/g, '').length > 0) {
+                writeGrid(gridSnapshot, true);
+                setStatus('Puzzle loaded from Play mode — click Solve');
+            } else {
+                setStatus('Click a cell and type a digit');
+            }
         } else {
             subtitleEl.textContent = 'Select a difficulty and start playing';
             solveTimeEl.textContent = '';
@@ -1381,6 +1405,58 @@
             }
         });
     }
+
+    // ══════════════════════════════════════════════════════════════════
+    //  THEME SELECTOR
+    // ══════════════════════════════════════════════════════════════════
+
+    const THEME_COLORS = {
+        midnight: '#0a0a0f',
+        sakura: '#fef7f0',
+        ocean: '#0b1628',
+        forest: '#091209',
+        arctic: '#f8fafc'
+    };
+
+    function applyTheme(theme) {
+        if (theme && theme !== 'midnight') {
+            document.documentElement.setAttribute('data-theme', theme);
+        } else {
+            document.documentElement.removeAttribute('data-theme');
+        }
+        // Update meta theme-color for mobile browsers
+        const meta = document.querySelector('meta[name="theme-color"]');
+        if (meta) meta.setAttribute('content', THEME_COLORS[theme] || THEME_COLORS.midnight);
+
+        // Update active state in dropdown
+        themeDropdown.querySelectorAll('.theme-option').forEach(opt => {
+            opt.classList.toggle('active', opt.dataset.theme === theme);
+        });
+
+        try { localStorage.setItem('sudoku-theme', theme); } catch (e) { }
+    }
+
+    themeToggle.addEventListener('click', (e) => {
+        e.stopPropagation();
+        themeDropdown.classList.toggle('open');
+    });
+
+    themeDropdown.addEventListener('click', (e) => {
+        const opt = e.target.closest('.theme-option');
+        if (!opt) return;
+        e.stopPropagation();
+        applyTheme(opt.dataset.theme);
+        themeDropdown.classList.remove('open');
+    });
+
+    // Close dropdown when clicking elsewhere
+    document.addEventListener('click', () => {
+        themeDropdown.classList.remove('open');
+    });
+
+    // Restore saved theme
+    const savedTheme = localStorage.getItem('sudoku-theme') || 'midnight';
+    applyTheme(savedTheme);
 
     // ══════════════════════════════════════════════════════════════════
     //  INIT
