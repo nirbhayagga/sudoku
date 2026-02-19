@@ -1412,10 +1412,12 @@
 
     const THEME_COLORS = {
         midnight: '#0a0a0f',
-        sakura: '#fef7f0',
+        sakura: '#f5e1d8',
         ocean: '#0b1628',
         forest: '#091209',
-        arctic: '#f8fafc'
+        arctic: '#dce4ef',
+        naruto: '#0f0800',
+        wicked: '#050d08'
     };
 
     function applyTheme(theme) {

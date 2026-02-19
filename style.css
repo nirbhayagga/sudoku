@@ -75,25 +75,25 @@ body::before {
 
 /* ── Theme: Sakura (pink & cream) ─────────────────────────────────── */
 [data-theme="sakura"] {
-    --bg-primary: #fef7f0;
-    --bg-secondary: #fff1e6;
-    --bg-card: rgba(255, 240, 230, 0.85);
-    --bg-cell: rgba(0, 0, 0, 0.02);
-    --bg-cell-hover: rgba(236, 72, 153, 0.08);
-    --bg-cell-focus: rgba(236, 72, 153, 0.12);
-    --bg-cell-given: rgba(236, 72, 153, 0.08);
-    --bg-cell-solved: rgba(16, 185, 129, 0.08);
-    --border-subtle: rgba(0, 0, 0, 0.08);
-    --border-box: rgba(0, 0, 0, 0.2);
+    --bg-primary: #f5e1d8;
+    --bg-secondary: #f0d4ca;
+    --bg-card: rgba(240, 200, 185, 0.7);
+    --bg-cell: rgba(180, 80, 120, 0.05);
+    --bg-cell-hover: rgba(236, 72, 153, 0.12);
+    --bg-cell-focus: rgba(236, 72, 153, 0.18);
+    --bg-cell-given: rgba(236, 72, 153, 0.1);
+    --bg-cell-solved: rgba(16, 185, 129, 0.1);
+    --border-subtle: rgba(160, 80, 100, 0.12);
+    --border-box: rgba(120, 50, 70, 0.25);
     --border-focus: rgba(236, 72, 153, 0.6);
-    --text-primary: #44212a;
-    --text-secondary: #9b7082;
-    --text-muted: #c4a2b0;
+    --text-primary: #3d1520;
+    --text-secondary: #7a4a5c;
+    --text-muted: #b08898;
     --text-given: #be185d;
     --text-solved: #059669;
     --text-error: #e11d48;
     --text-hint: #d97706;
-    --text-note: #9b7082;
+    --text-note: #7a4a5c;
     --text-conflict: #ea580c;
     --accent: #ec4899;
     --accent-glow: rgba(236, 72, 153, 0.25);
@@ -107,8 +107,8 @@ body::before {
 
 [data-theme="sakura"] body::before {
     background:
-        radial-gradient(ellipse 600px 400px at 20% 20%, rgba(236, 72, 153, 0.1), transparent),
-        radial-gradient(ellipse 500px 350px at 80% 80%, rgba(251, 191, 36, 0.08), transparent);
+        radial-gradient(ellipse 600px 400px at 20% 20%, rgba(236, 72, 153, 0.12), transparent),
+        radial-gradient(ellipse 500px 350px at 80% 80%, rgba(251, 146, 60, 0.08), transparent);
 }
 
 /* ── Theme: Ocean (deep blue-teal) ────────────────────────────────── */
@@ -189,25 +189,25 @@ body::before {
 
 /* ── Theme: Arctic (clean light) ──────────────────────────────────── */
 [data-theme="arctic"] {
-    --bg-primary: #f8fafc;
-    --bg-secondary: #f1f5f9;
-    --bg-card: rgba(255, 255, 255, 0.85);
-    --bg-cell: rgba(0, 0, 0, 0.02);
-    --bg-cell-hover: rgba(71, 85, 105, 0.08);
-    --bg-cell-focus: rgba(99, 102, 241, 0.1);
-    --bg-cell-given: rgba(99, 102, 241, 0.06);
-    --bg-cell-solved: rgba(16, 185, 129, 0.08);
-    --border-subtle: rgba(0, 0, 0, 0.08);
-    --border-box: rgba(0, 0, 0, 0.22);
+    --bg-primary: #dce4ef;
+    --bg-secondary: #d0daea;
+    --bg-card: rgba(190, 205, 230, 0.65);
+    --bg-cell: rgba(99, 102, 241, 0.04);
+    --bg-cell-hover: rgba(99, 102, 241, 0.1);
+    --bg-cell-focus: rgba(99, 102, 241, 0.15);
+    --bg-cell-given: rgba(99, 102, 241, 0.08);
+    --bg-cell-solved: rgba(16, 185, 129, 0.1);
+    --border-subtle: rgba(60, 80, 140, 0.12);
+    --border-box: rgba(40, 60, 120, 0.25);
     --border-focus: rgba(99, 102, 241, 0.5);
-    --text-primary: #1e293b;
-    --text-secondary: #475569;
-    --text-muted: #94a3b8;
+    --text-primary: #1a2340;
+    --text-secondary: #3d4e72;
+    --text-muted: #7889a8;
     --text-given: #4338ca;
     --text-solved: #059669;
     --text-error: #dc2626;
     --text-hint: #d97706;
-    --text-note: #64748b;
+    --text-note: #4e6090;
     --text-conflict: #ea580c;
     --accent: #6366f1;
     --accent-glow: rgba(99, 102, 241, 0.2);
@@ -221,8 +221,84 @@ body::before {
 
 [data-theme="arctic"] body::before {
     background:
-        radial-gradient(ellipse 600px 400px at 20% 20%, rgba(99, 102, 241, 0.06), transparent),
-        radial-gradient(ellipse 500px 350px at 80% 80%, rgba(16, 185, 129, 0.04), transparent);
+        radial-gradient(ellipse 600px 400px at 20% 20%, rgba(99, 102, 241, 0.1), transparent),
+        radial-gradient(ellipse 500px 350px at 80% 80%, rgba(16, 185, 129, 0.06), transparent);
+}
+
+/* ── Theme: Naruto (orange & black) ───────────────────────────────── */
+[data-theme="naruto"] {
+    --bg-primary: #0f0800;
+    --bg-secondary: #1a0e02;
+    --bg-card: rgba(26, 14, 2, 0.8);
+    --bg-cell: rgba(255, 140, 0, 0.04);
+    --bg-cell-hover: rgba(255, 140, 0, 0.12);
+    --bg-cell-focus: rgba(255, 140, 0, 0.18);
+    --bg-cell-given: rgba(255, 140, 0, 0.1);
+    --bg-cell-solved: rgba(250, 204, 21, 0.1);
+    --border-subtle: rgba(255, 140, 0, 0.08);
+    --border-box: rgba(255, 140, 0, 0.2);
+    --border-focus: rgba(255, 140, 0, 0.6);
+    --text-primary: #fde4c8;
+    --text-secondary: #d4a06a;
+    --text-muted: #6b4520;
+    --text-given: #ff8c00;
+    --text-solved: #facc15;
+    --text-error: #ef4444;
+    --text-hint: #fbbf24;
+    --text-note: #d4a06a;
+    --text-conflict: #f87171;
+    --accent: #ff6b00;
+    --accent-glow: rgba(255, 107, 0, 0.35);
+    --success: #facc15;
+    --success-glow: rgba(250, 204, 21, 0.3);
+    --danger: #ef4444;
+    --hint-color: #fbbf24;
+    --hint-glow: rgba(251, 191, 36, 0.3);
+    --nightmare-color: #ef4444;
+}
+
+[data-theme="naruto"] body::before {
+    background:
+        radial-gradient(ellipse 600px 400px at 30% 30%, rgba(255, 107, 0, 0.12), transparent),
+        radial-gradient(ellipse 500px 350px at 70% 70%, rgba(220, 38, 38, 0.06), transparent);
+}
+
+/* ── Theme: Wicked (emerald & black) ──────────────────────────────── */
+[data-theme="wicked"] {
+    --bg-primary: #050d08;
+    --bg-secondary: #0a1a10;
+    --bg-card: rgba(10, 26, 16, 0.8);
+    --bg-cell: rgba(0, 255, 100, 0.03);
+    --bg-cell-hover: rgba(0, 255, 100, 0.1);
+    --bg-cell-focus: rgba(0, 255, 100, 0.15);
+    --bg-cell-given: rgba(0, 255, 100, 0.08);
+    --bg-cell-solved: rgba(168, 85, 247, 0.1);
+    --border-subtle: rgba(0, 255, 100, 0.06);
+    --border-box: rgba(0, 255, 100, 0.18);
+    --border-focus: rgba(0, 255, 100, 0.5);
+    --text-primary: #c8ffd8;
+    --text-secondary: #5ae880;
+    --text-muted: #1a5030;
+    --text-given: #00ff64;
+    --text-solved: #c084fc;
+    --text-error: #fb7185;
+    --text-hint: #fbbf24;
+    --text-note: #5ae880;
+    --text-conflict: #fb923c;
+    --accent: #00e85a;
+    --accent-glow: rgba(0, 232, 90, 0.3);
+    --success: #a855f7;
+    --success-glow: rgba(168, 85, 247, 0.3);
+    --danger: #f43f5e;
+    --hint-color: #f59e0b;
+    --hint-glow: rgba(245, 158, 11, 0.3);
+    --nightmare-color: #f43f5e;
+}
+
+[data-theme="wicked"] body::before {
+    background:
+        radial-gradient(ellipse 600px 400px at 25% 25%, rgba(0, 232, 90, 0.1), transparent),
+        radial-gradient(ellipse 500px 350px at 75% 75%, rgba(168, 85, 247, 0.08), transparent);
 }
 
 /* ── Theme Picker ─────────────────────────────────────────────────── */
@@ -232,24 +308,24 @@ body::before {
 }
 
 .theme-btn {
-    background: var(--bg-cell);
-    border: 1px solid var(--border-subtle);
-    color: var(--text-secondary);
-    font-size: 1.25rem;
-    width: 40px;
-    height: 40px;
-    border-radius: var(--radius-sm);
+    background: linear-gradient(135deg,
+            var(--accent) 0%, var(--accent) 50%,
+            var(--success) 50%, var(--success) 100%);
+    border: 2px solid var(--border-subtle);
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
     cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
     transition: all var(--transition);
+    box-shadow: 0 2px 8px var(--accent-glow);
+    padding: 0;
+    font-size: 0;
 }
 
 .theme-btn:hover {
-    background: var(--bg-cell-hover);
+    transform: scale(1.15);
     border-color: var(--accent);
-    color: var(--text-primary);
+    box-shadow: 0 4px 16px var(--accent-glow);
 }
 
 .theme-dropdown {
@@ -259,11 +335,26 @@ body::before {
     top: 100%;
     margin-top: 0.5rem;
     background: var(--bg-secondary);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
     border: 1px solid var(--border-box);
     border-radius: var(--radius);
     padding: 0.4rem;
-    min-width: 160px;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    min-width: 170px;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+    animation: dropIn 0.15s ease-out;
+}
+
+@keyframes dropIn {
+    from {
+        opacity: 0;
+        transform: translateY(-6px) scale(0.96);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
 }
 
 .theme-dropdown.open {
@@ -319,7 +410,7 @@ body::before {
 }
 
 .header-spacer {
-    width: 40px;
+    width: 32px;
     /* same as theme button, to center the title */
 }
 
