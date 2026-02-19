@@ -146,7 +146,12 @@
             input.addEventListener('keydown', (e) => onCellKeydown(e, i));
             input.addEventListener('focus', () => onCellFocus(i));
             input.addEventListener('blur', () => onCellBlur(i));
-            wrapper.addEventListener('click', () => inputs[i].focus());
+            // On desktop, clicking wrapper focuses the input.
+            // On touch, we handle selection separately — never call focus()
+            // to avoid iOS Safari scrolling the page.
+            if (!isTouchDevice) {
+                wrapper.addEventListener('click', () => inputs[i].focus());
+            }
         }
     }
 
@@ -338,20 +343,32 @@
     }
 
     function onCellBlur(idx) {
-        // On touch devices, keep the visual focus for numpad interaction
-        if (!isTouchDevice) {
-            wrappers[idx].classList.remove('focused');
-            clearHighlights();
-            clearDigitHighlight();
-        }
+        // On touch devices, blur is irrelevant — selection is visual only
+        if (isTouchDevice) return;
+        wrappers[idx].classList.remove('focused');
+        clearHighlights();
+        clearDigitHighlight();
         focusedIdx = -1;
+    }
+
+    // Touch-only: visually select a cell without calling input.focus()
+    function selectCellTouch(idx) {
+        lastTouchedIdx = idx;
+        for (const w of wrappers) w.classList.remove('focused');
+        wrappers[idx].classList.add('focused');
+        highlightRelated(idx);
+        updateDigitHighlight();
     }
 
     function advanceToNextEmpty(fromIdx) {
         for (let i = 1; i <= 81; i++) {
             const next = (fromIdx + i) % 81;
             if (!inputs[next].value && !wrappers[next].classList.contains('locked')) {
-                inputs[next].focus();
+                if (isTouchDevice) {
+                    selectCellTouch(next);
+                } else {
+                    inputs[next].focus();
+                }
                 return;
             }
         }
@@ -1319,24 +1336,13 @@
         advanceToNextEmpty(idx);
     }
 
-    // ── NUMPAD: use touchstart + mousedown to prevent focus theft ──
-    // iOS Safari ignores pointerdown.preventDefault() for preventing blur,
-    // so we use touchstart (fires before blur) and fall back to lastTouchedIdx.
+    // ── NUMPAD (touch devices) ─────────────────────────────────────
     if (numpadEl) {
-        // Prevent focus transfer on both touch and mouse
-        numpadEl.addEventListener('touchstart', (e) => {
-            if (e.target.closest('.numpad-btn')) e.preventDefault();
-        }, { passive: false });
-        numpadEl.addEventListener('mousedown', (e) => {
-            if (e.target.closest('.numpad-btn')) e.preventDefault();
-        });
-
         numpadEl.addEventListener('click', (e) => {
             const btn = e.target.closest('.numpad-btn');
             if (!btn) return;
             e.preventDefault();
 
-            // Handle notes button separately
             if (btn.id === 'numpad-notes') {
                 toggleNotesMode();
                 btn.classList.toggle('notes-active', notesMode);
@@ -1350,19 +1356,16 @@
         });
     }
 
-    // On touch devices, tapping a cell wrapper should reliably focus it
+    // Touch cell selection — NO input.focus(), purely visual
     if (isTouchDevice) {
-        gridEl.addEventListener('touchstart', (e) => {
+        gridEl.addEventListener('click', (e) => {
             const wrapper = e.target.closest('.cell-wrapper');
             if (!wrapper) return;
             const idx = parseInt(wrapper.dataset.idx, 10);
             if (!isNaN(idx)) {
-                // Clear old visual focus
-                for (const w of wrappers) w.classList.remove('focused');
-                inputs[idx].focus();
-                onCellFocus(idx);
+                selectCellTouch(idx);
             }
-        }, { passive: true });
+        });
     }
 
     // ══════════════════════════════════════════════════════════════════
