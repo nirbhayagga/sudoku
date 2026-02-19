@@ -71,6 +71,7 @@
     let hintsUsed = 0;
     let notesMode = false;
     let focusedIdx = -1;
+    let lastTouchedIdx = -1; // Persists through blur — used by numpad on mobile
 
     // Undo/redo
     const undoStack = [];
@@ -327,6 +328,7 @@
 
     function onCellFocus(idx) {
         focusedIdx = idx;
+        lastTouchedIdx = idx;
         // Remove previous focus
         for (const w of wrappers) w.classList.remove('focused');
         wrappers[idx].classList.add('focused');
@@ -336,9 +338,12 @@
     }
 
     function onCellBlur(idx) {
-        wrappers[idx].classList.remove('focused');
-        clearHighlights();
-        clearDigitHighlight();
+        // On touch devices, keep the visual focus for numpad interaction
+        if (!isTouchDevice) {
+            wrappers[idx].classList.remove('focused');
+            clearHighlights();
+            clearDigitHighlight();
+        }
         focusedIdx = -1;
     }
 
@@ -1259,7 +1264,8 @@
     // ══════════════════════════════════════════════════════════════════
 
     function handleNumpadInput(digit) {
-        const idx = focusedIdx;
+        // Use lastTouchedIdx as fallback — focusedIdx is -1 after blur on mobile
+        const idx = focusedIdx >= 0 ? focusedIdx : lastTouchedIdx;
         if (idx < 0) return;
         const isLocked = wrappers[idx].classList.contains('locked');
         if (isLocked) return;
@@ -1313,12 +1319,16 @@
         advanceToNextEmpty(idx);
     }
 
-    // Prevent numpad buttons from stealing focus from the cell input.
-    // Without this, tapping a numpad btn triggers onCellBlur → focusedIdx = -1
+    // ── NUMPAD: use touchstart + mousedown to prevent focus theft ──
+    // iOS Safari ignores pointerdown.preventDefault() for preventing blur,
+    // so we use touchstart (fires before blur) and fall back to lastTouchedIdx.
     if (numpadEl) {
-        numpadEl.addEventListener('pointerdown', (e) => {
-            const btn = e.target.closest('.numpad-btn');
-            if (btn) e.preventDefault(); // prevents focus transfer away from cell
+        // Prevent focus transfer on both touch and mouse
+        numpadEl.addEventListener('touchstart', (e) => {
+            if (e.target.closest('.numpad-btn')) e.preventDefault();
+        }, { passive: false });
+        numpadEl.addEventListener('mousedown', (e) => {
+            if (e.target.closest('.numpad-btn')) e.preventDefault();
         });
 
         numpadEl.addEventListener('click', (e) => {
@@ -1340,18 +1350,19 @@
         });
     }
 
-    // On touch devices, tapping a cell wrapper should focus the input
-    // (readOnly inputs sometimes don't focus on tap in iOS Safari)
+    // On touch devices, tapping a cell wrapper should reliably focus it
     if (isTouchDevice) {
-        gridEl.addEventListener('pointerdown', (e) => {
+        gridEl.addEventListener('touchstart', (e) => {
             const wrapper = e.target.closest('.cell-wrapper');
             if (!wrapper) return;
             const idx = parseInt(wrapper.dataset.idx, 10);
             if (!isNaN(idx)) {
+                // Clear old visual focus
+                for (const w of wrappers) w.classList.remove('focused');
                 inputs[idx].focus();
                 onCellFocus(idx);
             }
-        });
+        }, { passive: true });
     }
 
     // ══════════════════════════════════════════════════════════════════
