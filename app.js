@@ -1,0 +1,1363 @@
+/**
+ * Sudoku — UI Controller
+ * Solver Mode + Play Mode with pencil marks, undo/redo, digit highlighting,
+ * conflict detection, localStorage save/resume, and stats tracking.
+ */
+(() => {
+    // ── Elements ───────────────────────────────────────────────────────
+    const gridEl = document.getElementById('grid');
+    const statusEl = document.getElementById('status');
+    const solveTimeEl = document.getElementById('solve-time');
+    const gameTimerEl = document.getElementById('game-timer');
+    const subtitleEl = document.getElementById('subtitle');
+
+    const tabSolver = document.getElementById('tab-solver');
+    const tabPlay = document.getElementById('tab-play');
+    const modeIndicator = document.getElementById('mode-indicator');
+
+    const solverControls = document.getElementById('solver-controls');
+    const btnSolve = document.getElementById('btn-solve');
+    const btnExample = document.getElementById('btn-example');
+    const btnPaste = document.getElementById('btn-paste');
+    const btnClear = document.getElementById('btn-clear');
+
+    const playControls = document.getElementById('play-controls');
+    const btnNewGame = document.getElementById('btn-new-game');
+    const btnHint = document.getElementById('btn-hint');
+    const btnCheck = document.getElementById('btn-check');
+    const btnReset = document.getElementById('btn-reset');
+    const btnUndo = document.getElementById('btn-undo');
+    const btnRedo = document.getElementById('btn-redo');
+    const btnNotesToggle = document.getElementById('btn-notes-toggle');
+    const diffSelector = document.getElementById('difficulty-selector');
+    const btnStats = document.getElementById('btn-stats');
+
+    const modalOverlay = document.getElementById('modal-overlay');
+    const importText = document.getElementById('import-text');
+    const btnModalOk = document.getElementById('btn-modal-import');
+    const btnModalNo = document.getElementById('btn-modal-cancel');
+
+    const winOverlay = document.getElementById('win-overlay');
+    const winDetails = document.getElementById('win-details');
+    const btnWinNew = document.getElementById('btn-win-new');
+
+    const statsOverlay = document.getElementById('stats-overlay');
+    const statsContent = document.getElementById('stats-content');
+    const btnStatsClose = document.getElementById('btn-stats-close');
+    const btnStatsReset = document.getElementById('btn-stats-reset');
+
+    // ── Cell Data Structures ───────────────────────────────────────────
+    // Each cell is a wrapper div containing an input and a notes grid
+    const wrappers = [];    // 81 wrapper divs
+    const inputs = [];      // 81 input elements
+    const notesEls = [];    // 81 arrays of 9 note-digit spans
+    const cellNotes = [];   // 81 Sets of active note digits (1-9)
+
+    for (let i = 0; i < 81; i++) cellNotes.push(new Set());
+
+    // ── State ──────────────────────────────────────────────────────────
+    let mode = 'solver';
+    let solved = false;
+    let solverExampleIdx = 0;
+
+    // Play mode
+    let currentDifficulty = 'easy';
+    let currentPuzzle = null;
+    let currentSolution = null;
+    let gameActive = false;
+    let gameWon = false;
+    let timerInterval = null;
+    let timerSeconds = 0;
+    let hintsUsed = 0;
+    let notesMode = false;
+    let focusedIdx = -1;
+
+    // Undo/redo
+    const undoStack = [];
+    const redoStack = [];
+
+    // Save debounce
+    let saveTimeout = null;
+
+    // Mobile detection
+    const isTouchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+
+    // Numpad elements
+    const numpadEl = document.getElementById('numpad');
+    const numpadNotesBtn = document.getElementById('numpad-notes');
+
+    const SOLVER_ALL_PUZZLES = ALL_PUZZLES.slice();
+
+    // ══════════════════════════════════════════════════════════════════
+    //  GRID BUILDING
+    // ══════════════════════════════════════════════════════════════════
+
+    function buildGrid() {
+        for (let i = 0; i < 81; i++) {
+            const row = Math.floor(i / 9);
+            const col = i % 9;
+
+            // Wrapper div
+            const wrapper = document.createElement('div');
+            wrapper.className = 'cell-wrapper';
+            wrapper.dataset.row = row;
+            wrapper.dataset.col = col;
+            wrapper.dataset.idx = i;
+
+            // Input
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.maxLength = 1;
+            input.className = 'cell-input';
+            input.setAttribute('aria-label', `Row ${row + 1}, Column ${col + 1}`);
+
+            // On touch devices, suppress virtual keyboard — use on-screen numpad
+            if (isTouchDevice) {
+                input.readOnly = true;
+                input.inputMode = 'none';
+            } else {
+                input.inputMode = 'numeric';
+            }
+
+            // Notes grid (3x3 mini-grid for pencil marks)
+            const notesGrid = document.createElement('div');
+            notesGrid.className = 'notes-grid';
+            const noteSpans = [];
+            for (let d = 1; d <= 9; d++) {
+                const span = document.createElement('span');
+                span.className = 'note-digit';
+                span.textContent = d;
+                span.dataset.digit = d;
+                notesGrid.appendChild(span);
+                noteSpans.push(span);
+            }
+
+            wrapper.appendChild(notesGrid);
+            wrapper.appendChild(input);
+            gridEl.appendChild(wrapper);
+
+            wrappers.push(wrapper);
+            inputs.push(input);
+            notesEls.push(noteSpans);
+
+            // Events
+            input.addEventListener('input', (e) => onCellInput(e, i));
+            input.addEventListener('keydown', (e) => onCellKeydown(e, i));
+            input.addEventListener('focus', () => onCellFocus(i));
+            input.addEventListener('blur', () => onCellBlur(i));
+            wrapper.addEventListener('click', () => inputs[i].focus());
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    //  CELL INPUT HANDLING
+    // ══════════════════════════════════════════════════════════════════
+
+    function onCellInput(e, idx) {
+        const input = inputs[idx];
+        const val = input.value;
+
+        if (!/^[1-9]$/.test(val)) {
+            input.value = '';
+            return;
+        }
+
+        // Locked cells
+        if (mode === 'play' && wrappers[idx].classList.contains('locked')) {
+            input.value = currentPuzzle ? (currentPuzzle[idx] !== '0' ? currentPuzzle[idx] : '') : '';
+            return;
+        }
+
+        if (mode === 'solver') {
+            if (solved) clearSolution();
+            wrappers[idx].classList.remove('error');
+            setStatus('');
+        } else if (mode === 'play' && gameActive) {
+            // Notes mode: toggle note instead of placing digit
+            if (notesMode) {
+                input.value = '';
+                toggleNote(idx, val);
+                return;
+            }
+
+            // Record for undo
+            const prevValue = '';  // input just changed, prev was empty or we handle in keydown
+            pushUndo(idx, prevValue, val, new Set(cellNotes[idx]), new Set());
+
+            // Clear notes on this cell
+            clearCellNotes(idx);
+
+            // Clear error styling
+            wrappers[idx].classList.remove('user-error', 'correct-check');
+
+            // Auto-clear conflicting notes in peers
+            clearPeerNotes(idx, val);
+
+            // Check conflicts
+            highlightConflicts(idx);
+
+            // Check for win
+            checkWin();
+
+            // Auto-save
+            debounceSave();
+        }
+
+        // Digit highlighting
+        updateDigitHighlight();
+
+        // Auto-advance
+        advanceToNextEmpty(idx);
+    }
+
+    function onCellKeydown(e, idx) {
+        const row = Math.floor(idx / 9);
+        const col = idx % 9;
+        const isLocked = mode === 'play' && wrappers[idx].classList.contains('locked');
+
+        // Prevent editing locked cells
+        if (isLocked && (/^[0-9]$/.test(e.key) || e.key === 'Backspace' || e.key === 'Delete')) {
+            e.preventDefault();
+            return;
+        }
+
+        switch (e.key) {
+            case 'ArrowUp': e.preventDefault(); if (row > 0) inputs[idx - 9].focus(); break;
+            case 'ArrowDown': e.preventDefault(); if (row < 8) inputs[idx + 9].focus(); break;
+            case 'ArrowLeft': e.preventDefault(); if (col > 0) inputs[idx - 1].focus(); break;
+            case 'ArrowRight': e.preventDefault(); if (col < 8) inputs[idx + 1].focus(); break;
+            case 'Tab': break;
+
+            case 'Backspace':
+            case 'Delete':
+                e.preventDefault();
+                if (mode === 'play' && gameActive) {
+                    if (cellNotes[idx].size > 0) {
+                        pushUndo(idx, inputs[idx].value, '', new Set(cellNotes[idx]), new Set());
+                        clearCellNotes(idx);
+                    } else if (inputs[idx].value) {
+                        pushUndo(idx, inputs[idx].value, '', new Set(cellNotes[idx]), new Set());
+                        inputs[idx].value = '';
+                        clearConflictStyle(idx);
+                    }
+                    debounceSave();
+                } else if (mode === 'solver') {
+                    inputs[idx].value = '';
+                    wrappers[idx].classList.remove('given', 'solved', 'error', 'solve-anim');
+                    if (solved) clearSolution();
+                }
+                updateDigitHighlight();
+                break;
+
+            case '0':
+                e.preventDefault();
+                if (mode === 'play' && gameActive && !isLocked) {
+                    if (inputs[idx].value) {
+                        pushUndo(idx, inputs[idx].value, '', new Set(cellNotes[idx]), new Set());
+                        inputs[idx].value = '';
+                        clearConflictStyle(idx);
+                    }
+                    debounceSave();
+                } else if (mode === 'solver') {
+                    inputs[idx].value = '';
+                    wrappers[idx].classList.remove('given', 'solved', 'error');
+                    if (solved) clearSolution();
+                }
+                updateDigitHighlight();
+                break;
+
+            case '1': case '2': case '3': case '4': case '5':
+            case '6': case '7': case '8': case '9':
+                if (mode === 'play' && gameActive && notesMode && !isLocked) {
+                    e.preventDefault();
+                    toggleNote(idx, e.key);
+                } else if (mode === 'play' && gameActive && !isLocked) {
+                    // Record undo before the input event changes the value
+                    const prevVal = inputs[idx].value;
+                    const prevNotes = new Set(cellNotes[idx]);
+                    // We'll let the input event handle the actual placement
+                    // Set up a one-time listener to record undo after value changes
+                    inputs[idx].dataset.prevVal = prevVal;
+                    inputs[idx].dataset.prevNotes = JSON.stringify([...prevNotes]);
+                }
+                break;
+
+            case 'Enter':
+                e.preventDefault();
+                if (mode === 'solver') solve();
+                else checkErrors();
+                break;
+
+            case 'Escape':
+                e.preventDefault();
+                if (mode === 'solver') clearGrid();
+                else resetGame();
+                break;
+
+            case 'n': case 'N':
+                if (mode === 'play' && !e.ctrlKey && !e.metaKey) {
+                    e.preventDefault();
+                    toggleNotesMode();
+                }
+                break;
+
+            case 'h': case 'H':
+                if (mode === 'play' && !e.ctrlKey && !e.metaKey) {
+                    e.preventDefault();
+                    giveHint();
+                }
+                break;
+
+            case 'z':
+                if (e.ctrlKey || e.metaKey) {
+                    e.preventDefault();
+                    if (e.shiftKey) doRedo();
+                    else doUndo();
+                }
+                break;
+
+            case 'y':
+                if (e.ctrlKey || e.metaKey) {
+                    e.preventDefault();
+                    doRedo();
+                }
+                break;
+        }
+    }
+
+    function onCellFocus(idx) {
+        focusedIdx = idx;
+        // Remove previous focus
+        for (const w of wrappers) w.classList.remove('focused');
+        wrappers[idx].classList.add('focused');
+
+        highlightRelated(idx);
+        updateDigitHighlight();
+    }
+
+    function onCellBlur(idx) {
+        wrappers[idx].classList.remove('focused');
+        clearHighlights();
+        clearDigitHighlight();
+        focusedIdx = -1;
+    }
+
+    function advanceToNextEmpty(fromIdx) {
+        for (let i = 1; i <= 81; i++) {
+            const next = (fromIdx + i) % 81;
+            if (!inputs[next].value && !wrappers[next].classList.contains('locked')) {
+                inputs[next].focus();
+                return;
+            }
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    //  PENCIL MARKS / NOTES
+    // ══════════════════════════════════════════════════════════════════
+
+    function toggleNotesMode() {
+        notesMode = !notesMode;
+        btnNotesToggle.textContent = `Notes: ${notesMode ? 'ON' : 'OFF'}`;
+        btnNotesToggle.classList.toggle('notes-active', notesMode);
+    }
+
+    function toggleNote(idx, digit) {
+        const prevNotes = new Set(cellNotes[idx]);
+        if (inputs[idx].value) return; // don't add notes to filled cells
+
+        if (cellNotes[idx].has(digit)) {
+            cellNotes[idx].delete(digit);
+        } else {
+            cellNotes[idx].add(digit);
+        }
+
+        pushUndo(idx, '', '', prevNotes, new Set(cellNotes[idx]));
+        renderNotes(idx);
+        debounceSave();
+    }
+
+    function renderNotes(idx) {
+        for (let d = 0; d < 9; d++) {
+            const digit = String(d + 1);
+            notesEls[idx][d].classList.toggle('visible', cellNotes[idx].has(digit));
+        }
+    }
+
+    function clearCellNotes(idx) {
+        cellNotes[idx].clear();
+        renderNotes(idx);
+    }
+
+    function clearPeerNotes(idx, digit) {
+        const row = Math.floor(idx / 9);
+        const col = idx % 9;
+        const boxRow = Math.floor(row / 3) * 3;
+        const boxCol = Math.floor(col / 3) * 3;
+
+        for (let i = 0; i < 81; i++) {
+            if (i === idx) continue;
+            const r = Math.floor(i / 9);
+            const c = i % 9;
+            const isPeer = (r === row) || (c === col) ||
+                (r >= boxRow && r < boxRow + 3 && c >= boxCol && c < boxCol + 3);
+            if (isPeer && cellNotes[i].has(digit)) {
+                cellNotes[i].delete(digit);
+                renderNotes(i);
+            }
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    //  HIGHLIGHTING
+    // ══════════════════════════════════════════════════════════════════
+
+    function highlightRelated(idx) {
+        const row = Math.floor(idx / 9);
+        const col = idx % 9;
+        const boxRow = Math.floor(row / 3) * 3;
+        const boxCol = Math.floor(col / 3) * 3;
+
+        for (let i = 0; i < 81; i++) {
+            const r = Math.floor(i / 9);
+            const c = i % 9;
+            const isPeer = (r === row) || (c === col) ||
+                (r >= boxRow && r < boxRow + 3 && c >= boxCol && c < boxCol + 3);
+            if (isPeer && i !== idx) {
+                wrappers[i].style.background = 'rgba(99, 102, 241, 0.04)';
+            }
+        }
+    }
+
+    function clearHighlights() {
+        for (const w of wrappers) w.style.background = '';
+    }
+
+    function updateDigitHighlight() {
+        clearDigitHighlight();
+        if (focusedIdx < 0) return;
+        const digit = inputs[focusedIdx].value;
+        if (!digit) return;
+
+        for (let i = 0; i < 81; i++) {
+            if (i !== focusedIdx && inputs[i].value === digit) {
+                wrappers[i].classList.add('digit-highlight');
+            }
+        }
+    }
+
+    function clearDigitHighlight() {
+        for (const w of wrappers) w.classList.remove('digit-highlight');
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    //  CONFLICT DETECTION
+    // ══════════════════════════════════════════════════════════════════
+
+    function highlightConflicts(idx) {
+        const digit = inputs[idx].value;
+        if (!digit) return;
+
+        clearConflictStyle(idx);
+
+        const row = Math.floor(idx / 9);
+        const col = idx % 9;
+        const boxRow = Math.floor(row / 3) * 3;
+        const boxCol = Math.floor(col / 3) * 3;
+        let hasConflict = false;
+
+        for (let i = 0; i < 81; i++) {
+            if (i === idx) continue;
+            const r = Math.floor(i / 9);
+            const c = i % 9;
+            const isPeer = (r === row) || (c === col) ||
+                (r >= boxRow && r < boxRow + 3 && c >= boxCol && c < boxCol + 3);
+            if (isPeer && inputs[i].value === digit) {
+                wrappers[i].classList.add('conflict', 'conflict-flash');
+                hasConflict = true;
+            }
+        }
+
+        if (hasConflict) {
+            wrappers[idx].classList.add('conflict', 'conflict-flash');
+        }
+    }
+
+    function clearConflictStyle(idx) {
+        wrappers[idx].classList.remove('conflict', 'conflict-flash');
+        // Also clear conflict on peers that might have been marked
+        for (const w of wrappers) {
+            w.classList.remove('conflict', 'conflict-flash');
+        }
+        // Re-check all conflicts for current board state
+        recheckAllConflicts();
+    }
+
+    function recheckAllConflicts() {
+        for (const w of wrappers) w.classList.remove('conflict');
+        for (let i = 0; i < 81; i++) {
+            const digit = inputs[i].value;
+            if (!digit) continue;
+            const row = Math.floor(i / 9);
+            const col = i % 9;
+            const boxRow = Math.floor(row / 3) * 3;
+            const boxCol = Math.floor(col / 3) * 3;
+
+            for (let j = i + 1; j < 81; j++) {
+                if (inputs[j].value !== digit) continue;
+                const r = Math.floor(j / 9);
+                const c = j % 9;
+                const isPeer = (r === row) || (c === col) ||
+                    (r >= boxRow && r < boxRow + 3 && c >= boxCol && c < boxCol + 3);
+                if (isPeer) {
+                    wrappers[i].classList.add('conflict');
+                    wrappers[j].classList.add('conflict');
+                }
+            }
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    //  UNDO / REDO
+    // ══════════════════════════════════════════════════════════════════
+
+    function pushUndo(idx, prevVal, newVal, prevNotes, newNotes) {
+        undoStack.push({ idx, prevVal, newVal, prevNotes, newNotes });
+        redoStack.length = 0; // clear redo on new action
+        if (undoStack.length > 200) undoStack.shift();
+    }
+
+    function doUndo() {
+        if (undoStack.length === 0 || !gameActive) return;
+        const action = undoStack.pop();
+        redoStack.push(action);
+
+        inputs[action.idx].value = action.prevVal;
+        cellNotes[action.idx] = new Set(action.prevNotes);
+        renderNotes(action.idx);
+        wrappers[action.idx].classList.remove('user-error', 'correct-check');
+        recheckAllConflicts();
+        updateDigitHighlight();
+        debounceSave();
+    }
+
+    function doRedo() {
+        if (redoStack.length === 0 || !gameActive) return;
+        const action = redoStack.pop();
+        undoStack.push(action);
+
+        inputs[action.idx].value = action.newVal;
+        cellNotes[action.idx] = new Set(action.newNotes);
+        renderNotes(action.idx);
+        wrappers[action.idx].classList.remove('user-error', 'correct-check');
+        recheckAllConflicts();
+        updateDigitHighlight();
+        debounceSave();
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    //  READ / WRITE GRID
+    // ══════════════════════════════════════════════════════════════════
+
+    function readGrid() {
+        return inputs.map(c => c.value || '0').join('');
+    }
+
+    function writeGrid(str, markAsGiven = false) {
+        for (let i = 0; i < 81; i++) {
+            const ch = str[i];
+            inputs[i].value = (ch === '0' || ch === '.') ? '' : ch;
+            wrappers[i].classList.remove('given', 'solved', 'error', 'solve-anim', 'hint',
+                'hint-anim', 'locked', 'user-error', 'correct-check', 'win-anim',
+                'conflict', 'conflict-flash', 'digit-highlight', 'focused');
+            inputs[i].readOnly = false;
+            clearCellNotes(i);
+
+            if (markAsGiven && inputs[i].value) {
+                wrappers[i].classList.add('given');
+            }
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    //  SOLVER MODE
+    // ══════════════════════════════════════════════════════════════════
+
+    function solve() {
+        const board = readGrid();
+        const filledCount = board.replace(/0/g, '').length;
+
+        if (filledCount < 1) {
+            setStatus('Enter some digits first', 'error');
+            gridEl.classList.add('shake');
+            setTimeout(() => gridEl.classList.remove('shake'), 300);
+            return;
+        }
+
+        const { solution, timeMs } = SudokuSolver.solveSudoku(board);
+
+        if (!solution) {
+            setStatus('No solution exists — check your input', 'error');
+            gridEl.classList.add('shake');
+            setTimeout(() => gridEl.classList.remove('shake'), 300);
+            return;
+        }
+
+        for (let i = 0; i < 81; i++) {
+            if (board[i] !== '0') {
+                wrappers[i].classList.add('given');
+            } else {
+                inputs[i].value = solution[i];
+                wrappers[i].classList.add('solved', 'solve-anim');
+                wrappers[i].style.animationDelay = `${(i % 9) * 15 + Math.floor(i / 9) * 15}ms`;
+            }
+        }
+
+        solved = true;
+        const formattedTime = timeMs < 1 ? `${(timeMs * 1000).toFixed(0)} μs` : `${timeMs.toFixed(2)} ms`;
+        solveTimeEl.textContent = formattedTime;
+        solveTimeEl.classList.add('visible');
+        setStatus('Solved!', 'success');
+    }
+
+    function clearSolution() {
+        solved = false;
+        solveTimeEl.textContent = '';
+        solveTimeEl.classList.remove('visible');
+        for (let i = 0; i < 81; i++) {
+            if (wrappers[i].classList.contains('solved')) {
+                inputs[i].value = '';
+                wrappers[i].classList.remove('solved', 'solve-anim');
+                wrappers[i].style.animationDelay = '';
+            }
+        }
+    }
+
+    function clearGrid() {
+        for (let i = 0; i < 81; i++) {
+            inputs[i].value = '';
+            wrappers[i].classList.remove('given', 'solved', 'error', 'solve-anim', 'hint',
+                'hint-anim', 'locked', 'user-error', 'correct-check', 'win-anim',
+                'conflict', 'conflict-flash', 'digit-highlight', 'focused');
+            wrappers[i].style.animationDelay = '';
+            inputs[i].readOnly = false;
+            clearCellNotes(i);
+        }
+        solved = false;
+        solveTimeEl.textContent = '';
+        solveTimeEl.classList.remove('visible');
+        setStatus('Click a cell and type a digit');
+        inputs[0].focus();
+    }
+
+    function loadSolverExample() {
+        const p = SOLVER_ALL_PUZZLES[solverExampleIdx];
+        const diff = DIFFICULTY_LABELS[p.difficulty] || p.difficulty;
+        writeGrid(p.puzzle, true);
+        solved = false;
+        solveTimeEl.textContent = '';
+        solveTimeEl.classList.remove('visible');
+        setStatus(`Loaded: ${diff} (${p.id})`);
+        solverExampleIdx = (solverExampleIdx + 1) % SOLVER_ALL_PUZZLES.length;
+    }
+
+    // ── Import Modal ───────────────────────────────────────────────────
+    function openModal() {
+        importText.value = '';
+        modalOverlay.classList.add('active');
+        setTimeout(() => importText.focus(), 100);
+    }
+
+    function closeModal() { modalOverlay.classList.remove('active'); }
+
+    function doImport() {
+        const raw = importText.value.trim();
+        const digits = raw.replace(/[^0-9.]/g, '');
+        if (digits.length !== 81) {
+            importText.style.borderColor = 'var(--danger)';
+            setTimeout(() => importText.style.borderColor = '', 1500);
+            return;
+        }
+        writeGrid(digits.replace(/\./g, '0'), true);
+        solved = false;
+        solveTimeEl.textContent = '';
+        solveTimeEl.classList.remove('visible');
+        setStatus('Puzzle imported');
+        closeModal();
+    }
+
+    // ── Quick Paste ────────────────────────────────────────────────────
+    document.addEventListener('paste', (e) => {
+        if (e.target === importText) return;
+        if (mode === 'play') return;
+        const text = (e.clipboardData || window.clipboardData).getData('text').trim();
+        const digits = text.replace(/[^0-9.]/g, '');
+        if (digits.length === 81) {
+            e.preventDefault();
+            writeGrid(digits.replace(/\./g, '0'), true);
+            solved = false;
+            solveTimeEl.textContent = '';
+            solveTimeEl.classList.remove('visible');
+            setStatus('Puzzle pasted from clipboard');
+        }
+    });
+
+    // ══════════════════════════════════════════════════════════════════
+    //  PLAY MODE
+    // ══════════════════════════════════════════════════════════════════
+
+    function startGame(difficulty) {
+        currentDifficulty = difficulty || currentDifficulty;
+        hintsUsed = 0;
+        gameWon = false;
+        undoStack.length = 0;
+        redoStack.length = 0;
+        notesMode = false;
+        btnNotesToggle.textContent = 'Notes: OFF';
+        btnNotesToggle.classList.remove('notes-active');
+
+        setStatus('Loading puzzle...');
+
+        // Use setTimeout to let the UI update
+        setTimeout(() => {
+            let puzzle, solution;
+
+            // ── PRIMARY: pick from pre-generated bank ────────────────────
+            const bankList = PUZZLES[currentDifficulty];
+            if (bankList && bankList.length > 0) {
+                // Track played puzzles to avoid repeats
+                const playedKey = `played_${currentDifficulty}`;
+                let played = [];
+                try { played = JSON.parse(localStorage.getItem(playedKey) || '[]'); } catch (e) { }
+
+                // If all puzzles played, reset the tracking
+                if (played.length >= bankList.length) {
+                    played = [];
+                    localStorage.setItem(playedKey, '[]');
+                }
+
+                // Pick a random unplayed puzzle
+                const unplayed = bankList.filter(p => !played.includes(p.id));
+                const pick = unplayed[Math.floor(Math.random() * unplayed.length)];
+                puzzle = pick.puzzle;
+
+                // Mark as played
+                played.push(pick.id);
+                try { localStorage.setItem(playedKey, JSON.stringify(played)); } catch (e) { }
+
+                // Solve to get solution
+                const solveResult = SudokuSolver.solveSudoku(puzzle);
+                solution = solveResult.solution;
+            }
+
+            // ── FALLBACK: generator (Easy–Evil only, never Nightmare) ────
+            if (!puzzle && currentDifficulty !== 'nightmare') {
+                try {
+                    const result = SudokuGenerator.generate(currentDifficulty);
+                    if (result && result.puzzle && result.solution) {
+                        puzzle = result.puzzle;
+                        solution = result.solution;
+                    }
+                } catch (e) { /* generator failed */ }
+            }
+
+            if (!solution) {
+                setStatus('Error loading puzzle', 'error');
+                return;
+            }
+
+            currentPuzzle = puzzle;
+            currentSolution = solution;
+
+            writeGrid(currentPuzzle, true);
+
+            for (let i = 0; i < 81; i++) {
+                if (currentPuzzle[i] !== '0') {
+                    wrappers[i].classList.add('locked');
+                    inputs[i].readOnly = true;
+                }
+            }
+
+            gameActive = true;
+            startTimer();
+
+            const label = DIFFICULTY_LABELS[currentDifficulty];
+            const clueCount = currentPuzzle.replace(/0/g, '').length;
+            setStatus(`${label} — ${clueCount} clues`);
+
+            // Focus first empty cell
+            for (let i = 0; i < 81; i++) {
+                if (!inputs[i].value) { inputs[i].focus(); break; }
+            }
+
+            deleteSavedGame();
+            debounceSave();
+        }, 16);
+    }
+
+    function resetGame() {
+        if (!currentPuzzle) return;
+        gameWon = false;
+        hintsUsed = 0;
+        undoStack.length = 0;
+        redoStack.length = 0;
+
+        for (let i = 0; i < 81; i++) {
+            wrappers[i].classList.remove('user-error', 'correct-check', 'hint', 'hint-anim',
+                'win-anim', 'solved', 'conflict', 'conflict-flash');
+            if (currentPuzzle[i] === '0') {
+                inputs[i].value = '';
+                wrappers[i].classList.remove('given', 'locked');
+                inputs[i].readOnly = false;
+                clearCellNotes(i);
+            }
+        }
+
+        startTimer();
+        setStatus('Puzzle reset');
+        debounceSave();
+    }
+
+    // ── Hints ──────────────────────────────────────────────────────────
+    function giveHint() {
+        if (!gameActive || !currentSolution || gameWon) return;
+
+        const emptyCells = [];
+        for (let i = 0; i < 81; i++) {
+            if (!wrappers[i].classList.contains('locked') && inputs[i].value !== currentSolution[i]) {
+                emptyCells.push(i);
+            }
+        }
+
+        if (emptyCells.length === 0) {
+            setStatus('No more hints needed!', 'success');
+            return;
+        }
+
+        const hintIdx = emptyCells[Math.floor(Math.random() * emptyCells.length)];
+        const prevVal = inputs[hintIdx].value;
+        const prevNotes = new Set(cellNotes[hintIdx]);
+
+        inputs[hintIdx].value = currentSolution[hintIdx];
+        clearCellNotes(hintIdx);
+        clearPeerNotes(hintIdx, currentSolution[hintIdx]);
+        wrappers[hintIdx].classList.remove('user-error', 'correct-check', 'conflict');
+        wrappers[hintIdx].classList.add('hint', 'hint-anim', 'locked');
+        inputs[hintIdx].readOnly = true;
+        hintsUsed++;
+
+        pushUndo(hintIdx, prevVal, currentSolution[hintIdx], prevNotes, new Set());
+        setStatus(`Hint revealed (${hintsUsed} hint${hintsUsed > 1 ? 's' : ''} used)`);
+
+        recheckAllConflicts();
+        checkWin();
+        debounceSave();
+    }
+
+    // ── Error Checking ─────────────────────────────────────────────────
+    function checkErrors() {
+        if (!gameActive || !currentSolution || gameWon) return;
+
+        let errorCount = 0;
+        let filledCount = 0;
+
+        for (let i = 0; i < 81; i++) {
+            if (wrappers[i].classList.contains('locked')) continue;
+            wrappers[i].classList.remove('user-error', 'correct-check');
+
+            if (inputs[i].value) {
+                filledCount++;
+                if (inputs[i].value !== currentSolution[i]) {
+                    wrappers[i].classList.add('user-error');
+                    errorCount++;
+                } else {
+                    wrappers[i].classList.add('correct-check');
+                }
+            }
+        }
+
+        if (errorCount > 0) {
+            setStatus(`${errorCount} error${errorCount > 1 ? 's' : ''} found`, 'error');
+            gridEl.classList.add('shake');
+            setTimeout(() => gridEl.classList.remove('shake'), 300);
+        } else if (filledCount > 0) {
+            setStatus('No errors — keep going!', 'success');
+        } else {
+            setStatus('Fill in some cells first');
+        }
+    }
+
+    // ── Win Detection ──────────────────────────────────────────────────
+    function checkWin() {
+        if (!gameActive || !currentSolution || gameWon) return;
+
+        const current = readGrid();
+        if (current === currentSolution) {
+            gameWon = true;
+            gameActive = false;
+            stopTimer();
+
+            for (let i = 0; i < 81; i++) {
+                wrappers[i].classList.add('win-anim');
+                wrappers[i].style.animationDelay = `${(i % 9) * 20 + Math.floor(i / 9) * 20}ms`;
+            }
+
+            const timeStr = formatTime(timerSeconds);
+            const hintStr = hintsUsed > 0 ? `${hintsUsed} hint${hintsUsed > 1 ? 's' : ''} used` : 'No hints used';
+            winDetails.textContent = `Time: ${timeStr} — ${hintStr}`;
+
+            setTimeout(() => winOverlay.classList.add('active'), 600);
+            setStatus('Puzzle complete!', 'success');
+
+            // Update stats
+            updateStats(currentDifficulty, timerSeconds, hintsUsed);
+            deleteSavedGame();
+        }
+    }
+
+    // ── Timer ──────────────────────────────────────────────────────────
+    function startTimer() {
+        stopTimer();
+        timerSeconds = 0;
+        gameTimerEl.textContent = '0:00';
+        timerInterval = setInterval(() => {
+            timerSeconds++;
+            gameTimerEl.textContent = formatTime(timerSeconds);
+        }, 1000);
+    }
+
+    function stopTimer() {
+        if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+    }
+
+    function formatTime(s) {
+        const mins = Math.floor(s / 60);
+        const secs = s % 60;
+        return `${mins}:${secs.toString().padStart(2, '0')}`;
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    //  localStorage SAVE / RESUME
+    // ══════════════════════════════════════════════════════════════════
+
+    const SAVE_KEY = 'sudoku_saved_game';
+    const STATS_KEY = 'sudoku_stats';
+
+    function debounceSave() {
+        if (saveTimeout) clearTimeout(saveTimeout);
+        saveTimeout = setTimeout(saveGame, 2000);
+    }
+
+    function saveGame() {
+        if (!gameActive || !currentPuzzle || gameWon) return;
+
+        const state = {
+            puzzle: currentPuzzle,
+            solution: currentSolution,
+            difficulty: currentDifficulty,
+            userValues: readGrid(),
+            notes: cellNotes.map(s => [...s]),
+            timerSeconds,
+            hintsUsed,
+            lockedCells: Array.from({ length: 81 }, (_, i) => wrappers[i].classList.contains('locked')),
+            hintCells: Array.from({ length: 81 }, (_, i) => wrappers[i].classList.contains('hint')),
+            timestamp: Date.now(),
+        };
+
+        try {
+            localStorage.setItem(SAVE_KEY, JSON.stringify(state));
+        } catch (e) { /* quota exceeded, ignore */ }
+    }
+
+    function loadSavedGame() {
+        try {
+            const raw = localStorage.getItem(SAVE_KEY);
+            if (!raw) return null;
+            return JSON.parse(raw);
+        } catch (e) { return null; }
+    }
+
+    function deleteSavedGame() {
+        localStorage.removeItem(SAVE_KEY);
+    }
+
+    function resumeGame(state) {
+        currentPuzzle = state.puzzle;
+        currentSolution = state.solution;
+        currentDifficulty = state.difficulty;
+        timerSeconds = state.timerSeconds || 0;
+        hintsUsed = state.hintsUsed || 0;
+        gameWon = false;
+        undoStack.length = 0;
+        redoStack.length = 0;
+
+        // Select difficulty button
+        selectDifficulty(currentDifficulty);
+
+        // Write user values
+        for (let i = 0; i < 81; i++) {
+            const ch = state.userValues[i];
+            inputs[i].value = (ch === '0') ? '' : ch;
+            wrappers[i].classList.remove('given', 'solved', 'error', 'hint', 'locked',
+                'user-error', 'correct-check', 'conflict');
+            inputs[i].readOnly = false;
+            clearCellNotes(i);
+
+            if (state.lockedCells[i]) {
+                wrappers[i].classList.add('locked');
+                inputs[i].readOnly = true;
+                if (state.hintCells && state.hintCells[i]) {
+                    wrappers[i].classList.add('hint');
+                } else if (currentPuzzle[i] !== '0') {
+                    wrappers[i].classList.add('given');
+                }
+            }
+
+            // Restore notes
+            if (state.notes[i]) {
+                for (const d of state.notes[i]) cellNotes[i].add(d);
+                renderNotes(i);
+            }
+        }
+
+        gameActive = true;
+        gameTimerEl.textContent = formatTime(timerSeconds);
+
+        // Resume timer
+        timerInterval = setInterval(() => {
+            timerSeconds++;
+            gameTimerEl.textContent = formatTime(timerSeconds);
+        }, 1000);
+
+        recheckAllConflicts();
+
+        const label = DIFFICULTY_LABELS[currentDifficulty];
+        setStatus(`Resumed: ${label} — ${formatTime(timerSeconds)}`);
+
+        // Remove resume banner if it exists
+        const banner = document.querySelector('.resume-banner');
+        if (banner) banner.remove();
+    }
+
+    function showResumeBanner(state) {
+        const existing = document.querySelector('.resume-banner');
+        if (existing) existing.remove();
+
+        const diff = DIFFICULTY_LABELS[state.difficulty] || state.difficulty;
+        const time = formatTime(state.timerSeconds || 0);
+
+        const banner = document.createElement('div');
+        banner.className = 'resume-banner';
+        banner.innerHTML = `
+      <span>Resume ${diff} game? (${time})</span>
+      <div class="resume-actions">
+        <button class="btn btn-primary" id="btn-resume-yes">Resume</button>
+        <button class="btn" id="btn-resume-no">Dismiss</button>
+      </div>
+    `;
+
+        const card = document.getElementById('app');
+        card.appendChild(banner);
+
+        document.getElementById('btn-resume-yes').addEventListener('click', () => {
+            resumeGame(state);
+        });
+        document.getElementById('btn-resume-no').addEventListener('click', () => {
+            banner.remove();
+            deleteSavedGame();
+        });
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    //  STATS
+    // ══════════════════════════════════════════════════════════════════
+
+    function getStats() {
+        try {
+            const raw = localStorage.getItem(STATS_KEY);
+            return raw ? JSON.parse(raw) : {};
+        } catch (e) { return {}; }
+    }
+
+    function saveStats(stats) {
+        try { localStorage.setItem(STATS_KEY, JSON.stringify(stats)); } catch (e) { }
+    }
+
+    function updateStats(difficulty, timeSeconds, hints) {
+        const stats = getStats();
+        if (!stats[difficulty]) {
+            stats[difficulty] = { played: 0, won: 0, bestTime: null, totalTime: 0, totalHints: 0 };
+        }
+        const s = stats[difficulty];
+        s.played++;
+        s.won++;
+        s.totalTime += timeSeconds;
+        s.totalHints += hints;
+        if (s.bestTime === null || timeSeconds < s.bestTime) {
+            s.bestTime = timeSeconds;
+        }
+        saveStats(stats);
+    }
+
+    function renderStats() {
+        const stats = getStats();
+        const diffs = ['easy', 'medium', 'hard', 'expert', 'evil', 'nightmare'];
+
+        let hasData = false;
+        for (const d of diffs) {
+            if (stats[d] && stats[d].played > 0) { hasData = true; break; }
+        }
+
+        if (!hasData) {
+            statsContent.innerHTML = '<p style="text-align:center;color:var(--text-muted);">No games played yet.</p>';
+            return;
+        }
+
+        let html = `<table class="stats-table">
+      <thead><tr><th>Difficulty</th><th>Played</th><th>Best Time</th><th>Avg Time</th><th>Hints</th></tr></thead>
+      <tbody>`;
+
+        for (const d of diffs) {
+            const s = stats[d];
+            if (!s || s.played === 0) continue;
+            const avg = Math.round(s.totalTime / s.won);
+            html += `<tr>
+        <td>${DIFFICULTY_LABELS[d]}</td>
+        <td>${s.played}</td>
+        <td>${formatTime(s.bestTime)}</td>
+        <td>${formatTime(avg)}</td>
+        <td>${s.totalHints}</td>
+      </tr>`;
+        }
+
+        html += '</tbody></table>';
+        statsContent.innerHTML = html;
+    }
+
+    function openStats() {
+        renderStats();
+        statsOverlay.classList.add('active');
+    }
+
+    function closeStats() { statsOverlay.classList.remove('active'); }
+
+    function resetStats() {
+        localStorage.removeItem(STATS_KEY);
+        renderStats();
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    //  MODE SWITCHING
+    // ══════════════════════════════════════════════════════════════════
+
+    function switchMode(newMode) {
+        if (newMode === mode) return;
+
+        // Save current play game before switching
+        if (mode === 'play' && gameActive) saveGame();
+
+        mode = newMode;
+        stopTimer();
+        clearGrid();
+        gameActive = false;
+        gameWon = false;
+        currentPuzzle = null;
+        currentSolution = null;
+        notesMode = false;
+        btnNotesToggle.textContent = 'Notes: OFF';
+        btnNotesToggle.classList.remove('notes-active');
+
+        tabSolver.classList.toggle('active', mode === 'solver');
+        tabPlay.classList.toggle('active', mode === 'play');
+        modeIndicator.classList.toggle('play', mode === 'play');
+
+        solverControls.style.display = mode === 'solver' ? 'flex' : 'none';
+        playControls.style.display = mode === 'play' ? 'flex' : 'none';
+        btnStats.style.display = mode === 'play' ? 'inline-flex' : 'none';
+
+        if (mode === 'solver') {
+            subtitleEl.textContent = 'Constraint propagation & backtracking — solves in <1 ms';
+            gameTimerEl.textContent = '';
+            setStatus('Click a cell and type a digit');
+        } else {
+            subtitleEl.textContent = 'Select a difficulty and start playing';
+            solveTimeEl.textContent = '';
+            solveTimeEl.classList.remove('visible');
+            setStatus('Click "New Game" to start');
+
+            // Check for saved game
+            const saved = loadSavedGame();
+            if (saved) showResumeBanner(saved);
+        }
+    }
+
+    function selectDifficulty(diff) {
+        currentDifficulty = diff;
+        diffSelector.querySelectorAll('.diff-btn').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.diff === diff);
+        });
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    //  STATUS + GLOBAL SHORTCUTS
+    // ══════════════════════════════════════════════════════════════════
+
+    function setStatus(msg, type = '') {
+        statusEl.textContent = msg;
+        statusEl.className = 'status-msg' + (type ? ` ${type}` : '');
+    }
+
+    document.addEventListener('keydown', (e) => {
+        if (e.ctrlKey && e.key === 'i') {
+            e.preventDefault();
+            if (mode === 'solver') openModal();
+        }
+    });
+
+    // ══════════════════════════════════════════════════════════════════
+    //  EVENT LISTENERS
+    // ══════════════════════════════════════════════════════════════════
+
+    tabSolver.addEventListener('click', () => switchMode('solver'));
+    tabPlay.addEventListener('click', () => switchMode('play'));
+
+    btnSolve.addEventListener('click', solve);
+    btnExample.addEventListener('click', loadSolverExample);
+    btnPaste.addEventListener('click', openModal);
+    btnClear.addEventListener('click', clearGrid);
+
+    btnNewGame.addEventListener('click', () => startGame());
+    btnHint.addEventListener('click', giveHint);
+    btnCheck.addEventListener('click', checkErrors);
+    btnReset.addEventListener('click', resetGame);
+    btnUndo.addEventListener('click', doUndo);
+    btnRedo.addEventListener('click', doRedo);
+    btnNotesToggle.addEventListener('click', toggleNotesMode);
+    btnStats.addEventListener('click', openStats);
+    btnStatsClose.addEventListener('click', closeStats);
+    btnStatsReset.addEventListener('click', resetStats);
+
+    btnWinNew.addEventListener('click', () => {
+        winOverlay.classList.remove('active');
+        startGame();
+    });
+
+    diffSelector.addEventListener('click', (e) => {
+        if (e.target.classList.contains('diff-btn')) {
+            selectDifficulty(e.target.dataset.diff);
+        }
+    });
+
+    btnModalOk.addEventListener('click', doImport);
+    btnModalNo.addEventListener('click', closeModal);
+    modalOverlay.addEventListener('click', (e) => { if (e.target === modalOverlay) closeModal(); });
+    statsOverlay.addEventListener('click', (e) => { if (e.target === statsOverlay) closeStats(); });
+    winOverlay.addEventListener('click', (e) => { if (e.target === winOverlay) winOverlay.classList.remove('active'); });
+
+    // ══════════════════════════════════════════════════════════════════
+    //  NUMPAD (mobile/tablet)
+    // ══════════════════════════════════════════════════════════════════
+
+    function handleNumpadInput(digit) {
+        const idx = focusedIdx;
+        if (idx < 0) return;
+        const isLocked = wrappers[idx].classList.contains('locked');
+        if (isLocked) return;
+
+        if (digit === '0') {
+            // Erase
+            if (mode === 'play' && gameActive) {
+                if (cellNotes[idx].size > 0) {
+                    pushUndo(idx, inputs[idx].value, '', new Set(cellNotes[idx]), new Set());
+                    clearCellNotes(idx);
+                } else if (inputs[idx].value) {
+                    pushUndo(idx, inputs[idx].value, '', new Set(cellNotes[idx]), new Set());
+                    inputs[idx].value = '';
+                    clearConflictStyle(idx);
+                }
+                debounceSave();
+            } else if (mode === 'solver') {
+                inputs[idx].value = '';
+                wrappers[idx].classList.remove('given', 'solved', 'error', 'solve-anim');
+                if (solved) clearSolution();
+            }
+            updateDigitHighlight();
+            return;
+        }
+
+        if (mode === 'play' && gameActive && notesMode) {
+            toggleNote(idx, digit);
+            return;
+        }
+
+        // Place digit
+        if (mode === 'play' && gameActive) {
+            const prevVal = inputs[idx].value;
+            const prevNotes = new Set(cellNotes[idx]);
+            inputs[idx].value = digit;
+            clearCellNotes(idx);
+            clearPeerNotes(idx, digit);
+            wrappers[idx].classList.remove('user-error', 'correct-check');
+            pushUndo(idx, prevVal, digit, prevNotes, new Set());
+            highlightConflicts(idx);
+            checkWin();
+            debounceSave();
+        } else if (mode === 'solver') {
+            if (solved) clearSolution();
+            inputs[idx].value = digit;
+            wrappers[idx].classList.remove('error');
+            setStatus('');
+        }
+
+        updateDigitHighlight();
+        advanceToNextEmpty(idx);
+    }
+
+    // Prevent numpad buttons from stealing focus from the cell input.
+    // Without this, tapping a numpad btn triggers onCellBlur → focusedIdx = -1
+    if (numpadEl) {
+        numpadEl.addEventListener('pointerdown', (e) => {
+            const btn = e.target.closest('.numpad-btn');
+            if (btn) e.preventDefault(); // prevents focus transfer away from cell
+        });
+
+        numpadEl.addEventListener('click', (e) => {
+            const btn = e.target.closest('.numpad-btn');
+            if (!btn) return;
+            e.preventDefault();
+
+            // Handle notes button separately
+            if (btn.id === 'numpad-notes') {
+                toggleNotesMode();
+                btn.classList.toggle('notes-active', notesMode);
+                return;
+            }
+
+            const digit = btn.dataset.digit;
+            if (digit !== undefined) {
+                handleNumpadInput(digit);
+            }
+        });
+    }
+
+    // On touch devices, tapping a cell wrapper should focus the input
+    // (readOnly inputs sometimes don't focus on tap in iOS Safari)
+    if (isTouchDevice) {
+        gridEl.addEventListener('pointerdown', (e) => {
+            const wrapper = e.target.closest('.cell-wrapper');
+            if (!wrapper) return;
+            const idx = parseInt(wrapper.dataset.idx, 10);
+            if (!isNaN(idx)) {
+                inputs[idx].focus();
+                onCellFocus(idx);
+            }
+        });
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    //  INIT
+    // ══════════════════════════════════════════════════════════════════
+
+    buildGrid();
+    inputs[0].focus();
+})();
