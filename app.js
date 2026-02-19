@@ -56,7 +56,7 @@
     for (let i = 0; i < 81; i++) cellNotes.push(new Set());
 
     // ── State ──────────────────────────────────────────────────────────
-    let mode = 'play';
+    let mode = 'solver'; // switchMode('play') called at init
     let solved = false;
     let solverExampleIdx = 0;
 
