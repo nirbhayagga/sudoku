@@ -30,6 +30,8 @@
     const btnRedo = document.getElementById('btn-redo');
     const btnNotesToggle = document.getElementById('btn-notes-toggle');
     const diffSelector = document.getElementById('difficulty-selector');
+    const levelInput = document.getElementById('level-input');
+    const levelMaxDisplay = document.getElementById('level-max');
     const btnStats = document.getElementById('btn-stats');
 
     const modalOverlay = document.getElementById('modal-overlay');
@@ -777,14 +779,32 @@
                     localStorage.setItem(playedKey, '[]');
                 }
 
-                // Pick a random unplayed puzzle
-                const unplayed = bankList.filter(p => !played.includes(p.id));
-                const pick = unplayed[Math.floor(Math.random() * unplayed.length)];
+                // Check for user-specified level
+                const reqLevel = levelInput ? parseInt(levelInput.value, 10) : NaN;
+                let pick;
+
+                // Load specified level if valid
+                if (!isNaN(reqLevel) && reqLevel >= 1 && reqLevel <= bankList.length) {
+                    pick = bankList[reqLevel - 1];
+                } else {
+                    // Pick a random unplayed puzzle
+                    const unplayed = bankList.filter(p => !played.includes(p.id));
+                    pick = unplayed[Math.floor(Math.random() * unplayed.length)];
+
+                    // Mark as played
+                    played.push(pick.id);
+                    try { localStorage.setItem(playedKey, JSON.stringify(played)); } catch (e) { }
+                }
+
                 puzzle = pick.puzzle;
 
-                // Mark as played
-                played.push(pick.id);
-                try { localStorage.setItem(playedKey, JSON.stringify(played)); } catch (e) { }
+                // Update level input to show the randomly chosen level
+                if (levelInput) {
+                    const actualIndex = bankList.findIndex(p => p.id === pick.id);
+                    if (actualIndex !== -1) {
+                        levelInput.value = actualIndex + 1;
+                    }
+                }
 
                 // Solve to get solution
                 const solveResult = SudokuSolver.solveSudoku(puzzle);
@@ -1257,6 +1277,14 @@
         diffSelector.querySelectorAll('.diff-btn').forEach(btn => {
             btn.classList.toggle('active', btn.dataset.diff === diff);
         });
+
+        if (levelInput && levelMaxDisplay) {
+            const max = diff === 'nightmare' ? 3000 : 500;
+            levelInput.max = max;
+            levelMaxDisplay.textContent = '/ ' + max;
+            // Clear current selection on diff change unless empty
+            levelInput.value = '';
+        }
     }
 
     // ══════════════════════════════════════════════════════════════════

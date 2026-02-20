@@ -788,8 +788,60 @@ body::before {
 }
 
 .diff-nightmare.active {
+    color: var(--text-primary);
     background: rgba(220, 38, 38, 0.15);
-    color: var(--nightmare-color);
+    border-color: rgba(220, 38, 38, 0.3);
+}
+
+.level-selector {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    padding: 0.25rem 0.5rem;
+    font-family: 'Inter', sans-serif;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+
+.level-selector label {
+    font-weight: 500;
+}
+
+.level-selector input {
+    width: 50px;
+    background: transparent;
+    border: 1px solid var(--border-box);
+    border-radius: 4px;
+    color: var(--text-primary);
+    font-family: 'JetBrains Mono', 'Inter', monospace;
+    font-size: 0.8rem;
+    text-align: center;
+    padding: 2px;
+    outline: none;
+    transition: border-color var(--transition);
+}
+
+.level-selector input:focus {
+    border-color: var(--accent);
+}
+
+/* Hide number input spinners */
+.level-selector input::-webkit-outer-spin-button,
+.level-selector input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+.level-selector input[type=number] {
+    -moz-appearance: textfield;
+    appearance: textfield;
+}
+
+.level-max {
+    color: var(--text-muted);
 }
 
 .play-buttons {
