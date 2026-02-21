@@ -42,11 +42,18 @@
     const winOverlay = document.getElementById('win-overlay');
     const winDetails = document.getElementById('win-details');
     const btnWinNew = document.getElementById('btn-win-new');
+    const scoreSubmitContainer = document.getElementById('score-submit-container');
+    const playerNameInput = document.getElementById('player-name');
+    const btnSubmitScore = document.getElementById('btn-submit-score');
 
     const statsOverlay = document.getElementById('stats-overlay');
     const statsContent = document.getElementById('stats-content');
     const btnStatsClose = document.getElementById('btn-stats-close');
     const btnStatsReset = document.getElementById('btn-stats-reset');
+    const statsTabs = document.getElementById('stats-tabs');
+    const btnTabLocal = document.getElementById('btn-tab-local');
+    const btnTabGlobal = document.getElementById('btn-tab-global');
+    const globalLeaderboardArea = document.getElementById('global-leaderboard');
 
     // Theme picker & Update
     const themeToggle = document.getElementById('theme-toggle');
@@ -76,9 +83,11 @@
     let timerInterval = null;
     let timerSeconds = 0;
     let hintsUsed = 0;
+    let apiAvailable = true;
     let notesMode = false;
     let focusedIdx = -1;
     let lastTouchedIdx = -1; // Persists through blur — used by numpad on mobile
+    let selectedKeypadDigit = null; // Used to highlight specific numbers when no cell is selected
 
     // Undo/redo
     const undoStack = [];
@@ -352,10 +361,9 @@
     function onCellBlur(idx) {
         // On touch devices, blur is irrelevant — selection is visual only
         if (isTouchDevice) return;
-        wrappers[idx].classList.remove('focused');
-        clearHighlights();
-        clearDigitHighlight();
+        if (focusedIdx >= 0) wrappers[focusedIdx].classList.remove('focused');
         focusedIdx = -1;
+        updateDigitHighlight();
     }
 
     // Touch-only: visually select a cell without calling input.focus()
@@ -464,8 +472,14 @@
 
     function updateDigitHighlight() {
         clearDigitHighlight();
-        if (focusedIdx < 0) return;
-        const digit = inputs[focusedIdx].value;
+        let digit = null;
+
+        if (focusedIdx >= 0 && inputs[focusedIdx].value) {
+            digit = inputs[focusedIdx].value;
+        } else if (selectedKeypadDigit) {
+            digit = selectedKeypadDigit;
+        }
+
         if (!digit) return;
 
         for (let i = 0; i < 81; i++) {
@@ -477,6 +491,31 @@
 
     function clearDigitHighlight() {
         for (const w of wrappers) w.classList.remove('digit-highlight');
+        selectedKeypadDigit = null;
+    }
+
+    // ── DIGIT COMPLETION (Fade Out) ───────────────────────────────────
+
+    function updateCompletedDigits() {
+        // Count occurrences of each digit 1-9
+        const counts = { '1': 0, '2': 0, '3': 0, '4': 0, '5': 0, '6': 0, '7': 0, '8': 0, '9': 0 };
+        for (let i = 0; i < 81; i++) {
+            const val = inputs[i].value;
+            if (val && counts[val] !== undefined && !wrappers[i].classList.contains('error') && !wrappers[i].classList.contains('user-error') && !wrappers[i].classList.contains('conflict')) {
+                counts[val]++;
+            }
+        }
+
+        // Update numpad buttons (mobile/tablet)
+        if (numpadEl) {
+            numpadEl.querySelectorAll('.numpad-btn').forEach(btn => {
+                const digit = btn.dataset.digit;
+                if (digit && digit !== '0') {
+                    btn.classList.toggle('completed', counts[digit] >= 9);
+                    btn.classList.toggle('selected', selectedKeypadDigit === digit);
+                }
+            });
+        }
     }
 
     // ══════════════════════════════════════════════════════════════════
@@ -556,46 +595,50 @@
         if (undoStack.length > 200) undoStack.shift();
     }
 
-    function doUndo() {
-        if (undoStack.length === 0 || !gameActive) return;
-        const action = undoStack.pop();
-        redoStack.push(action);
-
-        inputs[action.idx].value = action.prevVal;
-        cellNotes[action.idx] = new Set(action.prevNotes);
-        renderNotes(action.idx);
-        wrappers[action.idx].classList.remove('user-error', 'correct-check');
+    function applyOp(op) {
+        inputs[op.idx].value = op.newVal;
+        cellNotes[op.idx] = new Set(op.newNotes);
+        renderNotes(op.idx);
+        wrappers[op.idx].classList.remove('user-error', 'correct-check');
         recheckAllConflicts();
+    }
 
-        // Move selection to the undone cell
-        if (isTouchDevice) {
-            selectCellTouch(action.idx);
-        } else {
-            inputs[action.idx].focus();
-        }
-        updateDigitHighlight();
+    function doUndo() {
+        if (!gameActive || undoStack.length === 0) return;
+        const op = undoStack.pop();
+        redoStack.push({
+            idx: op.idx,
+            prevVal: inputs[op.idx].value,
+            newVal: op.prevVal,
+            prevNotes: new Set(cellNotes[op.idx]),
+            newNotes: op.prevNotes
+        });
+
+        applyOp(op);
+        highlightConflicts(op.idx);
+        lastTouchedIdx = op.idx;
+        if (isTouchDevice) selectCellTouch(op.idx);
         debounceSave();
+        updateCompletedDigits();
     }
 
     function doRedo() {
-        if (redoStack.length === 0 || !gameActive) return;
-        const action = redoStack.pop();
-        undoStack.push(action);
+        if (!gameActive || redoStack.length === 0) return;
+        const op = redoStack.pop();
+        undoStack.push({
+            idx: op.idx,
+            prevVal: inputs[op.idx].value,
+            newVal: op.newVal,
+            prevNotes: new Set(cellNotes[op.idx]),
+            newNotes: op.newNotes
+        });
 
-        inputs[action.idx].value = action.newVal;
-        cellNotes[action.idx] = new Set(action.newNotes);
-        renderNotes(action.idx);
-        wrappers[action.idx].classList.remove('user-error', 'correct-check');
-        recheckAllConflicts();
-
-        // Move selection to the redone cell
-        if (isTouchDevice) {
-            selectCellTouch(action.idx);
-        } else {
-            inputs[action.idx].focus();
-        }
-        updateDigitHighlight();
+        applyOp(op);
+        highlightConflicts(op.idx);
+        lastTouchedIdx = op.idx;
+        if (isTouchDevice) selectCellTouch(op.idx);
         debounceSave();
+        updateCompletedDigits();
     }
 
     // ══════════════════════════════════════════════════════════════════
@@ -858,6 +901,7 @@
                 }
             }
 
+            updateCompletedDigits();
             deleteSavedGame();
             debounceSave();
         }, 16);
@@ -973,6 +1017,25 @@
             const timeStr = formatTime(timerSeconds);
             const hintStr = hintsUsed > 0 ? `${hintsUsed} hint${hintsUsed > 1 ? 's' : ''} used` : 'No hints used';
             winDetails.textContent = `Time: ${timeStr} — ${hintStr}`;
+
+            // Reset submit UI
+            scoreSubmitContainer.style.display = 'none';
+            playerNameInput.value = localStorage.getItem('sudoku_player_name') || '';
+            btnSubmitScore.disabled = false;
+            btnSubmitScore.textContent = 'Submit Score';
+
+            if (apiAvailable) {
+                // Ping API to see if it's reachable before showing submit box
+                fetch('/api/health')
+                    .then(res => {
+                        if (res.ok) {
+                            scoreSubmitContainer.style.display = 'flex';
+                        } else {
+                            apiAvailable = false;
+                        }
+                    })
+                    .catch(() => { apiAvailable = false; });
+            }
 
             setTimeout(() => winOverlay.classList.add('active'), 600);
             setStatus('Puzzle complete!', 'success');
@@ -1204,6 +1267,10 @@
 
     function openStats() {
         renderStats();
+        if (apiAvailable) {
+            statsTabs.style.display = 'flex';
+        }
+        btnTabLocal.click(); // Always open to local by default
         statsOverlay.classList.add('active');
     }
 
@@ -1331,6 +1398,112 @@
         startGame();
     });
 
+    // ── Global Leaderboard Logic ──────────────────────────────────────────
+
+    btnSubmitScore.addEventListener('click', () => {
+        const name = playerNameInput.value.trim();
+        if (!name) {
+            playerNameInput.focus();
+            return;
+        }
+
+        localStorage.setItem('sudoku_player_name', name);
+        btnSubmitScore.disabled = true;
+        btnSubmitScore.textContent = 'Submitting...';
+
+        const reqLevel = levelInput && levelInput.value ? parseInt(levelInput.value, 10) : null;
+
+        fetch('/api/scores', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                name: name,
+                difficulty: currentDifficulty,
+                level: reqLevel || 0,
+                time_seconds: timerSeconds
+            })
+        })
+            .then(res => {
+                if (!res.ok) throw new Error('Failed to submit');
+                scoreSubmitContainer.innerHTML = '<span style="color:#22c55e;font-size:0.85rem;padding:0.5rem">Score submitted!</span>';
+            })
+            .catch(err => {
+                console.error('Submit error:', err);
+                apiAvailable = false;
+                scoreSubmitContainer.style.display = 'none';
+            });
+    });
+
+    btnTabLocal.addEventListener('click', () => {
+        btnTabLocal.classList.add('active');
+        btnTabGlobal.classList.remove('active');
+        statsContent.style.display = 'block';
+        globalLeaderboardArea.style.display = 'none';
+        btnStatsReset.style.display = 'block';
+    });
+
+    btnTabGlobal.addEventListener('click', () => {
+        btnTabGlobal.classList.add('active');
+        btnTabLocal.classList.remove('active');
+        statsContent.style.display = 'none';
+        globalLeaderboardArea.style.display = 'block';
+        btnStatsReset.style.display = 'none';
+        fetchGlobalLeaderboard(currentDifficulty);
+    });
+
+    function fetchGlobalLeaderboard(difficulty) {
+        globalLeaderboardArea.innerHTML = '<div class="leaderboard-loading">Loading scores...</div>';
+        fetch(`/api/scores?difficulty=${difficulty}`)
+            .then(res => {
+                if (!res.ok) throw new Error('API down');
+                return res.json();
+            })
+            .then(scores => {
+                if (scores.length === 0) {
+                    globalLeaderboardArea.innerHTML = '<div class="leaderboard-loading">No scores yet for this difficulty.</div>';
+                    return;
+                }
+
+                let html = `
+                    <table class="leaderboard-table">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Name</th>
+                                <th>Time</th>
+                                <th>Lvl</th>
+                                <th>Date</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                `;
+
+                scores.forEach((s, idx) => {
+                    const rankClass = idx < 3 ? `rank-${idx + 1}` : '';
+                    const dateObj = new Date(s.date);
+                    const dateStr = dateObj.toLocaleDateString();
+                    html += `
+                        <tr>
+                            <td class="${rankClass}">${idx + 1}</td>
+                            <td class="${rankClass}">${s.name}</td>
+                            <td>${formatTime(s.time_seconds)}</td>
+                            <td>${s.level || '?'}</td>
+                            <td>${dateStr}</td>
+                        </tr>
+                    `;
+                });
+
+                html += '</tbody></table>';
+                globalLeaderboardArea.innerHTML = html;
+            })
+            .catch(err => {
+                console.error('Leaderboard error:', err);
+                apiAvailable = false;
+                statsTabs.style.display = 'none';
+                btnTabLocal.click(); // fallback to local
+            });
+    }
+
     diffSelector.addEventListener('click', (e) => {
         if (e.target.classList.contains('diff-btn')) {
             selectDifficulty(e.target.dataset.diff);
@@ -1350,7 +1523,17 @@
     function handleNumpadInput(digit) {
         // Use lastTouchedIdx as fallback — focusedIdx is -1 after blur on mobile
         const idx = focusedIdx >= 0 ? focusedIdx : lastTouchedIdx;
-        if (idx < 0) return;
+
+        // If no cell is selected, treat it as a highlight request
+        if (idx < 0) {
+            if (digit !== '0') {
+                selectedKeypadDigit = selectedKeypadDigit === digit ? null : digit;
+                updateDigitHighlight();
+                updateCompletedDigits(); // Refresh numpad selection state
+            }
+            return;
+        }
+
         const isLocked = wrappers[idx].classList.contains('locked');
         if (isLocked) return;
 
@@ -1400,6 +1583,7 @@
         }
 
         updateDigitHighlight();
+        updateCompletedDigits();
         advanceToNextEmpty(idx);
     }
 
