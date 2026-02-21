@@ -11,19 +11,20 @@ The app has two modes, toggled via tabs at the top:
 Play sudoku puzzles with built-in hints, pencil marks, undo/redo, and more.
 
 - **6 difficulty levels** — Easy, Medium, Hard, Expert, Evil, Nightmare
-- **5,500 pre-generated puzzles** — 500 per difficulty (Easy–Evil) + 3,000 Nightmare (17-clue), served instantly from a puzzle bank. Generator fallback for Easy–Evil.
-- **5 color themes** — Midnight (dark), Sakura (pink/cream), Ocean (blue-teal), Forest (green), Arctic (light) — saved in localStorage
+- **5,500 pre-generated puzzles** — 500 per difficulty (Easy–Evil) + 3,000 Nightmare (17-clue), served instantly from a puzzle bank. Play a specific level or random ones.
+- **7 color themes** — Midnight (dark), Sakura (pink/cream), Ocean (blue-teal), Forest (green), Arctic (light), Naruto (orange), Wicked (emerald) — saved in localStorage
+- **Global & Local Leaderboard** — Track your times against others (if using the provided API backend), or just locally in your browser. Gracefully delegates to local if the backend is down.
 - **Pencil marks / Notes** — Toggle with `N`, type digits to add/remove candidate marks
 - **Hints** — Reveals one correct cell in amber (press `H`)
 - **Error checking** — Click "Check" or press `Enter` to highlight incorrect entries
+- **Target & Keypad Highlighting** — Focus a cell to see all matching digits glow. Or, tap a number on the mobile keypad without focusing a cell to instantly highlight all occurrences on the board.
+- **Keypad Completing** — Once a number has been placed 9 times on the board, its mobile keypad button fades out automatically.
 - **Conflict detection** — Duplicates in the same row/column/box flash orange immediately
-- **Digit highlighting** — Focus a cell and all matching digits get a subtle glow
 - **Undo / Redo** — `Ctrl+Z` / `Ctrl+Y` with full history
 - **Timer** — Counts up during gameplay
-- **Win detection** — Celebration overlay with your time and hint count
 - **Save / Resume** — Game auto-saves to localStorage; offers to resume on reload
 - **Stats** — Tracks games played, best time, and average time per difficulty
-- **Mobile optimized** — On-screen numpad, touch-friendly targets, no virtual keyboard popup
+- **Mobile optimized** — Native-feeling header, segmented control tabs, on-screen numpad, touch-friendly targets, no virtual keyboard popup
 
 ### Solver Mode
 
@@ -66,25 +67,32 @@ sudoku_solver/
   generator.js        Runtime puzzle generator with uniqueness verification
   puzzle-bank.js      5,500 pre-generated puzzles across 6 difficulty levels
   app.js              UI controller (modes, themes, notes, undo, stats, save)
-  Dockerfile          Nginx-alpine container
-  docker-compose.yml  Compose config (Traefik or standalone)
+  backend/            SQLite + Node.js backend for Global Leaderboard (`server.js`)
+  Dockerfile          Nginx-alpine container for the frontend
+  docker-compose.yml  Compose config (Traefik or standalone + backend API)
   nginx.conf          Nginx server config (used inside the Docker image)
 ```
 
-## Running Locally
+## Running Locally (No Server Needed)
 
-Open `index.html` in any modern browser. No server required.
+You don't need to deploy anything to play—just open `index.html` in any modern browser.
+
+> [!NOTE]
+> If you run the game directly from `index.html` without the backend, the Global Leaderboard API will gracefully fail silently. The app will continue tracking your statistics tracking fully locally without throwing errors.
+
+If you prefer to run a local dev server:
 
 ```bash
-# Or use a dev server:
 python3 -m http.server 8000
 ```
 
-## Deploying with Docker
+## Deploying with Docker (Full Setup)
+
+To use the **Global Leaderboard** feature and serve the app cleanly online, use Docker. This spins up the Nginx frontend, the Node.js API, and connects them.
 
 ### With Traefik (default)
 
-The included `docker-compose.yml` builds the image directly from the Forgejo repo and routes via Traefik:
+The included `docker-compose.yml` builds the frontend and backend directly from the repo and routes via Traefik. The backend lives at `/api`:
 
 ```bash
 docker compose up -d --build
@@ -94,7 +102,7 @@ This serves the app at `sudoku.example.com` via HTTPS.
 
 ### Without Traefik (standalone)
 
-For standalone deployment, uncomment the `ports` line and remove the Traefik labels and network:
+If you are not using Traefik, uncomment the `ports` lines in `docker-compose.yml` for the frontend and remove the Traefik labels/networks:
 
 ```yaml
 services:
@@ -105,6 +113,10 @@ services:
     restart: unless-stopped
     ports:
       - "8080:80"
+  
+  sudoku-api:
+    build: ./backend
+    # ...
 ```
 
 Then run:
@@ -113,28 +125,24 @@ Then run:
 docker compose up -d --build
 ```
 
-The app will be available at `http://localhost:8080`.
+The app will be available at `http://localhost:8080`, safely communicating with its Node backend in the Docker network.
 
-### Updating
+### Updating the App
 
-To deploy the latest code, just rebuild:
+To deploy the latest code from the repository, just rebuild:
 
 ```bash
 docker compose up -d --build
 ```
 
-Docker clones the repo fresh and rebuilds the image.
-
 ## Nginx Config
 
-The `nginx.conf` is used inside the Docker image (baked in via the Dockerfile). It handles:
+The `nginx.conf` is baked into the Docker frontend image. It handles:
 - Static file serving
-- JS/CSS caching (1 hour)
-- Gzip compression
-- Security headers
-
-You don't need nginx installed locally — it's only used inside the container.
+- Routing `/api/` traffic to the backend node application (`sudoku-api:3000`)
+- JS/CSS caching (`1 hour`) with `index.html` caching disabled (always fetch fresh)
+- Gzip compression and Security headers
 
 ## Browser Compatibility
 
-Tested in Chrome, Firefox, Safari, and Edge. Full mobile support for iOS and Android.
+Tested in Chrome, Firefox, Safari, and Edge. Full mobile support for iOS and Android with responsive layouts and touch-friendly controls.

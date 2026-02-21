@@ -16,6 +16,20 @@ services:
     networks:
       - traefik
 
+  sudoku-api:
+    build:
+      context: https://git.example.com/nirb/sudoku.git
+      dockerfile: backend/Dockerfile
+    container_name: sudoku-api
+    restart: unless-stopped
+    volumes:
+      - sudoku_db:/app/data
+    networks:
+      - traefik
+
+volumes:
+  sudoku_db:
+
 networks:
   traefik:
     external: true
