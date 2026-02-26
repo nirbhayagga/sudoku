@@ -584,6 +584,10 @@ body::before {
     background: rgba(99, 102, 241, 0.08);
 }
 
+.cell-wrapper.peer-highlight {
+    background: var(--bg-cell-hover);
+}
+
 .cell-wrapper.conflict {
     background: rgba(251, 146, 60, 0.12);
 }
@@ -1096,6 +1100,144 @@ body::before {
     line-height: 1.6;
 }
 
+.win-submit {
+    display: flex;
+    gap: 0.5rem;
+    justify-content: center;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.win-submit input {
+    padding: 0.4rem 0.75rem;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    background: var(--bg-cell);
+    color: var(--text-primary);
+    font-family: 'Inter', sans-serif;
+    font-size: 0.85rem;
+    outline: none;
+    width: 140px;
+}
+
+.win-submit input:focus {
+    border-color: var(--accent);
+}
+
+.win-submit .btn {
+    font-size: 0.8rem;
+    padding: 0.4rem 0.75rem;
+}
+
+/* ── Leaderboard Modal ───────────────────────────────────────────── */
+.leaderboard-modal {
+    width: min(520px, 92vw);
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.leaderboard-tabs {
+    display: flex;
+    gap: 2px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    padding: 2px;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+}
+
+.lb-tab {
+    font-family: 'Inter', sans-serif;
+    font-size: 0.7rem;
+    font-weight: 500;
+    padding: 0.3rem 0.5rem;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    border-radius: 4px;
+    transition: all var(--transition);
+    flex: 1;
+    text-align: center;
+}
+
+.lb-tab:hover {
+    color: var(--text-secondary);
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.lb-tab.active {
+    color: var(--text-primary);
+    background: rgba(99, 102, 241, 0.15);
+    font-weight: 600;
+}
+
+#leaderboard-content {
+    overflow-y: auto;
+    max-height: 50vh;
+    min-height: 120px;
+}
+
+.lb-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8125rem;
+}
+
+.lb-table th {
+    text-align: left;
+    padding: 0.5rem 0.6rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    border-bottom: 1px solid var(--border-subtle);
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    position: sticky;
+    top: 0;
+    background: var(--bg-secondary);
+}
+
+.lb-table td {
+    padding: 0.4rem 0.6rem;
+    color: var(--text-primary);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.8rem;
+}
+
+.lb-table td:first-child {
+    font-family: 'Inter', sans-serif;
+    color: var(--text-muted);
+    font-weight: 600;
+    width: 2rem;
+    text-align: center;
+}
+
+.lb-table td:nth-child(2) {
+    font-family: 'Inter', sans-serif;
+    color: var(--text-primary);
+    font-weight: 500;
+}
+
+.lb-table tr:last-child td {
+    border-bottom: none;
+}
+
+.lb-table tr.lb-highlight td {
+    color: var(--accent);
+    font-weight: 600;
+}
+
+.lb-empty {
+    text-align: center;
+    color: var(--text-muted);
+    padding: 2rem 1rem;
+    font-size: 0.85rem;
+}
+
 /* ── Resume Banner ────────────────────────────────────────────────── */
 .resume-banner {
     display: flex;
@@ -1120,121 +1262,6 @@ body::before {
 .resume-banner .btn {
     padding: 0.3rem 0.75rem;
     font-size: 0.75rem;
-}
-
-/* ── Leaderboard UI ─────────────────────────────────────────────────── */
-.score-submit-container {
-    display: flex;
-    gap: 0.5rem;
-    margin: 1.5rem 0;
-    justify-content: center;
-}
-
-.score-input {
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid var(--border-box);
-    border-radius: var(--radius-sm);
-    padding: 0.5rem 1rem;
-    color: var(--text-primary);
-    font-family: 'Inter', sans-serif;
-    font-size: 0.85rem;
-    width: 200px;
-    outline: none;
-    transition: all var(--transition);
-}
-
-.score-input:focus {
-    border-color: var(--accent);
-    background: rgba(255, 255, 255, 0.06);
-}
-
-.btn-submit {
-    background: rgba(34, 197, 94, 0.15);
-    color: #22c55e;
-    border-color: rgba(34, 197, 94, 0.3);
-}
-
-.btn-submit:hover {
-    background: rgba(34, 197, 94, 0.25);
-}
-
-.stats-tabs {
-    display: flex;
-    gap: 0.5rem;
-    margin-bottom: 1.5rem;
-    justify-content: center;
-    border-bottom: 1px solid var(--border-subtle);
-    padding-bottom: 0.75rem;
-}
-
-.tab-btn {
-    background: transparent;
-    border: none;
-    color: var(--text-muted);
-    font-size: 0.85rem;
-    font-weight: 500;
-    cursor: pointer;
-    padding: 0.4rem 1rem;
-    border-radius: var(--radius-sm);
-    transition: all var(--transition);
-}
-
-.tab-btn:hover {
-    color: var(--text-secondary);
-    background: rgba(255, 255, 255, 0.05);
-}
-
-.tab-btn.active {
-    color: var(--text-primary);
-    background: rgba(99, 102, 241, 0.15);
-}
-
-.leaderboard-table {
-    width: 100%;
-    border-collapse: collapse;
-    text-align: left;
-    font-size: 0.85rem;
-    margin-top: 1rem;
-}
-
-.leaderboard-table th {
-    color: var(--text-muted);
-    font-weight: 500;
-    padding: 0.5rem;
-    border-bottom: 1px solid var(--border-subtle);
-}
-
-.leaderboard-table td {
-    padding: 0.5rem;
-    color: var(--text-secondary);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.02);
-}
-
-.leaderboard-table tr:last-child td {
-    border-bottom: none;
-}
-
-.rank-1 {
-    color: #fbbf24;
-    font-weight: 600;
-}
-
-.rank-2 {
-    color: #94a3b8;
-    font-weight: 600;
-}
-
-.rank-3 {
-    color: #b45309;
-    font-weight: 600;
-}
-
-.leaderboard-loading,
-.leaderboard-error {
-    text-align: center;
-    color: var(--text-muted);
-    padding: 2rem 0;
-    font-size: 0.85rem;
 }
 
 /* ── Keyboard Shortcuts ───────────────────────────────────────────── */
@@ -1412,15 +1439,11 @@ kbd {
     transform: scale(0.95);
 }
 
-.numpad-btn.selected {
-    background: rgba(99, 102, 241, 0.25);
-    border-color: var(--accent);
-}
-
 .numpad-btn.completed {
-    opacity: 0.3;
-    pointer-events: auto;
-    /* keep clickable just in case they want to highlight it */
+    opacity: 0.25;
+    pointer-events: none;
+    text-decoration: line-through;
+    filter: grayscale(0.8);
 }
 
 .numpad-actions {
@@ -1536,33 +1559,6 @@ kbd {
 
     .header {
         margin-bottom: 0.75rem;
-        flex-direction: column;
-        align-items: center;
-        position: relative;
-    }
-
-    .header-top {
-        display: flex;
-        justify-content: space-between;
-        width: 100%;
-        align-items: center;
-        margin-bottom: 0.5rem;
-    }
-
-    /* Keep the title centered but allow the theme picker to sit on the right */
-    .header-top {
-        position: relative;
-    }
-
-    .header-title {
-        text-align: center;
-        width: 100%;
-    }
-
-    .theme-picker {
-        position: absolute;
-        right: 0;
-        top: 0;
     }
 
     .header h1 {
@@ -1573,51 +1569,8 @@ kbd {
         font-size: 0.75rem;
     }
 
-    /* Make the mode toggle look like an iOS segmented control */
     .mode-toggle {
-        margin: 0.5rem auto 1rem auto;
-        width: 100%;
-        max-width: 300px;
-        background: var(--bg-secondary);
-        border: 1px solid var(--border-box);
-        border-radius: 8px;
-        padding: 3px;
-        display: flex;
-    }
-
-    .mode-tab {
-        flex: 1;
-        text-align: center;
-        border-radius: 6px;
-        font-size: 0.8rem;
-        padding: 0.5rem 0;
-        margin: 0;
-        border: none;
-    }
-
-    .mode-tab.active {
-        background: var(--bg-card);
-        color: var(--text-primary);
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
-    }
-
-    .difficulty-selector {
-        flex-wrap: nowrap;
-        overflow-x: auto;
-        padding-bottom: 0.25rem;
-        -webkit-overflow-scrolling: touch;
-        justify-content: flex-start;
-        scrollbar-width: none;
-        /* Firefox */
-    }
-
-    .difficulty-selector::-webkit-scrollbar {
-        display: none;
-        /* Safari and Chrome */
-    }
-
-    .diff-btn {
-        flex-shrink: 0;
+        margin-bottom: 0.75rem;
     }
 
     .card {

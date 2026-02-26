@@ -1,6 +1,6 @@
 # Sudoku
 
-A fast, browser-based sudoku solver and player with 5,500 pre-generated puzzles, 5 color themes, pencil marks, and a polished gameplay experience. No dependencies, no build step — just open `index.html`.
+A fast, browser-based sudoku solver and player with 5,500 pre-generated puzzles, 7 color themes, pencil marks, a self-hosted leaderboard, and a polished gameplay experience. No dependencies, no build step — just open `index.html`.
 
 ## Modes
 
@@ -11,20 +11,23 @@ The app has two modes, toggled via tabs at the top:
 Play sudoku puzzles with built-in hints, pencil marks, undo/redo, and more.
 
 - **6 difficulty levels** — Easy, Medium, Hard, Expert, Evil, Nightmare
-- **5,500 pre-generated puzzles** — 500 per difficulty (Easy–Evil) + 3,000 Nightmare (17-clue), served instantly from a puzzle bank. Play a specific level or random ones.
-- **7 color themes** — Midnight (dark), Sakura (pink/cream), Ocean (blue-teal), Forest (green), Arctic (light), Naruto (orange), Wicked (emerald) — saved in localStorage
-- **Global & Local Leaderboard** — Track your times against others (if using the provided API backend), or just locally in your browser. Gracefully delegates to local if the backend is down.
+- **5,500 pre-generated puzzles** — 500 per difficulty (Easy–Evil) + 3,000 Nightmare (17-clue), served instantly from a puzzle bank
+- **Level selector** — Enter a specific level number or leave blank for a random puzzle
+- **7 color themes** — Midnight, Sakura, Ocean, Forest, Arctic, Naruto, Wicked — saved in localStorage
+- **Digit highlighting** — Focus a cell and all matching digits glow across the board (works on both desktop and mobile)
+- **Numpad completion** — Completed digits (placed 9 times) are greyed/crossed out on the mobile numpad
 - **Pencil marks / Notes** — Toggle with `N`, type digits to add/remove candidate marks
 - **Hints** — Reveals one correct cell in amber (press `H`)
 - **Error checking** — Click "Check" or press `Enter` to highlight incorrect entries
-- **Target & Keypad Highlighting** — Focus a cell to see all matching digits glow. Or, tap a number on the mobile keypad without focusing a cell to instantly highlight all occurrences on the board.
-- **Keypad Completing** — Once a number has been placed 9 times on the board, its mobile keypad button fades out automatically.
 - **Conflict detection** — Duplicates in the same row/column/box flash orange immediately
 - **Undo / Redo** — `Ctrl+Z` / `Ctrl+Y` with full history
 - **Timer** — Counts up during gameplay
+- **Win detection** — Celebration overlay with your time and hint count
 - **Save / Resume** — Game auto-saves to localStorage; offers to resume on reload
 - **Stats** — Tracks games played, best time, and average time per difficulty
-- **Mobile optimized** — Native-feeling header, segmented control tabs, on-screen numpad, touch-friendly targets, no virtual keyboard popup
+- **Leaderboard** — Submit scores to a self-hosted leaderboard (optional; app works fine without it)
+- **Mobile optimized** — On-screen numpad, touch-friendly targets, no virtual keyboard popup
+- **Force Update** — Button in theme dropdown to reload with cache-busting
 
 ### Solver Mode
 
@@ -67,82 +70,90 @@ sudoku_solver/
   generator.js        Runtime puzzle generator with uniqueness verification
   puzzle-bank.js      5,500 pre-generated puzzles across 6 difficulty levels
   app.js              UI controller (modes, themes, notes, undo, stats, save)
-  backend/            SQLite + Node.js backend for Global Leaderboard (`server.js`)
-  Dockerfile          Nginx-alpine container for the frontend
-  docker-compose.yml  Compose config (Traefik or standalone + backend API)
-  nginx.conf          Nginx server config (used inside the Docker image)
+  Dockerfile          Nginx-alpine container for frontend
+  docker-compose.yml  Compose config (frontend + leaderboard API)
+  nginx.conf          Nginx config (proxies /api/ to leaderboard)
+  leaderboard-api/    Self-hosted leaderboard backend
+    server.js         Express.js API (scores stored in JSON file)
+    package.json      Dependencies
+    Dockerfile        Node.js container
 ```
 
-## Running Locally (No Server Needed)
+## Running Locally
 
-You don't need to deploy anything to play—just open `index.html` in any modern browser.
-
-> [!NOTE]
-> If you run the game directly from `index.html` without the backend, the Global Leaderboard API will gracefully fail silently. The app will continue tracking your statistics tracking fully locally without throwing errors.
-
-If you prefer to run a local dev server:
+Open `index.html` in any modern browser. No server required. The leaderboard will be unavailable but everything else works perfectly.
 
 ```bash
+# Or use a dev server:
 python3 -m http.server 8000
 ```
 
-## Deploying with Docker (Full Setup)
+## Leaderboard Setup (Optional)
 
-To use the **Global Leaderboard** feature and serve the app cleanly online, use Docker. This spins up the Nginx frontend, the Node.js API, and connects them.
+The leaderboard is a lightweight Express.js API that stores scores in a JSON file. It's completely optional — the app auto-detects whether the backend is available and silently hides leaderboard features when it's not.
+
+### Running the leaderboard locally
+
+```bash
+cd leaderboard-api
+npm install
+node server.js
+```
+
+The API runs on `http://localhost:3001`. The frontend auto-detects this when opened via `file://` or `localhost`.
+
+## Deploying with Docker
 
 ### With Traefik (default)
 
-The included `docker-compose.yml` builds the frontend and backend directly from the repo and routes via Traefik. The backend lives at `/api`:
+The included `docker-compose.yml` builds both services from the Forgejo repo:
 
 ```bash
 docker compose up -d --build
 ```
 
-This serves the app at `sudoku.example.com` via HTTPS.
+This serves the app at `sudoku.example.com` via HTTPS, with nginx proxying `/api/` requests to the leaderboard container. Scores persist in a Docker volume (`leaderboard-data`).
 
 ### Without Traefik (standalone)
 
-If you are not using Traefik, uncomment the `ports` lines in `docker-compose.yml` for the frontend and remove the Traefik labels/networks:
+For standalone deployment, uncomment the `ports` line and remove the Traefik labels and network:
 
 ```yaml
 services:
   sudoku:
     build:
-      context: https://git.example.com/nirb/sudoku.git
-    container_name: sudoku
-    restart: unless-stopped
+      context: .
     ports:
       - "8080:80"
-  
-  sudoku-api:
-    build: ./backend
-    # ...
+    depends_on:
+      - leaderboard
+  leaderboard:
+    build:
+      context: ./leaderboard-api
+    volumes:
+      - leaderboard-data:/app/data
+volumes:
+  leaderboard-data:
 ```
 
-Then run:
+The app will be available at `http://localhost:8080`.
+
+### Updating
 
 ```bash
 docker compose up -d --build
 ```
 
-The app will be available at `http://localhost:8080`, safely communicating with its Node backend in the Docker network.
+Docker clones the repo fresh and rebuilds both images.
 
-### Updating the App
+## Graceful Degradation
 
-To deploy the latest code from the repository, just rebuild:
+The app is designed to work in three modes:
 
-```bash
-docker compose up -d --build
-```
-
-## Nginx Config
-
-The `nginx.conf` is baked into the Docker frontend image. It handles:
-- Static file serving
-- Routing `/api/` traffic to the backend node application (`sudoku-api:3000`)
-- JS/CSS caching (`1 hour`) with `index.html` caching disabled (always fetch fresh)
-- Gzip compression and Security headers
+1. **Full Docker deployment** — Frontend + Leaderboard API (full features)
+2. **Local dev server** — `python3 -m http.server` + `node leaderboard-api/server.js` (full features)
+3. **Just open `index.html`** — No server needed; leaderboard hidden, everything else works
 
 ## Browser Compatibility
 
-Tested in Chrome, Firefox, Safari, and Edge. Full mobile support for iOS and Android with responsive layouts and touch-friendly controls.
+Tested in Chrome, Firefox, Safari, and Edge. Full mobile support for iOS and Android.
