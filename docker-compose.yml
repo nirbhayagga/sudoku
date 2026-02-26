@@ -4,6 +4,8 @@ services:
       context: https://git.local.nirbslab.com/nirb/sudoku.git
     container_name: sudoku
     restart: unless-stopped
+    depends_on:
+      - leaderboard
     # ports:
     #   - "8080:80"
     labels:
@@ -16,20 +18,20 @@ services:
     networks:
       - traefik
 
-  sudoku-api:
+  leaderboard:
     build:
       context: https://git.local.nirbslab.com/nirb/sudoku.git
-      dockerfile: backend/Dockerfile
-    container_name: sudoku-api
+      dockerfile: leaderboard-api/Dockerfile
+    container_name: sudoku-leaderboard
     restart: unless-stopped
     volumes:
-      - sudoku_db:/app/data
+      - leaderboard-data:/app/data
     networks:
       - traefik
-
-volumes:
-  sudoku_db:
 
 networks:
   traefik:
     external: true
+
+volumes:
+  leaderboard-data:
