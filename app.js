@@ -29,6 +29,7 @@
     const btnUndo = document.getElementById('btn-undo');
     const btnRedo = document.getElementById('btn-redo');
     const btnNotesToggle = document.getElementById('btn-notes-toggle');
+    const btnPause = document.getElementById('btn-pause');
     const diffSelector = document.getElementById('difficulty-selector');
     const levelInput = document.getElementById('level-input');
     const levelMaxDisplay = document.getElementById('level-max');
@@ -96,6 +97,7 @@
 
     // Save debounce
     let saveTimeout = null;
+    let timerPaused = false;
 
     // Mobile detection
     const isTouchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
@@ -385,7 +387,8 @@
                 if (isTouchDevice) {
                     selectCellTouch(next);
                 } else {
-                    inputs[next].focus();
+                    // Use rAF to avoid focus race with the current input event
+                    requestAnimationFrame(() => inputs[next].focus());
                 }
                 return;
             }
@@ -1020,15 +1023,33 @@
     function startTimer() {
         stopTimer();
         timerSeconds = 0;
+        timerPaused = false;
         gameTimerEl.textContent = '0:00';
+        gameTimerEl.classList.remove('paused');
         timerInterval = setInterval(() => {
-            timerSeconds++;
-            gameTimerEl.textContent = formatTime(timerSeconds);
+            if (!timerPaused) {
+                timerSeconds++;
+                gameTimerEl.textContent = formatTime(timerSeconds);
+            }
         }, 1000);
     }
 
     function stopTimer() {
         if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+    }
+
+    function togglePause() {
+        if (!gameActive || gameWon) return;
+        timerPaused = !timerPaused;
+        gameTimerEl.classList.toggle('paused', timerPaused);
+        if (timerPaused) {
+            setStatus('Paused');
+            // Optionally hide the grid to prevent cheating
+            gridEl.classList.add('paused');
+        } else {
+            setStatus('');
+            gridEl.classList.remove('paused');
+        }
     }
 
     function formatTime(s) {
@@ -1358,7 +1379,36 @@
     btnReset.addEventListener('click', resetGame);
     btnUndo.addEventListener('click', doUndo);
     btnRedo.addEventListener('click', doRedo);
-    btnNotesToggle.addEventListener('click', toggleNotesMode);
+    btnNotesToggle.addEventListener('click', () => {
+        toggleNotesMode();
+        // Re-focus the previously selected cell to keep keyboard input working
+        if (!isTouchDevice && focusedIdx >= 0) {
+            requestAnimationFrame(() => inputs[focusedIdx].focus());
+        }
+    });
+    // Prevent mousedown from stealing focus from active cell
+    btnNotesToggle.addEventListener('mousedown', (e) => e.preventDefault());
+    if (btnPause) {
+        btnPause.addEventListener('click', () => {
+            togglePause();
+            btnPause.textContent = timerPaused ? 'Resume' : 'Pause';
+        });
+        btnPause.addEventListener('mousedown', (e) => e.preventDefault());
+    }
+    // Timer click also toggles pause
+    gameTimerEl.addEventListener('click', () => {
+        if (btnPause) {
+            togglePause();
+            btnPause.textContent = timerPaused ? 'Resume' : 'Pause';
+        }
+    });
+    gameTimerEl.style.cursor = 'pointer';
+
+    // Prevent ALL play buttons from stealing cell focus
+    [btnHint, btnCheck, btnUndo, btnRedo, btnReset].forEach(btn => {
+        if (btn) btn.addEventListener('mousedown', (e) => e.preventDefault());
+    });
+
     btnStats.addEventListener('click', openStats);
     btnStatsClose.addEventListener('click', closeStats);
     btnStatsReset.addEventListener('click', resetStats);

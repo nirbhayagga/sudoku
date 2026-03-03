@@ -581,7 +581,8 @@ body::before {
 }
 
 .cell-wrapper.digit-highlight {
-    background: rgba(99, 102, 241, 0.08);
+    background: rgba(99, 102, 241, 0.18);
+    box-shadow: inset 0 0 0 1.5px rgba(99, 102, 241, 0.45);
 }
 
 .cell-wrapper.peer-highlight {
@@ -590,6 +591,30 @@ body::before {
 
 .cell-wrapper.conflict {
     background: rgba(251, 146, 60, 0.12);
+}
+
+/* ── Pause overlay ─────────────────────────────────────────────── */
+.grid-container.paused {
+    filter: blur(8px);
+    pointer-events: none;
+    user-select: none;
+    transition: filter 0.3s ease;
+}
+
+.game-timer.paused {
+    animation: blink-pause 1.2s ease-in-out infinite;
+}
+
+@keyframes blink-pause {
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.3;
+    }
 }
 
 /* The actual input inside the cell */
