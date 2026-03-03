@@ -71,7 +71,8 @@ sudoku_solver/
   puzzle-bank.js      5,500 pre-generated puzzles across 6 difficulty levels
   app.js              UI controller (modes, themes, notes, undo, stats, save)
   Dockerfile          Nginx-alpine container for frontend
-  docker-compose.yml  Compose config (frontend + leaderboard API)
+  docker-compose.yml  Compose config (local build, recommended)
+  docker-compose.remote.yml  Compose config (builds from git repo)
   nginx.conf          Nginx config (proxies /api/ to leaderboard)
   leaderboard-api/    Self-hosted leaderboard backend
     server.js         Express.js API (scores stored in JSON file)
@@ -104,32 +105,52 @@ The API runs on `http://localhost:3001`. The frontend auto-detects this when ope
 
 ## Deploying with Docker
 
-### With Traefik (default)
+Two compose files are included for different deployment strategies:
 
-The included `docker-compose.yml` builds both services from the Forgejo repo:
+| File | Build Source | Best For |
+|------|-------------|----------|
+| `docker-compose.yml` | Local directory | Fastest builds, test before committing |
+| `docker-compose.remote.yml` | Git repo URL | Deploy without cloning repo on host |
+
+### Option A: Local Build (recommended)
+
+Clone the repo on your server and build from the local directory:
 
 ```bash
+git clone https://git.local.nirbslab.com/nirb/sudoku.git
+cd sudoku
 docker compose up -d --build
 ```
 
-This serves the app at `sudoku.local.nirbslab.com` via HTTPS, with nginx proxying `/api/` requests to the leaderboard container. Scores persist in a Docker volume (`leaderboard-data`).
+To update:
+
+```bash
+git pull
+docker compose up -d --build
+```
+
+### Option B: Remote Build (from Git repo)
+
+Build directly from the Forgejo repo — no local clone needed. All changes **must be committed and pushed** before rebuilding.
+
+```bash
+docker compose -f docker-compose.remote.yml up -d --build
+```
 
 ### Without Traefik (standalone)
 
-For standalone deployment, uncomment the `ports` line and remove the Traefik labels and network:
+For either option, uncomment the `ports` line and remove the Traefik labels/network:
 
 ```yaml
 services:
   sudoku:
-    build:
-      context: .
+    build: .
     ports:
       - "8080:80"
     depends_on:
       - leaderboard
   leaderboard:
-    build:
-      context: ./leaderboard-api
+    build: ./leaderboard-api
     volumes:
       - leaderboard-data:/app/data
 volumes:
@@ -137,14 +158,6 @@ volumes:
 ```
 
 The app will be available at `http://localhost:8080`.
-
-### Updating
-
-```bash
-docker compose up -d --build
-```
-
-Docker clones the repo fresh and rebuilds both images.
 
 ## Graceful Degradation
 
