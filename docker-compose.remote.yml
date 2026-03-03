@@ -1,12 +1,16 @@
+## Remote Build (from Git repo)
+## Use this if you want to deploy without cloning the repo on the host.
+## Deploy: docker compose -f docker-compose.remote.yml up -d --build
+## NOTE: All changes must be committed and pushed before rebuilding.
+
 services:
   sudoku:
-    build: .
+    build:
+      context: https://git.example.com/nirb/sudoku.git
     container_name: sudoku
     restart: unless-stopped
     depends_on:
       - leaderboard
-    # ports:
-    #   - "8080:80"
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.sudoku.rule=Host(`sudoku.example.com`)"
@@ -18,7 +22,9 @@ services:
       - traefik
 
   leaderboard:
-    build: ./leaderboard-api
+    build:
+      context: https://git.example.com/nirb/sudoku.git
+      dockerfile: leaderboard-api/Dockerfile
     container_name: sudoku-leaderboard
     restart: unless-stopped
     volumes:
