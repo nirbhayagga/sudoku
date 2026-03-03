@@ -14,12 +14,12 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.sudoku.rule=Host(`sudoku.local.nirbslab.com`)"
-      - "traefik.http.routers.sudoku.entrypoints=websecure"
+      - "traefik.http.routers.sudoku.entrypoints=https"
       - "traefik.http.routers.sudoku.tls=true"
       - "traefik.http.routers.sudoku.tls.certresolver=letsencrypt"
       - "traefik.http.services.sudoku.loadbalancer.server.port=80"
     networks:
-      - traefik
+      - proxy
 
   leaderboard:
     build:
@@ -29,10 +29,10 @@ services:
     volumes:
       - leaderboard-data:/app/data
     networks:
-      - traefik
+      - proxy
 
 networks:
-  traefik:
+  proxy:
     external: true
 
 volumes:
