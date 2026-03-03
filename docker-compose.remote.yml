@@ -23,8 +23,7 @@ services:
 
   leaderboard:
     build:
-      context: https://git.example.com/nirb/sudoku.git
-      dockerfile: leaderboard-api/Dockerfile
+      context: https://git.example.com/nirb/sudoku.git#:leaderboard-api
     container_name: sudoku-leaderboard
     restart: unless-stopped
     volumes:
