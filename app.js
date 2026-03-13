@@ -358,6 +358,8 @@
         for (const w of wrappers) w.classList.remove('focused');
         wrappers[idx].classList.add('focused');
 
+        clearHighlights();
+        clearDigitHighlight();
         highlightRelated(idx);
         updateDigitHighlight();
     }
@@ -376,6 +378,8 @@
         lastTouchedIdx = idx;
         for (const w of wrappers) w.classList.remove('focused');
         wrappers[idx].classList.add('focused');
+        clearHighlights();
+        clearDigitHighlight();
         highlightRelated(idx);
         updateDigitHighlight();
     }
