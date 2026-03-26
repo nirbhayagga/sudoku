@@ -4,6 +4,15 @@
  * conflict detection, localStorage save/resume, and stats tracking.
  */
 (() => {
+    // ── Prevent iOS Safari elastic scroll / bounce ──────────────────
+    if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
+        document.addEventListener('touchmove', (e) => {
+            // Allow scrolling inside modal overlays and scrollable containers
+            if (e.target.closest('.modal, .leaderboard-modal, .stats-modal')) return;
+            e.preventDefault();
+        }, { passive: false });
+    }
+
     // ── Elements ───────────────────────────────────────────────────────
     const gridEl = document.getElementById('grid');
     const statusEl = document.getElementById('status');
