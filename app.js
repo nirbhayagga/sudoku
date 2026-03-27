@@ -1135,7 +1135,7 @@
             inputs[i].value = (ch === '0') ? '' : ch;
             wrappers[i].classList.remove('given', 'solved', 'error', 'hint', 'locked',
                 'user-error', 'correct-check', 'conflict');
-            inputs[i].readOnly = false;
+            inputs[i].readOnly = isTouchDevice; // keep readOnly on touch to suppress virtual keyboard
             clearCellNotes(i);
 
             if (state.lockedCells[i]) {
@@ -1159,9 +1159,13 @@
         gameTimerEl.textContent = formatTime(timerSeconds);
 
         // Resume timer
+        timerPaused = false;
+        gameTimerEl.classList.remove('paused');
         timerInterval = setInterval(() => {
-            timerSeconds++;
-            gameTimerEl.textContent = formatTime(timerSeconds);
+            if (!timerPaused) {
+                timerSeconds++;
+                gameTimerEl.textContent = formatTime(timerSeconds);
+            }
         }, 1000);
 
         recheckAllConflicts();
@@ -1655,6 +1659,12 @@
         return null;
     }
 
+    function escapeHtml(str) {
+        const div = document.createElement('div');
+        div.textContent = str;
+        return div.innerHTML;
+    }
+
     function renderLeaderboard(entries) {
         if (!lbContent) return;
         if (!entries || entries.length === 0) {
@@ -1668,7 +1678,7 @@
             const date = new Date(e.date).toLocaleDateString();
             html += `<tr>
                 <td>${i + 1}</td>
-                <td>${e.name}</td>
+                <td>${escapeHtml(e.name)}</td>
                 <td>${formatTime(e.time)}</td>
                 <td>${e.hints || 0}</td>
                 <td>${date}</td>
