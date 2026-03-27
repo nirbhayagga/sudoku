@@ -35,14 +35,9 @@ const SudokuGenerator = (() => {
      * Fills the board using the solver with randomized digit ordering.
      */
     function generateSolvedBoard() {
-        // Start with an empty board
-        const board = new Array(81).fill('0');
+        const { squares: sq, DIGITS: dg, assign } = SudokuSolver.getInternals();
 
-        // Fill using solver with randomized search
-        const boardStr = board.join('');
-        const { squares: sq, DIGITS: dg } = SudokuSolver.getInternals();
-
-        // We'll use a randomized search approach
+        // Start with all possibilities open
         const values = {};
         for (const s of sq) values[s] = dg;
 
@@ -63,9 +58,7 @@ const SudokuGenerator = (() => {
             // Randomize digit order for variety
             const digits = shuffle(vals[minSquare].split(''));
             for (const d of digits) {
-                const copy = copyValues(vals);
-                const { assign } = SudokuSolver.getInternals();
-                const result = randomSearch(assign(copy, minSquare, d));
+                const result = randomSearch(assign(copyValues(vals), minSquare, d));
                 if (result) return result;
             }
             return null;

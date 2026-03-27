@@ -26,7 +26,8 @@ Play sudoku puzzles with built-in hints, pencil marks, undo/redo, and more.
 - **Save / Resume** — Game auto-saves to localStorage; offers to resume on reload
 - **Stats** — Tracks games played, best time, and average time per difficulty
 - **Leaderboard** — Submit scores to a self-hosted leaderboard (optional; app works fine without it)
-- **Mobile optimized** — On-screen numpad, touch-friendly targets, no virtual keyboard popup
+- **Mobile optimized** — On-screen numpad, touch-friendly 44px targets, no virtual keyboard popup, safe-area-inset support for iPhone notch/Dynamic Island, landscape mode handling
+- **Pause** — Pause the timer and blur the grid to prevent peeking
 - **Force Update** — Button in theme dropdown to reload with cache-busting
 
 ### Solver Mode
@@ -103,6 +104,12 @@ node server.js
 
 The API runs on `http://localhost:3001`. The frontend auto-detects this when opened via `file://` or `localhost`.
 
+The leaderboard API includes rate limiting (5 submissions/minute per IP) and difficulty validation. To restrict CORS to your domain, set the `CORS_ORIGIN` environment variable:
+
+```bash
+CORS_ORIGIN=https://sudoku.example.com node server.js
+```
+
 ## Deploying with Docker
 
 Two compose files are included for different deployment strategies:
@@ -170,3 +177,7 @@ The app is designed to work in three modes:
 ## Browser Compatibility
 
 Tested in Chrome, Firefox, Safari, and Edge. Full mobile support for iOS and Android.
+
+- **iPhone** — Safe-area insets for notch/Dynamic Island, iOS Safari bounce prevention, 16px minimum font to prevent auto-zoom, landscape support, compact layout for iPhone SE/Mini
+- **Android** — Touch-friendly numpad, responsive grid scaling, no virtual keyboard interference
+- **Tablet** — Adaptive cell sizing, works in both portrait and landscape

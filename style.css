@@ -73,6 +73,7 @@ body::before {
         radial-gradient(ellipse 500px 350px at 80% 80%, rgba(16, 185, 129, 0.06), transparent);
     pointer-events: none;
     z-index: 0;
+    will-change: transform;
 }
 
 /* ── Theme: Sakura (pink & cream) ─────────────────────────────────── */
@@ -774,6 +775,16 @@ body::before {
     border-color: rgba(239, 68, 68, 0.3);
 }
 
+.btn-pause {
+    color: var(--text-secondary);
+    border-color: rgba(148, 163, 184, 0.2);
+}
+
+.btn-pause:hover {
+    background: rgba(148, 163, 184, 0.1);
+    border-color: rgba(148, 163, 184, 0.3);
+}
+
 .btn.notes-active {
     background: rgba(99, 102, 241, 0.15);
     border-color: rgba(99, 102, 241, 0.3);
@@ -973,12 +984,21 @@ body::before {
     pointer-events: all;
 }
 
+@supports (padding: env(safe-area-inset-top)) {
+    .modal-overlay,
+    .win-overlay {
+        padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+    }
+}
+
 .modal {
     background: var(--bg-secondary);
     border: 1px solid var(--border-subtle);
     border-radius: var(--radius);
     padding: 1.5rem;
     width: min(420px, 90vw);
+    max-height: 85vh;
+    overflow-y: auto;
     box-shadow: 0 24px 80px -16px rgba(0, 0, 0, 0.7);
     transform: translateY(8px);
     transition: transform 0.25s ease;
@@ -1623,7 +1643,7 @@ kbd {
         margin-bottom: 0.35rem;
     }
 
-    .mode-toggle .tab {
+    .mode-tab {
         padding: 0.35rem 1rem;
         font-size: 0.75rem;
     }
@@ -1742,6 +1762,47 @@ kbd {
 
     .numpad-btn {
         height: 36px;
+    }
+}
+
+/* Phone landscape — squeeze everything to fit */
+@media (max-height: 500px) and (orientation: landscape) {
+    :root {
+        --cell-size: min(calc((100vw - 3rem - 2px) / 9), calc((100dvh - 6rem) / 9));
+    }
+
+    body {
+        padding: 0.25rem 0.5rem;
+        flex-direction: row;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 0.5rem;
+    }
+
+    .header {
+        margin-bottom: 0;
+    }
+
+    .header p {
+        display: none;
+    }
+
+    .controls {
+        margin-top: 0.25rem;
+    }
+
+    .numpad {
+        margin-top: 0.25rem;
+    }
+
+    .numpad-btn {
+        height: 32px;
+        width: 36px;
+        font-size: 0.875rem;
+    }
+
+    .status-bar {
+        margin-top: 0.25rem;
     }
 }
 

@@ -7,8 +7,38 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 const DATA_FILE = path.join(__dirname, 'data', 'leaderboard.json');
 
-app.use(cors());
+app.use(cors({
+    origin: process.env.CORS_ORIGIN || '*',
+}));
 app.use(express.json());
+
+// Simple in-memory rate limiting for POST submissions
+const rateLimitMap = new Map();
+const RATE_LIMIT_WINDOW = 60 * 1000; // 1 minute
+const RATE_LIMIT_MAX = 5; // max submissions per window
+
+function rateLimit(req, res, next) {
+    const ip = req.ip || req.connection.remoteAddress;
+    const now = Date.now();
+    const entry = rateLimitMap.get(ip);
+    if (entry && now - entry.start < RATE_LIMIT_WINDOW) {
+        if (entry.count >= RATE_LIMIT_MAX) {
+            return res.status(429).json({ error: 'Too many submissions. Try again later.' });
+        }
+        entry.count++;
+    } else {
+        rateLimitMap.set(ip, { start: now, count: 1 });
+    }
+    next();
+}
+
+// Clean up stale rate limit entries every 5 minutes
+setInterval(() => {
+    const now = Date.now();
+    for (const [ip, entry] of rateLimitMap) {
+        if (now - entry.start > RATE_LIMIT_WINDOW) rateLimitMap.delete(ip);
+    }
+}, 5 * 60 * 1000);
 
 // Ensure data directory exists
 const dataDir = path.dirname(DATA_FILE);
@@ -52,11 +82,17 @@ app.get('/api/leaderboard', (req, res) => {
 
 // POST /api/leaderboard
 // Body: { name, difficulty, time, hints, level }
-app.post('/api/leaderboard', (req, res) => {
+const VALID_DIFFICULTIES = ['easy', 'medium', 'hard', 'expert', 'evil', 'nightmare'];
+
+app.post('/api/leaderboard', rateLimit, (req, res) => {
     const { name, difficulty, time, hints, level } = req.body;
 
     if (!name || !difficulty || time === undefined) {
         return res.status(400).json({ error: 'Missing required fields: name, difficulty, time' });
+    }
+
+    if (!VALID_DIFFICULTIES.includes(difficulty)) {
+        return res.status(400).json({ error: 'Invalid difficulty' });
     }
 
     // Sanitize name (max 20 chars, strip HTML)

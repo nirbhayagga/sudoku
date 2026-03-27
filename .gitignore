@@ -10,5 +10,11 @@ Desktop.ini
 .vscode/
 .idea/
 
+# Dependencies
+node_modules/
+
+# Leaderboard data
+leaderboard-api/data/
+
 # Misc
 *.log
