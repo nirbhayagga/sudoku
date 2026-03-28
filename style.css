@@ -1286,17 +1286,22 @@ body::before {
 
 /* ── Resume Banner ────────────────────────────────────────────────── */
 .resume-banner {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    justify-content: center;
     gap: 0.75rem;
-    padding: 0.6rem 1rem;
-    margin-top: 0.75rem;
-    background: rgba(99, 102, 241, 0.08);
-    border: 1px solid rgba(99, 102, 241, 0.2);
-    border-radius: var(--radius-sm);
+    padding: 0.75rem 1rem;
+    padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+    background: var(--bg-secondary);
+    border-top: 1px solid rgba(99, 102, 241, 0.3);
     font-size: 0.8125rem;
     color: var(--text-secondary);
+    z-index: 50;
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.3);
 }
 
 .resume-banner .resume-actions {
@@ -1562,24 +1567,16 @@ kbd {
         display: none;
     }
 
-    /* Lock viewport on touch devices to prevent iOS Safari bounce */
-    html {
-        position: fixed;
-        overflow: hidden;
-        width: 100%;
-        height: 100%;
-        height: 100dvh;
-    }
-
-    body {
-        position: fixed;
-        width: 100%;
+    /* Fit viewport on touch devices — no bounce, no scroll needed */
+    html, body {
         height: 100%;
         height: 100dvh;
         min-height: 0;
+        overflow: hidden;
+    }
+
+    body {
         justify-content: flex-start;
-        overflow-y: auto;
-        -webkit-overflow-scrolling: touch;
     }
 }
 
