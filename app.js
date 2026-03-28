@@ -1039,6 +1039,7 @@
         timerPaused = false;
         gameTimerEl.textContent = '0:00';
         gameTimerEl.classList.remove('paused');
+        gridEl.classList.remove('paused');
         timerInterval = setInterval(() => {
             if (!timerPaused) {
                 timerSeconds++;
@@ -1161,6 +1162,7 @@
         // Resume timer
         timerPaused = false;
         gameTimerEl.classList.remove('paused');
+        gridEl.classList.remove('paused');
         timerInterval = setInterval(() => {
             if (!timerPaused) {
                 timerSeconds++;
