@@ -1199,7 +1199,12 @@
     `;
 
         const card = document.getElementById('app');
-        card.appendChild(banner);
+        const numpad = document.getElementById('numpad');
+        if (numpad) {
+            card.insertBefore(banner, numpad);
+        } else {
+            card.appendChild(banner);
+        }
 
         document.getElementById('btn-resume-yes').addEventListener('click', () => {
             resumeGame(state);
