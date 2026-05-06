@@ -18,3 +18,5 @@ leaderboard-api/data/
 
 # Misc
 *.log
+
+*.txt
