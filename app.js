@@ -9,6 +9,9 @@
         document.addEventListener('touchmove', (e) => {
             // Allow scrolling inside modal overlays and scrollable containers
             if (e.target.closest('.modal, .leaderboard-modal, .stats-modal')) return;
+            // Allow scrolling on body/card when content overflows (e.g. landscape iPad)
+            const scrollable = e.target.closest('body, .card');
+            if (scrollable && scrollable.scrollHeight > scrollable.clientHeight) return;
             e.preventDefault();
         }, { passive: false });
     }
