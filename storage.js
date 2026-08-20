@@ -49,6 +49,7 @@ export const saveStats = (stats) => writeJson(STATS_KEY, stats);
 export const resetStats = () => {
     remove(STATS_KEY);
     remove(STREAK_KEY);
+    remove(DAILY_KEY);
 };
 
 /** Local calendar day as YYYY-MM-DD. Streaks follow the player's own days. */
@@ -154,6 +155,31 @@ export function getSummary() {
         winRate: totals.started ? totals.won / totals.started : 0,
         streak: getStreak(),
     };
+}
+
+// ── Daily puzzle ───────────────────────────────────────────────────────
+// Which days' puzzles have been solved. Kept as a small set of recent days so
+// it cannot grow without bound.
+
+const DAILY_KEY = 'sudoku_daily_done';
+const DAILY_HISTORY = 60;
+
+export const getDailyDone = () => {
+    const days = readJson(DAILY_KEY, []);
+    return Array.isArray(days) ? days : [];
+};
+
+export const isDailyDone = (dayKey) => getDailyDone().includes(dayKey);
+
+export function markDailyDone(dayKey) {
+    const days = getDailyDone();
+    if (days.includes(dayKey)) return days;
+
+    days.push(dayKey);
+    days.sort();
+    const trimmed = days.slice(-DAILY_HISTORY);
+    writeJson(DAILY_KEY, trimmed);
+    return trimmed;
 }
 
 // ── Preferences ────────────────────────────────────────────────────────

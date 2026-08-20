@@ -6,6 +6,7 @@
 import { SudokuSolver } from './solver.js';
 import { SudokuGenerator } from './generator.js';
 import { DIFFICULTY_LABELS, BANK_SIZES } from './difficulties.js';
+import { dailyPuzzle, formatDay } from './daily.js';
 import { formatTime, escapeHtml } from './format.js';
 import { createDialogs } from './dialogs.js';
 import { applyTheme, DEFAULT_THEME } from './theme.js';
@@ -68,6 +69,7 @@ function loadBank() {
     const levelInput = document.getElementById('level-input');
     const levelMaxDisplay = document.getElementById('level-max');
     const btnStats = document.getElementById('btn-stats');
+    const btnDaily = document.getElementById('btn-daily');
 
     const modalOverlay = document.getElementById('modal-overlay');
     const importText = document.getElementById('import-text');
@@ -149,6 +151,8 @@ function loadBank() {
     // #level-input stays editable afterwards — reading it at submit time
     // attributed scores to whatever number happened to be in the box.
     let currentLevel = null;
+    // The day whose puzzle is being played, or null for a normal game.
+    let currentDaily = null;
 
     /**
      * While paused the timer is frozen and the grid is blurred, so accepting
@@ -987,7 +991,8 @@ function loadBank() {
     //  PLAY MODE
     // ══════════════════════════════════════════════════════════════════
 
-    function startGame(difficulty) {
+    function startGame(difficulty, { daily = null } = {}) {
+        currentDaily = daily;
         currentDifficulty = difficulty || currentDifficulty;
         hintsUsed = 0;
         autoNotesUsed = autoNotes; // carrying the mode over counts as using it
@@ -1081,7 +1086,11 @@ function loadBank() {
 
             const label = DIFFICULTY_LABELS[currentDifficulty];
             const clueCount = currentPuzzle.replace(/0/g, '').length;
-            setStatus(`${label} — ${clueCount} clues`);
+            // Set here rather than by the caller: the bank loads asynchronously,
+            // so anything set before this point is overwritten.
+            setStatus(currentDaily
+                ? `Daily puzzle — ${formatDay(currentDaily)} · ${label}`
+                : `${label} — ${clueCount} clues`);
 
             // Select first empty cell
             for (let i = 0; i < 81; i++) {
@@ -1103,6 +1112,29 @@ function loadBank() {
         }).catch(() => {
             setStatus('Could not load puzzles', 'error');
         });
+    }
+
+    /**
+     * Start today's puzzle. The board is derived from the date, so every player
+     * gets the same one and the per-level leaderboard compares like with like.
+     */
+    function startDaily() {
+        const today = store.dayKey();
+        const { difficulty, level } = dailyPuzzle(today);
+
+        selectDifficulty(difficulty);
+        if (levelInput) levelInput.value = String(level);
+        startGame(difficulty, { daily: today });
+    }
+
+    /** Tick the Daily button once today's puzzle has been solved. */
+    function updateDailyButton() {
+        if (!btnDaily) return;
+        const done = store.isDailyDone(store.dayKey());
+        btnDaily.classList.toggle('done', done);
+        btnDaily.title = done
+            ? "Today's puzzle — already solved, play it again"
+            : "Today's puzzle — everyone gets the same one";
     }
 
     function resetGame() {
@@ -1227,6 +1259,10 @@ function loadBank() {
 
             // Update stats
             store.recordWin(currentDifficulty, timerSeconds, hintsUsed, autoNotesUsed);
+            if (currentDaily) {
+                store.markDailyDone(currentDaily);
+                updateDailyButton();
+            }
             store.deleteSavedGame();
         }
     }
@@ -1317,6 +1353,7 @@ function loadBank() {
             timerSeconds: elapsedSeconds(),
             hintsUsed,
             level: currentLevel,
+            daily: currentDaily,
             autoNotes,
             autoNotesUsed,
             lockedCells: Array.from({ length: 81 }, (_, i) => wrappers[i].classList.contains('locked')),
@@ -1332,6 +1369,7 @@ function loadBank() {
         currentSolution = state.solution;
         currentDifficulty = state.difficulty;
         currentLevel = state.level ?? null;
+        currentDaily = state.daily ?? null;
         autoNotesUsed = state.autoNotesUsed || false;
         timerSeconds = state.timerSeconds || 0;
         hintsUsed = state.hintsUsed || 0;
@@ -1589,6 +1627,10 @@ function loadBank() {
     btnClear.addEventListener('click', clearGrid);
 
     btnNewGame.addEventListener('click', () => startGame());
+    if (btnDaily) {
+        btnDaily.addEventListener('click', startDaily);
+        btnDaily.addEventListener('mousedown', (e) => e.preventDefault());
+    }
     btnHint.addEventListener('click', giveHint);
     btnCheck.addEventListener('click', checkErrors);
     btnReset.addEventListener('click', resetGame);
@@ -1923,6 +1965,7 @@ function loadBank() {
     // ══════════════════════════════════════════════════════════════════
 
     buildGrid();
+    updateDailyButton();
     switchMode('play');
     revealLeaderboardUi();
 
