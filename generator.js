@@ -1,4 +1,3 @@
-/* exported SudokuGenerator */
 /**
  * Sudoku Puzzle Generator
  *
@@ -10,7 +9,9 @@
  *     → { puzzle, solution, clues, searchNodes, attempts, targetMet, timeMs }
  */
 
-const SudokuGenerator = (() => {
+import { SudokuSolver } from './solver.js';
+
+export const SudokuGenerator = (() => {
     const { copyValues } = SudokuSolver.getInternals();
 
     /**

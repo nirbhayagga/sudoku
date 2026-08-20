@@ -1,11 +1,6 @@
-import { describe, it, expect, beforeAll } from 'vitest';
-import { loadSudoku } from './helpers/load-globals.js';
-
-let SudokuSolver, PUZZLES, ALL_PUZZLES, DIFFICULTY_LABELS;
-
-beforeAll(() => {
-    ({ SudokuSolver, PUZZLES, ALL_PUZZLES, DIFFICULTY_LABELS } = loadSudoku());
-});
+import { describe, it, expect } from 'vitest';
+import { SudokuSolver } from '../solver.js';
+import { PUZZLES, ALL_PUZZLES, DIFFICULTY_LABELS } from '../puzzle-bank.js';
 
 const EXPECTED_COUNTS = {
     easy: 500,

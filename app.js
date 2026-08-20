@@ -3,6 +3,10 @@
  * Solver Mode + Play Mode with pencil marks, undo/redo, digit highlighting,
  * conflict detection, localStorage save/resume, and stats tracking.
  */
+import { SudokuSolver } from './solver.js';
+import { SudokuGenerator } from './generator.js';
+import { PUZZLES, ALL_PUZZLES, DIFFICULTY_LABELS } from './puzzle-bank.js';
+
 (() => {
     // ── Prevent iOS Safari elastic scroll / bounce ──────────────────
     if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {

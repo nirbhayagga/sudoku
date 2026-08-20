@@ -7,7 +7,9 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
 
-COPY index.html style.css solver.js generator.js puzzle-bank.js app.js build.js _headers ./
+COPY vite.config.js index.html style.css ./
+COPY solver.js generator.js puzzle-bank.js app.js ./
+COPY public ./public
 RUN npm run build
 
 # ── Runtime stage ─────────────────────────────────────────────────────

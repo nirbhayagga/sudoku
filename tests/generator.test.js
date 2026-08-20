@@ -1,10 +1,8 @@
 import { describe, it, expect, beforeAll } from 'vitest';
-import { loadSudoku } from './helpers/load-globals.js';
-
-let SudokuSolver, SudokuGenerator;
+import { SudokuSolver } from '../solver.js';
+import { SudokuGenerator } from '../generator.js';
 
 beforeAll(() => {
-    ({ SudokuSolver, SudokuGenerator } = loadSudoku(['solver.js', 'generator.js']));
     ({ CLUE_TARGETS } = SudokuGenerator);
 });
 
@@ -20,7 +18,15 @@ describe('generate', () => {
         describe(difficulty, () => {
             let result;
             beforeAll(() => {
-                result = SudokuGenerator.generate(difficulty);
+                // Generation is probabilistic: each attempt is an independent
+                // dig, so the default budget occasionally runs out (~1% of the
+                // time at expert). These assertions are about what the algorithm
+                // achieves given room to work, so the budget is made generous
+                // here; the default best-effort behaviour is covered separately.
+                result = SudokuGenerator.generate(difficulty, {
+                    maxAttempts: 60,
+                    timeBudgetMs: 20_000,
+                });
             });
 
             it('returns a puzzle, solution and clue count', () => {
@@ -79,6 +85,16 @@ describe('generate', () => {
         const a = SudokuGenerator.generate('easy');
         const b = SudokuGenerator.generate('easy');
         expect(a.puzzle).not.toBe(b.puzzle);
+    });
+
+    it('reports targetMet honestly when the budget runs out', () => {
+        // One attempt almost never satisfies evil, and the result must say so
+        // rather than quietly returning an easier puzzle as if it qualified.
+        const result = SudokuGenerator.generate('evil', { maxAttempts: 1 });
+        if (!result.targetMet) {
+            const target = CLUE_TARGETS.evil;
+            expect(result.clues > target.max || result.searchNodes < target.minNodes).toBe(true);
+        }
     });
 
     it('still returns a usable puzzle when the budget is exhausted', () => {

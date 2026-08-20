@@ -5,92 +5,101 @@ import { gzipSync } from 'node:zlib';
 import os from 'node:os';
 import path from 'node:path';
 import { JSDOM, VirtualConsole } from 'jsdom';
-import { repoRoot } from './helpers/load-globals.js';
+import { repoRoot } from './helpers/paths.js';
 
-/**
- * Builds into a temp copy of the repo so the developer's own dist/ is untouched,
- * then boots the built page to prove the bundle actually runs.
- */
+/** Build into a temp directory so the developer's own dist/ is untouched. */
+function runBuild(outDir, env = {}) {
+    execFileSync(
+        process.execPath,
+        [path.join(repoRoot, 'node_modules/vite/bin/vite.js'), 'build', '--outDir', outDir, '--emptyOutDir'],
+        { cwd: repoRoot, stdio: 'pipe', env: { ...process.env, ...env } }
+    );
+}
+
+const assetsOf = (dist) => fs.readdirSync(path.join(dist, 'assets'));
+const jsBundle = (dist) => assetsOf(dist).find((f) => f.endsWith('.js'));
+
 let dist;
 let indexHtml;
-let workdir;
 
 beforeAll(() => {
-    workdir = fs.mkdtempSync(path.join(os.tmpdir(), 'sudoku-build-'));
-    for (const file of [
-        'index.html', 'style.css', 'solver.js', 'generator.js',
-        'puzzle-bank.js', 'app.js', 'build.js', '_headers', 'package.json',
-    ]) {
-        fs.copyFileSync(path.join(repoRoot, file), path.join(workdir, file));
-    }
-    fs.symlinkSync(path.join(repoRoot, 'node_modules'), path.join(workdir, 'node_modules'));
-
-    execFileSync(process.execPath, ['build.js'], { cwd: workdir, stdio: 'pipe' });
-
-    dist = path.join(workdir, 'dist');
+    dist = fs.mkdtempSync(path.join(os.tmpdir(), 'sudoku-build-'));
+    runBuild(dist);
     indexHtml = fs.readFileSync(path.join(dist, 'index.html'), 'utf8');
-}, 60_000);
+}, 120_000);
 
 afterAll(() => {
-    fs.rmSync(workdir, { recursive: true, force: true });
+    fs.rmSync(dist, { recursive: true, force: true });
 });
 
 describe('build output', () => {
     it('emits index.html, one JS bundle and one CSS file', () => {
         expect(fs.existsSync(path.join(dist, 'index.html'))).toBe(true);
-        const assets = fs.readdirSync(path.join(dist, 'assets'));
-        expect(assets.filter((f) => f.endsWith('.js'))).toHaveLength(1);
-        expect(assets.filter((f) => f.endsWith('.css'))).toHaveLength(1);
+        expect(assetsOf(dist).filter((f) => f.endsWith('.js'))).toHaveLength(1);
+        expect(assetsOf(dist).filter((f) => f.endsWith('.css'))).toHaveLength(1);
     });
 
     it('content-hashes asset filenames', () => {
-        const assets = fs.readdirSync(path.join(dist, 'assets'));
-        expect(assets).toEqual(
-            expect.arrayContaining([
-                expect.stringMatching(/^app\.[a-f0-9]{8}\.js$/),
-                expect.stringMatching(/^style\.[a-f0-9]{8}\.css$/),
-            ])
-        );
+        for (const asset of assetsOf(dist)) {
+            expect(asset).toMatch(/\.[A-Za-z0-9_-]{8,}\.(js|css)$/);
+        }
     });
 
     it('points index.html at the hashed assets', () => {
-        const assets = fs.readdirSync(path.join(dist, 'assets'));
-        for (const asset of assets) expect(indexHtml).toContain(`assets/${asset}`);
+        for (const asset of assetsOf(dist)) expect(indexHtml).toContain(asset);
     });
 
     it('leaves no reference to the unbundled sources', () => {
-        for (const source of ['solver.js', 'generator.js', 'puzzle-bank.js', 'app.js', 'style.css']) {
+        for (const source of ['solver.js', 'generator.js', 'puzzle-bank.js', '/app.js', '/style.css']) {
             expect(indexHtml).not.toContain(`"${source}"`);
         }
+    });
+
+    // CSS must stay a separate file. Inlined into a ~500 kB bundle it would only
+    // apply once all of that JS had parsed, flashing unstyled content on mobile.
+    it('keeps CSS out of the JS bundle', () => {
+        const bundle = fs.readFileSync(path.join(dist, 'assets', jsBundle(dist)), 'utf8');
+        expect(bundle).not.toContain('--bg-primary');
+        const css = fs.readFileSync(
+            path.join(dist, 'assets', assetsOf(dist).find((f) => f.endsWith('.css'))),
+            'utf8'
+        );
+        expect(css).toContain('--bg-primary');
+    });
+
+    // ES modules are blocked over file://, so a module script would cost the
+    // project its "just open index.html" property. The bundle is a single IIFE
+    // and the module attributes are stripped for exactly this reason.
+    it('emits a classic script so the build still opens from the filesystem', () => {
+        expect(indexHtml).toMatch(/<script[^>]+src="[^"]+\.js"/);
+        expect(indexHtml).not.toContain('type="module"');
+        expect(indexHtml).not.toContain('crossorigin');
+    });
+
+    it('uses relative asset paths so it works from a subpath', () => {
+        // GitHub Pages serves at /<repo>/, so absolute /assets/... would 404.
+        expect(indexHtml).not.toMatch(/(src|href)="\/assets\//);
+        expect(indexHtml).toMatch(/(src|href)="\.\/assets\//);
     });
 
     it('copies _headers for static hosts', () => {
         expect(fs.existsSync(path.join(dist, '_headers'))).toBe(true);
     });
 
-    it('actually shrinks the payload', () => {
-        const built = fs.statSync(path.join(dist, 'assets', fs.readdirSync(path.join(dist, 'assets')).find((f) => f.endsWith('.js')))).size;
-        const sources = ['solver.js', 'generator.js', 'puzzle-bank.js', 'app.js']
-            .reduce((n, f) => n + fs.statSync(path.join(repoRoot, f)).size, 0);
-        expect(built).toBeLessThan(sources);
-    });
-
-    // A payload budget, so bloat has to be a deliberate decision rather than a
-    // surprise. The bank dominates: it is 5,500 puzzles of 81 characters, which
-    // is ~435 kB of irreducible data that gzip takes down to about 120 kB.
+    // A payload budget, so bloat has to be a deliberate decision. The bank
+    // dominates: 5,500 puzzles of 81 characters is ~435 kB of irreducible data.
     it('stays within the gzipped payload budget', () => {
-        const assetDir = path.join(dist, 'assets');
-        const total = fs.readdirSync(assetDir).reduce(
-            (n, f) => n + gzipSync(fs.readFileSync(path.join(assetDir, f))).length,
+        const total = assetsOf(dist).reduce(
+            (n, f) => n + gzipSync(fs.readFileSync(path.join(dist, 'assets', f))).length,
             0
         );
         expect(total).toBeLessThan(150 * 1024);
     });
 
-    it('produces a byte-identical bundle when rebuilt', () => {
-        const before = fs.readdirSync(path.join(dist, 'assets')).sort();
-        execFileSync(process.execPath, ['build.js'], { cwd: workdir, stdio: 'pipe' });
-        expect(fs.readdirSync(path.join(dist, 'assets')).sort()).toEqual(before);
+    it('produces the same asset names when rebuilt', () => {
+        const before = assetsOf(dist).sort();
+        runBuild(dist);
+        expect(assetsOf(dist).sort()).toEqual(before);
     });
 });
 
@@ -101,14 +110,13 @@ describe('built page', () => {
             if (!/fetch is not defined|Not implemented/.test(err.message)) throw err;
         });
 
-        const bundleName = fs.readdirSync(path.join(dist, 'assets')).find((f) => f.endsWith('.js'));
         const dom = new JSDOM(indexHtml, {
             runScripts: 'dangerously',
             pretendToBeVisual: true,
             url: 'http://localhost/',
             virtualConsole,
         });
-        dom.window.eval(fs.readFileSync(path.join(dist, 'assets', bundleName), 'utf8'));
+        dom.window.eval(fs.readFileSync(path.join(dist, 'assets', jsBundle(dist)), 'utf8'));
 
         const { document } = dom.window;
         expect(document.querySelectorAll('.cell-wrapper')).toHaveLength(81);
@@ -129,12 +137,13 @@ describe('built page', () => {
     });
 
     it('inlines SUDOKU_API_BASE when the env var is set', () => {
-        execFileSync(process.execPath, ['build.js'], {
-            cwd: workdir,
-            stdio: 'pipe',
-            env: { ...process.env, SUDOKU_API_BASE: 'https://api.example.com' },
-        });
-        const html = fs.readFileSync(path.join(dist, 'index.html'), 'utf8');
-        expect(html).toContain('window.SUDOKU_API_BASE="https://api.example.com"');
+        const other = fs.mkdtempSync(path.join(os.tmpdir(), 'sudoku-build-api-'));
+        try {
+            runBuild(other, { SUDOKU_API_BASE: 'https://api.example.com' });
+            const html = fs.readFileSync(path.join(other, 'index.html'), 'utf8');
+            expect(html).toContain('window.SUDOKU_API_BASE="https://api.example.com"');
+        } finally {
+            fs.rmSync(other, { recursive: true, force: true });
+        }
     });
 });

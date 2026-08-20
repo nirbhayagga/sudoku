@@ -1,4 +1,3 @@
-/* exported PUZZLES, ALL_PUZZLES, DIFFICULTY_LABELS */
 // ═══════════════════════════════════════════════════════════════════════
 //  Pre-generated puzzle bank — 5,500 puzzles total
 //  Easy/Medium/Hard/Expert/Evil: 500 each
@@ -11,7 +10,7 @@
 //  leaderboard entries — never reorder a tier without regenerating it.
 // ═══════════════════════════════════════════════════════════════════════
 
-const PUZZLE_STRINGS = {
+export const PUZZLE_STRINGS = {
     easy: [
         '906040000041508902087010540400030621025000070103009450019800000830050006560190000',
         '700004000450786000000200070040650020100000908602010457504809006098007540370501092',
@@ -5530,7 +5529,7 @@ const PUZZLE_STRINGS = {
 const ID_PREFIX = {"easy":"e","medium":"m","hard":"h","expert":"x","evil":"v","nightmare":"n"};
 const ID_WIDTH = {"easy":2,"medium":2,"hard":2,"expert":2,"evil":2,"nightmare":5};
 
-const PUZZLES = {};
+export const PUZZLES = {};
 for (const [difficulty, list] of Object.entries(PUZZLE_STRINGS)) {
     const prefix = ID_PREFIX[difficulty];
     const width = ID_WIDTH[difficulty];
@@ -5541,14 +5540,14 @@ for (const [difficulty, list] of Object.entries(PUZZLE_STRINGS)) {
 }
 
 /** Flat list of all puzzles with difficulty label attached */
-const ALL_PUZZLES = [];
+export const ALL_PUZZLES = [];
 for (const [diff, list] of Object.entries(PUZZLES)) {
     for (const p of list) {
         ALL_PUZZLES.push({ ...p, difficulty: diff });
     }
 }
 
-const DIFFICULTY_LABELS = {
+export const DIFFICULTY_LABELS = {
     easy: 'Easy',
     medium: 'Medium',
     hard: 'Hard',

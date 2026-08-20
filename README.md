@@ -1,6 +1,6 @@
 # Sudoku
 
-A fast, browser-based sudoku solver and player with 5,500 pre-generated puzzles, 7 color themes, pencil marks, a self-hosted leaderboard, and a polished gameplay experience. No runtime dependencies and no build step required — just open `index.html`.
+A fast, browser-based sudoku solver and player with 5,500 pre-generated puzzles, 7 color themes, pencil marks, a self-hosted leaderboard, and a polished gameplay experience. No runtime dependencies and no framework — the built output is a single self-contained script that even runs straight off the filesystem.
 
 ## Modes
 
@@ -72,19 +72,19 @@ sudoku_solver/
   puzzle-bank.js      5,500 pre-generated puzzles (bare strings; ids derived at load)
   app.js              UI controller (modes, themes, notes, undo, stats, save)
 
-  build.js            Optional build — minified, content-hashed dist/
+  vite.config.js      Build config — minified, content-hashed dist/
   eslint.config.js    Lint rules
   vitest.config.js    Test config
-  scripts/serve.js    Dependency-free dev server with /api/ proxy
+  public/_headers     Cache rules, copied verbatim into dist/
   scripts/generate-bank.js  Regenerate or reorder a difficulty tier
-  tests/              Test suite (248 tests)
+  tests/              Test suite (251 tests)
 
   Dockerfile          Multi-stage build -> nginx-alpine
   nginx.conf.template Nginx config (envsubst at container start)
   docker-compose.yml            Local build, Traefik (recommended)
   docker-compose.remote.yml     Builds from git repo
   docker-compose.standalone.yml No Traefik, localhost:8080
-  netlify.toml / _headers       Static host build + cache settings
+  netlify.toml                  Static host build settings
 
   leaderboard-api/    Self-hosted leaderboard backend
     server.js         Express.js API (scores stored in JSON file)
@@ -94,16 +94,13 @@ sudoku_solver/
 
 ## Development
 
-The source tree runs directly — there is no build step required at any point.
-The tooling below is optional and exists for deployment and safety nets.
-
 ```bash
-npm install                     # dev dependencies (esbuild, eslint, vitest)
+npm install                     # dev dependencies (vite, eslint, vitest)
 npm ci --prefix leaderboard-api # leaderboard deps, needed for its tests
 
-npm run dev      # serve the source tree at :8000, proxying /api/ to :3001
+npm run dev      # Vite dev server at :8000 with hot reload, /api/ proxied to :3001
 npm run lint     # eslint
-npm test         # 248 tests
+npm test         # 251 tests
 npm run build    # produce dist/
 npm run check    # lint + test + build, what CI runs
 ```
@@ -153,39 +150,57 @@ By default the bank suite checks a deterministic 100-puzzle sample per
 difficulty (~1s). `FULL_BANK_CHECK=1` verifies every puzzle (~10s) and is what
 CI runs.
 
-The frontend files are plain `<script>` globals rather than modules, so tests
-load them through `tests/helpers/load-globals.js` (a `vm` context) or
-`tests/helpers/boot-app.js` (jsdom with the real `index.html`).
+Unit tests import the modules directly. UI tests use `tests/helpers/boot-app.js`,
+which bundles the app in-memory with esbuild and runs it against the real
+`index.html` in jsdom — jsdom cannot execute a module graph itself.
 
-## The Build Step
+## The Build
 
-`npm run build` writes `dist/`: the four scripts concatenated and minified into
-one file, CSS minified, and `index.html` rewritten to point at them.
+The source is ES modules bundled by Vite. `npm run build` writes `dist/`: one
+minified JS bundle, one CSS file, and an `index.html` pointing at them.
 
-The filenames carry a content hash (`app.a1b2c3d4.js`), which is the point — a
+Filenames carry a content hash (`index.DpVtReIW.js`), which is the point — a
 file's name changes whenever its bytes do, so assets can be cached forever while
 `index.html` stays uncached. Stale CSS on a phone after a deploy becomes
 impossible, and the "Force Update" button becomes a fallback rather than a
 necessity.
 
-The source tree is never modified and stays directly openable.
+Two deliberate choices in `vite.config.js`:
+
+- **The bundle is a single IIFE and the `type="module"` attribute is stripped.**
+  Browsers refuse to load ES modules over `file://`, so a module script would
+  cost this project its "just open it" property. As a classic script, `dist/`
+  still runs straight off the filesystem. Served over HTTP nothing differs.
+- **`base: './'`** so assets resolve relatively and the build works from a
+  subpath, which is how GitHub Pages serves a project site.
 
 ```bash
-npm run build
-npm run serve    # build, then serve dist/ at :8000
+npm run dev      # dev server with hot reload
+npm run build    # dist/
+npm run preview  # serve the built dist/
 
 # Point a static deployment at a leaderboard hosted elsewhere:
 SUDOKU_API_BASE=https://sudoku-api.example.com npm run build
 ```
 
+Development needs the dev server: `file://` cannot load ES modules, so the raw
+source tree is not directly openable even though the build output is.
+
 ## Running Locally
 
-Open `index.html` in any modern browser. No server required. The leaderboard will be unavailable but everything else works perfectly.
+```bash
+npm install
+npm run dev      # http://localhost:8000
+```
+
+Or build once and open the result with no server at all — `dist/index.html`
+works straight from the filesystem:
 
 ```bash
-# Or use a dev server:
-python3 -m http.server 8000
+npm run build && xdg-open dist/index.html
 ```
+
+The leaderboard is unavailable without a backend; everything else works.
 
 ## Leaderboard Setup (Optional)
 
@@ -261,7 +276,7 @@ Container environment:
 ### Static hosting
 
 `npm run build` produces `dist/`, which any static host can serve. The generated
-`dist/_headers` sets long-lived caching for hashed assets and no-cache for
+`public/_headers` is copied into `dist/` and sets long-lived caching for hashed assets and no-cache for
 `index.html`; Cloudflare Pages and Netlify both read it.
 
 | Host | Setup |
@@ -269,7 +284,7 @@ Container environment:
 | **Cloudflare Pages** | Build command `npm run build`, output directory `dist` |
 | **Netlify** | `netlify.toml` is committed — connect the repo |
 | **GitHub Pages** | `.github/workflows/pages.yml` deploys on push to `main` |
-| **S3 / any nginx** | Upload `dist/`; mirror the `_headers` rules in your config |
+| **S3 / any nginx** | Upload `dist/`; mirror the `public/_headers` rules in your config |
 
 A static deployment has no backend, so the leaderboard hides itself. To keep it,
 point the frontend at a leaderboard you host (through Traefik, for example):
