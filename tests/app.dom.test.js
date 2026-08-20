@@ -915,3 +915,162 @@ describe('theme dropdown', () => {
         }
     });
 });
+
+describe('dialog accessibility', () => {
+    /** Open a dialog and return its overlay and the dialog element inside it. */
+    function open(harness, trigger, overlayId) {
+        harness.click(trigger);
+        const overlay = harness.$(`#${overlayId}`);
+        return { overlay, dialog: overlay.querySelector('[role="dialog"]') };
+    }
+
+    const press = (harness, key, init = {}) =>
+        harness.document.activeElement.dispatchEvent(
+            new harness.window.KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...init })
+        );
+
+    describe('markup', () => {
+        it('marks every overlay as a modal dialog with a label', () => {
+            for (const id of ['modal-overlay', 'win-overlay', 'stats-overlay', 'leaderboard-overlay']) {
+                const dialog = app.$(`#${id} [role="dialog"]`);
+                expect(dialog, id).not.toBeNull();
+                expect(dialog.getAttribute('aria-modal'), id).toBe('true');
+
+                const labelId = dialog.getAttribute('aria-labelledby');
+                expect(labelId, id).toBeTruthy();
+                expect(app.$(`#${labelId}`), `${id} label target`).not.toBeNull();
+            }
+        });
+    });
+
+    describe('opening', () => {
+        beforeEach(() => app.click('#tab-solver'));
+
+        it('moves focus into the dialog', () => {
+            open(app, '#btn-paste', 'modal-overlay');
+            expect(app.document.activeElement).toBe(app.$('#import-text'));
+        });
+
+        it('hides the page behind it from assistive technology', () => {
+            open(app, '#btn-paste', 'modal-overlay');
+            expect(app.$('#app').getAttribute('aria-hidden')).toBe('true');
+            expect(app.$('.header').getAttribute('aria-hidden')).toBe('true');
+        });
+
+        it('reveals the page again on close', () => {
+            open(app, '#btn-paste', 'modal-overlay');
+            app.click('#btn-modal-cancel');
+            expect(app.$('#app').getAttribute('aria-hidden')).toBeNull();
+        });
+    });
+
+    describe('escape', () => {
+        it('closes the import dialog', () => {
+            app.click('#tab-solver');
+            const { overlay } = open(app, '#btn-paste', 'modal-overlay');
+            press(app, 'Escape');
+            expect(overlay.classList.contains('active')).toBe(false);
+        });
+
+        it('closes the stats dialog', () => {
+            const { overlay } = open(app, '#btn-stats', 'stats-overlay');
+            press(app, 'Escape');
+            expect(overlay.classList.contains('active')).toBe(false);
+        });
+
+        // Escape also resets the puzzle when a cell has focus, so the dialog
+        // handler must win while one is open.
+        it('does not reset the game while a dialog is open', async () => {
+            await startGame(app);
+            const empty = EASY_PUZZLE.indexOf('0');
+            app.type(empty, EASY_SOLUTION[empty]);
+
+            open(app, '#btn-stats', 'stats-overlay');
+            press(app, 'Escape');
+
+            expect(app.inputs()[empty].value).toBe(EASY_SOLUTION[empty]);
+        });
+    });
+
+    describe('focus return', () => {
+        it('returns focus to whatever opened the dialog', () => {
+            app.click('#tab-solver');
+            const trigger = app.$('#btn-paste');
+            trigger.focus();
+            open(app, '#btn-paste', 'modal-overlay');
+            press(app, 'Escape');
+            expect(app.document.activeElement).toBe(trigger);
+        });
+
+        it('returns focus when closed by its button', () => {
+            const trigger = app.$('#btn-stats');
+            trigger.focus();
+            open(app, '#btn-stats', 'stats-overlay');
+            app.click('#btn-stats-close');
+            expect(app.document.activeElement).toBe(trigger);
+        });
+    });
+
+    describe('focus trap', () => {
+        // Without this, Tab walks into the grid behind the overlay — invisible
+        // to a sighted user and incoherent to a screen reader.
+        it('wraps from the last element back to the first', () => {
+            open(app, '#btn-stats', 'stats-overlay');
+            const focusable = [...app.$('#stats-overlay').querySelectorAll('button, input, textarea')];
+            const last = focusable[focusable.length - 1];
+
+            last.focus();
+            press(app, 'Tab');
+            expect(app.document.activeElement).toBe(focusable[0]);
+        });
+
+        it('wraps backwards from the first element to the last', () => {
+            open(app, '#btn-stats', 'stats-overlay');
+            const focusable = [...app.$('#stats-overlay').querySelectorAll('button, input, textarea')];
+
+            focusable[0].focus();
+            press(app, 'Tab', { shiftKey: true });
+            expect(app.document.activeElement).toBe(focusable[focusable.length - 1]);
+        });
+
+        it('pulls focus back in if it escaped the dialog', () => {
+            open(app, '#btn-stats', 'stats-overlay');
+            app.inputs()[0].focus(); // a cell behind the overlay
+            press(app, 'Tab');
+            expect(app.$('#stats-overlay').contains(app.document.activeElement)).toBe(true);
+        });
+
+        it('leaves Tab alone when no dialog is open', () => {
+            app.inputs()[0].focus();
+            press(app, 'Tab');
+            // The browser handles it; the app must not interfere.
+            expect(app.document.activeElement).toBe(app.inputs()[0]);
+        });
+    });
+
+    describe('stacking', () => {
+        it('does not open the import dialog on top of another', () => {
+            app.click('#tab-solver');
+            open(app, '#btn-stats', 'stats-overlay');
+            app.document.dispatchEvent(
+                new app.window.KeyboardEvent('keydown', { key: 'i', ctrlKey: true, bubbles: true })
+            );
+            expect(app.$('#modal-overlay').classList.contains('active')).toBe(false);
+        });
+    });
+
+    describe('win overlay', () => {
+        it('traps focus and can be dismissed with Escape', async () => {
+            await startGame(app);
+            completePuzzle(app);
+            await app.tick(700);
+
+            const overlay = app.$('#win-overlay');
+            expect(overlay.classList.contains('active')).toBe(true);
+            expect(overlay.contains(app.document.activeElement)).toBe(true);
+
+            press(app, 'Escape');
+            expect(overlay.classList.contains('active')).toBe(false);
+        });
+    });
+});

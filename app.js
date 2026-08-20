@@ -816,15 +816,118 @@ function loadBank() {
         solverExampleIdx = (solverExampleIdx + 1) % solverExamples.length;
     }
 
+    // ══════════════════════════════════════════════════════════════════
+    //  DIALOGS (shared accessibility behaviour)
+    // ══════════════════════════════════════════════════════════════════
+    //
+    // Every overlay goes through here so they all behave the same: Escape
+    // closes, Tab is confined to the dialog, focus moves in on open and returns
+    // to whatever opened it on close, and the page behind is hidden from
+    // assistive technology. Without the trap, Tab walks into the grid behind the
+    // overlay, which is invisible to a sighted user and nonsense to a screen
+    // reader.
+
+    // Regions hidden from assistive tech while a dialog is open. The overlays
+    // are siblings of these, never descendants, so nothing focused ends up
+    // inside an aria-hidden subtree.
+    const pageRegions = [
+        document.querySelector('.header'),
+        document.querySelector('.mode-toggle'),
+        document.getElementById('app'),
+        document.querySelector('.shortcuts'),
+    ].filter(Boolean);
+
+    let activeDialog = null;
+
+    const FOCUSABLE = 'a[href], button, input, select, textarea, [tabindex]:not([tabindex="-1"])';
+
+    /**
+     * Visible in the sense that matters for focus. Checks inline display only:
+     * that is how this app hides things (the win screen's submit block, for
+     * example), and it works without layout, which jsdom has none of.
+     */
+    function isFocusVisible(el) {
+        if (el.disabled || el.hidden) return false;
+        for (let node = el; node && node !== document.body; node = node.parentElement) {
+            if (node.style && node.style.display === 'none') return false;
+        }
+        return true;
+    }
+
+    function focusableIn(dialog) {
+        return [...dialog.querySelectorAll(FOCUSABLE)].filter(isFocusVisible);
+    }
+
+    function openDialog(overlay, { initialFocus } = {}) {
+        if (activeDialog && activeDialog.overlay !== overlay) closeDialog(activeDialog.overlay);
+
+        activeDialog = { overlay, returnFocusTo: document.activeElement };
+        overlay.classList.add('active');
+        for (const region of pageRegions) region.setAttribute('aria-hidden', 'true');
+
+        const target = initialFocus || focusableIn(overlay)[0];
+        if (target) target.focus();
+    }
+
+    function closeDialog(overlay) {
+        overlay.classList.remove('active');
+        for (const region of pageRegions) region.removeAttribute('aria-hidden');
+
+        if (activeDialog && activeDialog.overlay === overlay) {
+            const { returnFocusTo } = activeDialog;
+            activeDialog = null;
+            // Send focus back where it came from, so a keyboard user is not
+            // dropped at the top of the document.
+            if (returnFocusTo && document.contains(returnFocusTo) && isFocusVisible(returnFocusTo)) {
+                returnFocusTo.focus();
+            }
+        }
+    }
+
+    function isDialogOpen() {
+        return activeDialog !== null;
+    }
+
+    document.addEventListener('keydown', (e) => {
+        if (!activeDialog) return;
+
+        if (e.key === 'Escape') {
+            e.preventDefault();
+            e.stopPropagation();
+            closeDialog(activeDialog.overlay);
+            return;
+        }
+
+        if (e.key !== 'Tab') return;
+
+        const focusable = focusableIn(activeDialog.overlay);
+        if (focusable.length === 0) {
+            e.preventDefault();
+            return;
+        }
+
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        const current = document.activeElement;
+
+        // Wrap at both ends, and pull focus back in if it escaped entirely.
+        if (e.shiftKey && (current === first || !activeDialog.overlay.contains(current))) {
+            e.preventDefault();
+            last.focus();
+        } else if (!e.shiftKey && (current === last || !activeDialog.overlay.contains(current))) {
+            e.preventDefault();
+            first.focus();
+        }
+    }, true);
+
     // ── Import Modal ───────────────────────────────────────────────────
     function openModal() {
         if (importError) importError.textContent = '';
         importText.value = '';
-        modalOverlay.classList.add('active');
-        setTimeout(() => importText.focus(), 100);
+        openDialog(modalOverlay, { initialFocus: importText });
     }
 
-    function closeModal() { modalOverlay.classList.remove('active'); }
+    function closeModal() { closeDialog(modalOverlay); }
 
     function doImport() {
         const raw = importText.value.trim();
@@ -1103,7 +1206,7 @@ function loadBank() {
             const hintStr = hintsUsed > 0 ? `${hintsUsed} hint${hintsUsed > 1 ? 's' : ''} used` : 'No hints used';
             winDetails.textContent = `Time: ${timeStr} — ${hintStr}`;
 
-            setTimeout(() => winOverlay.classList.add('active'), 600);
+            setTimeout(() => openDialog(winOverlay), 600);
             setStatus('Puzzle complete!', 'success');
 
             // Update stats
@@ -1385,10 +1488,10 @@ function loadBank() {
 
     function openStats() {
         renderStats();
-        statsOverlay.classList.add('active');
+        openDialog(statsOverlay);
     }
 
-    function closeStats() { statsOverlay.classList.remove('active'); }
+    function closeStats() { closeDialog(statsOverlay); }
 
     function resetStats() {
         localStorage.removeItem(STATS_KEY);
@@ -1483,7 +1586,8 @@ function loadBank() {
     document.addEventListener('keydown', (e) => {
         if (e.ctrlKey && e.key === 'i') {
             e.preventDefault();
-            if (mode === 'solver') openModal();
+            // Never stack a second dialog on top of an open one.
+            if (mode === 'solver' && !isDialogOpen()) openModal();
         }
     });
 
@@ -1540,7 +1644,7 @@ function loadBank() {
     btnStatsReset.addEventListener('click', resetStats);
 
     btnWinNew.addEventListener('click', () => {
-        winOverlay.classList.remove('active');
+        closeDialog(winOverlay);
         startGame();
     });
 
@@ -1554,7 +1658,7 @@ function loadBank() {
     btnModalNo.addEventListener('click', closeModal);
     modalOverlay.addEventListener('click', (e) => { if (e.target === modalOverlay) closeModal(); });
     statsOverlay.addEventListener('click', (e) => { if (e.target === statsOverlay) closeStats(); });
-    winOverlay.addEventListener('click', (e) => { if (e.target === winOverlay) winOverlay.classList.remove('active'); });
+    winOverlay.addEventListener('click', (e) => { if (e.target === winOverlay) closeDialog(winOverlay); });
 
     // ══════════════════════════════════════════════════════════════════
     //  NUMPAD (mobile/tablet)
@@ -1800,7 +1904,9 @@ function loadBank() {
         if (!lbOverlay) return;
         currentLbDiff = diff || currentDifficulty;
         lbContent.innerHTML = '<p class="lb-empty">Loading...</p>';
-        lbOverlay.classList.add('active');
+        // Only opened once; re-opening on a tab switch would steal focus back
+        // to the first tab on every click.
+        if (!lbOverlay.classList.contains('active')) openDialog(lbOverlay);
         if (lbTabs) {
             lbTabs.querySelectorAll('.lb-tab').forEach(t =>
                 t.classList.toggle('active', t.dataset.diff === currentLbDiff)
@@ -1811,7 +1917,7 @@ function loadBank() {
     }
 
     function closeLeaderboard() {
-        if (lbOverlay) lbOverlay.classList.remove('active');
+        if (lbOverlay) closeDialog(lbOverlay);
     }
 
     // Leaderboard button

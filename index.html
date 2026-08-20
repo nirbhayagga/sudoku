@@ -136,8 +136,8 @@
 
   <!-- Paste/Import Modal -->
   <div class="modal-overlay" id="modal-overlay">
-    <div class="modal">
-      <h2>Import Puzzle</h2>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="import-title">
+      <h2 id="import-title">Import Puzzle</h2>
       <p>Paste an 81-character string using digits 1-9 and 0 or . for empty cells.<br>
         You can also paste 9 lines of 9 digits.</p>
       <textarea id="import-text"
@@ -153,9 +153,9 @@
 
   <!-- Win overlay -->
   <div class="win-overlay" id="win-overlay">
-    <div class="win-card">
+    <div class="win-card" role="dialog" aria-modal="true" aria-labelledby="win-title">
       <div class="win-icon">&#10003;</div>
-      <h2>Puzzle Complete!</h2>
+      <h2 id="win-title">Puzzle Complete!</h2>
       <p id="win-details" role="status" aria-live="assertive"></p>
       <div class="win-submit" id="win-submit" style="display:none;">
         <input type="text" id="win-name" placeholder="Your name" maxlength="20" autocomplete="off">
@@ -167,8 +167,8 @@
 
   <!-- Stats Modal -->
   <div class="modal-overlay" id="stats-overlay">
-    <div class="modal stats-modal">
-      <h2>Statistics</h2>
+    <div class="modal stats-modal" role="dialog" aria-modal="true" aria-labelledby="stats-title">
+      <h2 id="stats-title">Statistics</h2>
       <div id="stats-content"></div>
       <div class="modal-actions">
         <button class="btn btn-danger" id="btn-stats-reset">Reset Stats</button>
@@ -179,8 +179,8 @@
 
   <!-- Leaderboard Modal -->
   <div class="modal-overlay" id="leaderboard-overlay">
-    <div class="modal leaderboard-modal">
-      <h2>Leaderboard</h2>
+    <div class="modal leaderboard-modal" role="dialog" aria-modal="true" aria-labelledby="lb-title">
+      <h2 id="lb-title">Leaderboard</h2>
       <div class="leaderboard-tabs" id="leaderboard-tabs">
         <button class="lb-tab active" data-diff="easy">Easy</button>
         <button class="lb-tab" data-diff="medium">Medium</button>
