@@ -152,3 +152,32 @@ describe('when storage is unavailable', () => {
         expect(() => store.recordWin('easy', 10, 0)).not.toThrow();
     });
 });
+
+describe('auto-notes in stats', () => {
+    it('counts games that used it', () => {
+        store.recordWin('easy', 100, 0, true);
+        expect(store.getStats().easy.autoNotesGames).toBe(1);
+    });
+
+    it('does not count games that did not', () => {
+        store.recordWin('easy', 100, 0, false);
+        store.recordWin('easy', 120, 0);
+        expect(store.getStats().easy.autoNotesGames).toBe(0);
+    });
+
+    it('accumulates alongside plays', () => {
+        store.recordWin('easy', 100, 0, true);
+        store.recordWin('easy', 110, 0, false);
+        store.recordWin('easy', 120, 0, true);
+        const easy = store.getStats().easy;
+        expect(easy.played).toBe(3);
+        expect(easy.autoNotesGames).toBe(2);
+    });
+
+    it('upgrades stats saved before the field existed', () => {
+        localStorage.setItem('sudoku_stats', JSON.stringify({
+            easy: { played: 5, won: 5, bestTime: 90, totalTime: 600, totalHints: 2 },
+        }));
+        expect(store.recordWin('easy', 80, 0, true).easy.autoNotesGames).toBe(1);
+    });
+});

@@ -328,3 +328,29 @@ describe('numeric field hardening', () => {
         expect((await resp.json()).entry.level).toBeNull();
     });
 });
+
+describe('auto-notes flag', () => {
+    it('records when auto-notes was used', async () => {
+        const resp = await post(server.base, { ...validScore, autoNotes: true });
+        expect((await resp.json()).entry.autoNotes).toBe(true);
+    });
+
+    it('defaults to false when omitted', async () => {
+        const resp = await post(server.base, validScore);
+        expect((await resp.json()).entry.autoNotes).toBe(false);
+    });
+
+    // Only a real boolean counts, so a truthy string cannot smuggle it through
+    // — or, worse, reach the leaderboard table as markup.
+    it('coerces any non-boolean to false', async () => {
+        for (const value of ['yes', 1, {}, '<b>x</b>']) {
+            const resp = await post(server.base, { ...validScore, autoNotes: value });
+            expect((await resp.json()).entry.autoNotes, String(value)).toBe(false);
+        }
+    });
+
+    it('persists the flag', async () => {
+        await post(server.base, { ...validScore, autoNotes: true });
+        expect(server.readData().easy[0].autoNotes).toBe(true);
+    });
+});
