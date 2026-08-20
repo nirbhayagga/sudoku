@@ -33,7 +33,7 @@ function appBundle() {
     return bundledApp;
 }
 
-export async function bootApp({ localStorage: seed = {}, serviceWorker = null } = {}) {
+export async function bootApp({ localStorage: seed = {}, serviceWorker = null, url = 'http://localhost/' } = {}) {
     // Swallow the expected "fetch is not defined" noise, surface real errors.
     const virtualConsole = new VirtualConsole();
     virtualConsole.on('jsdomError', (err) => {
@@ -47,7 +47,7 @@ export async function bootApp({ localStorage: seed = {}, serviceWorker = null } 
     const dom = new JSDOM(html, {
         runScripts: 'dangerously',
         pretendToBeVisual: true,
-        url: 'http://localhost/',
+        url,
         virtualConsole,
     });
 

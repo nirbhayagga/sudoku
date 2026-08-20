@@ -7,6 +7,7 @@ import { SudokuSolver } from './solver.js';
 import { SudokuGenerator } from './generator.js';
 import { DIFFICULTY_LABELS, BANK_SIZES } from './difficulties.js';
 import { dailyPuzzle, formatDay } from './daily.js';
+import { parseShareLink, bankLink, puzzleLink, copyToClipboard } from './share.js';
 import { formatTime, escapeHtml } from './format.js';
 import { createDialogs } from './dialogs.js';
 import { applyTheme, DEFAULT_THEME } from './theme.js';
@@ -70,6 +71,10 @@ function loadBank() {
     const levelMaxDisplay = document.getElementById('level-max');
     const btnStats = document.getElementById('btn-stats');
     const btnDaily = document.getElementById('btn-daily');
+    const btnShare = document.getElementById('btn-share');
+    const shareOverlay = document.getElementById('share-overlay');
+    const shareText = document.getElementById('share-text');
+    const btnShareClose = document.getElementById('btn-share-close');
 
     const modalOverlay = document.getElementById('modal-overlay');
     const importText = document.getElementById('import-text');
@@ -153,6 +158,8 @@ function loadBank() {
     let currentLevel = null;
     // The day whose puzzle is being played, or null for a normal game.
     let currentDaily = null;
+    // Set during init when the URL names a puzzle; suppresses the resume offer.
+    let sharedPuzzleLoaded = false;
 
     /**
      * While paused the timer is frozen and the grid is blurred, so accepting
@@ -1118,8 +1125,8 @@ function loadBank() {
      * Start today's puzzle. The board is derived from the date, so every player
      * gets the same one and the per-level leaderboard compares like with like.
      */
-    function startDaily() {
-        const today = store.dayKey();
+    function startDaily(day) {
+        const today = day || store.dayKey();
         const { difficulty, level } = dailyPuzzle(today);
 
         selectDifficulty(difficulty);
@@ -1135,6 +1142,60 @@ function loadBank() {
         btnDaily.title = done
             ? "Today's puzzle — already solved, play it again"
             : "Today's puzzle — everyone gets the same one";
+    }
+
+    /**
+     * Copy a link to whatever is on screen. Prefers a bank link, which is short
+     * and carries the level the leaderboard compares; falls back to encoding
+     * the board itself for a hand-entered puzzle.
+     */
+    async function shareCurrentPuzzle() {
+        const board = readGrid();
+        let link;
+
+        if (mode === 'play' && currentLevel) {
+            link = bankLink(window.location.href, currentDifficulty, currentLevel);
+        } else if (board !== '0'.repeat(81)) {
+            link = puzzleLink(window.location.href, board);
+        } else {
+            setStatus('Nothing to share yet', 'error');
+            return;
+        }
+
+        if (await copyToClipboard(link)) {
+            setStatus('Link copied to clipboard', 'success');
+            return;
+        }
+
+        // No clipboard on file:// or an insecure origin, so show the link.
+        if (shareText && shareOverlay) {
+            shareText.value = link;
+            dialogs.open(shareOverlay, { initialFocus: shareText });
+            shareText.select();
+        }
+    }
+
+    /**
+     * Act on a puzzle named in the URL. Applied after the initial switchMode so
+     * a raw-board link can land in solver mode without being switched back.
+     */
+    function applySharedPuzzle(shared) {
+        if (!shared) return;
+
+        if (shared.kind === 'daily') {
+            startDaily(shared.dayKey);
+            return;
+        }
+        if (shared.kind === 'bank') {
+            selectDifficulty(shared.difficulty);
+            if (levelInput) levelInput.value = shared.level ? String(shared.level) : '';
+            startGame(shared.difficulty);
+            return;
+        }
+        // A raw board goes to the solver, which is what it is for.
+        switchMode('solver');
+        writeGrid(shared.puzzle, true);
+        setStatus('Puzzle loaded from link');
     }
 
     function resetGame() {
@@ -1576,9 +1637,12 @@ function loadBank() {
             solveTimeEl.classList.remove('visible');
             setStatus('Click "New Game" to start');
 
-            // Check for saved game
-            const saved = store.loadSavedGame();
-            if (saved) showResumeBanner(saved);
+            // A shared link is an explicit request for a specific puzzle, so
+            // it wins over offering to resume.
+            if (!sharedPuzzleLoaded) {
+                const saved = store.loadSavedGame();
+                if (saved) showResumeBanner(saved);
+            }
         }
     }
 
@@ -1627,8 +1691,18 @@ function loadBank() {
     btnClear.addEventListener('click', clearGrid);
 
     btnNewGame.addEventListener('click', () => startGame());
+    if (btnShare) {
+        btnShare.addEventListener('click', shareCurrentPuzzle);
+        btnShare.addEventListener('mousedown', (e) => e.preventDefault());
+    }
+    if (btnShareClose) btnShareClose.addEventListener('click', () => dialogs.close(shareOverlay));
+    if (shareOverlay) {
+        shareOverlay.addEventListener('click', (e) => {
+            if (e.target === shareOverlay) dialogs.close(shareOverlay);
+        });
+    }
     if (btnDaily) {
-        btnDaily.addEventListener('click', startDaily);
+        btnDaily.addEventListener('click', () => startDaily());
         btnDaily.addEventListener('mousedown', (e) => e.preventDefault());
     }
     btnHint.addEventListener('click', giveHint);
@@ -1966,7 +2040,14 @@ function loadBank() {
 
     buildGrid();
     updateDailyButton();
+
+    // Parsed before the first switchMode so the resume offer can be suppressed,
+    // applied after so a raw-board link can stay in solver mode.
+    const sharedPuzzle = parseShareLink(window.location.search);
+    sharedPuzzleLoaded = sharedPuzzle !== null;
+
     switchMode('play');
+    applySharedPuzzle(sharedPuzzle);
     revealLeaderboardUi();
 
     // ── Offline support ────────────────────────────────────────────────
