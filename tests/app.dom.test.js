@@ -103,7 +103,9 @@ describe('solver mode', () => {
             if (EASY_PUZZLE[i] !== '0') app.type(i, EASY_PUZZLE[i]);
         }
         app.click('#btn-solve');
-        expect(app.$('#solve-time').textContent).toMatch(/ms/);
+        // Sub-millisecond solves are reported in μs, which is the common case
+        // now that candidates are bitmasks.
+        expect(app.$('#solve-time').textContent).toMatch(/(ms|μs)/);
     });
 
     it('clears the grid', () => {
