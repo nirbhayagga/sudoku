@@ -1224,23 +1224,108 @@ function loadBank() {
     }
 
     // ── Hints ──────────────────────────────────────────────────────────
+
+    /**
+     * The most useful cell to reveal: one the player could actually have worked
+     * out from what is on the board right now.
+     *
+     * Preference order is naked single (one candidate left), then hidden single
+     * (a digit with only one home in some unit), then whichever cell has fewest
+     * candidates. Every deduction is checked against the solution before it is
+     * used — a wrong entry elsewhere makes candidate arithmetic unsound, and a
+     * hint must never be wrong.
+     *
+     * @returns {{idx: number, reason: string}|null}
+     */
+    function findHintCell(board) {
+        const candidates = new Map();
+        for (let i = 0; i < 81; i++) {
+            if (board[i] === '0') candidates.set(i, candidatesFor(board, i));
+        }
+        if (candidates.size === 0) return null;
+
+        const trustworthy = (idx, digit) => digit === currentSolution[idx];
+
+        // Naked single: only one digit can go here.
+        for (const [idx, set] of candidates) {
+            if (set.size === 1) {
+                const [digit] = [...set];
+                if (trustworthy(idx, digit)) {
+                    return { idx, reason: `only ${digit} fits in this cell` };
+                }
+            }
+        }
+
+        // Hidden single: this digit has only one home left in some unit.
+        const units = [];
+        for (let r = 0; r < 9; r++) units.push({ name: 'row', cells: Array.from({ length: 9 }, (_, c) => r * 9 + c) });
+        for (let c = 0; c < 9; c++) units.push({ name: 'column', cells: Array.from({ length: 9 }, (_, r) => r * 9 + c) });
+        for (let br = 0; br < 3; br++) {
+            for (let bc = 0; bc < 3; bc++) {
+                const cells = [];
+                for (let r = br * 3; r < br * 3 + 3; r++) {
+                    for (let c = bc * 3; c < bc * 3 + 3; c++) cells.push(r * 9 + c);
+                }
+                units.push({ name: 'box', cells });
+            }
+        }
+
+        for (const unit of units) {
+            for (let d = 1; d <= 9; d++) {
+                const digit = String(d);
+                const homes = unit.cells.filter((i) => candidates.has(i) && candidates.get(i).has(digit));
+                if (homes.length === 1 && trustworthy(homes[0], digit)) {
+                    return { idx: homes[0], reason: `the only place for ${digit} in this ${unit.name}` };
+                }
+            }
+        }
+
+        // Nothing basic is available, so give the most constrained cell — the
+        // one needing the least work to justify.
+        let best = null;
+        for (const [idx, set] of candidates) {
+            if (!trustworthy(idx, currentSolution[idx])) continue;
+            if (!best || set.size < best.size) best = { idx, size: set.size };
+        }
+        if (best) return { idx: best.idx, reason: `narrowed to ${best.size} candidates` };
+
+        return null;
+    }
+
     function giveHint() {
         if (isPlayBlocked()) return;
         if (!gameActive || !currentSolution || gameWon) return;
 
-        const emptyCells = [];
+        const fixable = [];
         for (let i = 0; i < 81; i++) {
             if (!wrappers[i].classList.contains('locked') && inputs[i].value !== currentSolution[i]) {
-                emptyCells.push(i);
+                fixable.push(i);
             }
         }
 
-        if (emptyCells.length === 0) {
+        if (fixable.length === 0) {
             setStatus('No more hints needed!', 'success');
             return;
         }
 
-        const hintIdx = emptyCells[Math.floor(Math.random() * emptyCells.length)];
+        // A selected cell is an explicit request: hint that one.
+        const selected = focusedIdx >= 0 ? focusedIdx : lastTouchedIdx;
+        let hintIdx;
+        let reason = '';
+
+        if (selected >= 0 && fixable.includes(selected)) {
+            hintIdx = selected;
+        } else {
+            const found = findHintCell(readGrid());
+            if (found) {
+                hintIdx = found.idx;
+                reason = found.reason;
+            } else {
+                // Deduction is unreliable, which means something on the board is
+                // wrong; fall back to any cell that still needs fixing.
+                hintIdx = fixable[Math.floor(Math.random() * fixable.length)];
+            }
+        }
         const prevVal = inputs[hintIdx].value;
         const prevNotes = new Set(cellNotes[hintIdx]);
 
@@ -1253,7 +1338,10 @@ function loadBank() {
         hintsUsed++;
 
         pushUndo(hintIdx, prevVal, currentSolution[hintIdx], prevNotes, new Set());
-        setStatus(`Hint revealed (${hintsUsed} hint${hintsUsed > 1 ? 's' : ''} used)`);
+
+        const cellName = `R${Math.floor(hintIdx / 9) + 1}C${(hintIdx % 9) + 1}`;
+        const because = reason ? ` — ${reason}` : '';
+        setStatus(`Hint: ${cellName}${because} (${hintsUsed} used)`);
 
         recheckAllConflicts();
         refreshAutoNotes();

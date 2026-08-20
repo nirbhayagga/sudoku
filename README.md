@@ -20,7 +20,7 @@ Play sudoku puzzles with built-in hints, pencil marks, undo/redo, and more.
 - **Numpad completion** — Completed digits (placed 9 times) are greyed/crossed out on the mobile numpad
 - **Pencil marks / Notes** — Toggle with `N`, type digits to add/remove candidate marks
 - **Auto-notes** — Toggle with `A`: fills every empty cell with the digits its row, column and box still allow, and keeps them current as you play. Derived from the board, never from the solution — it reveals no answers, but it does remove the scanning, so games that used it are marked on the leaderboard and in stats
-- **Hints** — Reveals one correct cell in amber (press `H`)
+- **Hints** — Press `H`. With a cell selected it reveals that one; otherwise it picks a cell you could actually deduce right now — a naked single, or the only home left for a digit in some unit — and says which (`R4C7 — the only place for 7 in this box`)
 - **Error checking** — Click "Check" or press `Enter` to highlight incorrect entries
 - **Conflict detection** — Duplicates in the same row/column/box flash orange immediately
 - **Undo / Redo** — `Ctrl+Z` / `Ctrl+Y` with full history
@@ -92,7 +92,7 @@ sudoku_solver/
   vitest.config.js    Test config
   scripts/generate-bank.js  Regenerate or reorder a difficulty tier
   scripts/check-contrast.js Audit (and fix) theme contrast
-  tests/              Test suite (451 tests)
+  tests/              Test suite (460 tests)
 
   Dockerfile          Multi-stage build -> nginx-alpine
   nginx.conf.template Nginx config (envsubst at container start)
@@ -115,7 +115,7 @@ npm ci --prefix leaderboard-api # leaderboard deps, needed for its tests
 
 npm run dev      # Vite dev server at :8000 with hot reload, /api/ proxied to :3001
 npm run lint     # eslint
-npm test         # 451 tests
+npm test         # 460 tests
 npm run build    # produce dist/
 npm run check    # lint + test + build, what CI runs
 ```
