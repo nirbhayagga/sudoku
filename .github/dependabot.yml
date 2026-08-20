@@ -1,0 +1,54 @@
+# Opens a PR when a dependency has a new version or a published advisory.
+# CI runs on those PRs like any other, so a green check means the suite passed
+# against the new version.
+version: 2
+
+updates:
+  # Frontend dev tooling (vite, vitest, eslint, jsdom).
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      # One PR for routine bumps instead of five; anything major stays separate
+      # so it gets read properly.
+      dev-dependencies:
+        patterns: ['*']
+        update-types: [minor, patch]
+    commit-message:
+      prefix: 'deps'
+
+  # The leaderboard API. This one actually ships, so its advisories matter most.
+  - package-ecosystem: npm
+    directory: /leaderboard-api
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      api-dependencies:
+        patterns: ['*']
+        update-types: [minor, patch]
+    commit-message:
+      prefix: 'deps(api)'
+
+  # Base images: node:20-alpine and nginx:alpine.
+  - package-ecosystem: docker
+    directories:
+      - /
+      - /leaderboard-api
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: 'deps(docker)'
+
+  # actions/checkout, actions/setup-node and friends.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: 'deps(ci)'

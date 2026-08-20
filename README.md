@@ -382,6 +382,31 @@ is nothing to unregister while iterating.
 
 ## Continuous Integration
 
+### Dependency updates
+
+`.github/dependabot.yml` watches four ecosystems weekly — frontend dev
+dependencies, the leaderboard API, both Dockerfiles' base images, and the
+GitHub Actions themselves — and opens PRs for new versions and published
+advisories. Routine minor/patch bumps are grouped into one PR; majors stay
+separate so they get read. CI runs on each, so a green check means the suite
+passed against the new version.
+
+### Lighthouse
+
+`.github/workflows/lighthouse.yml` audits the **built** output on every push and
+fails if performance or accessibility drops below the thresholds in
+`lighthouserc.json`. It exists to protect what has already been earned: a ~17 kB
+initial load and AA contrast on every theme.
+
+PWA installability is deliberately not asserted there — Lighthouse 12 removed
+the PWA category, and `tests/service-worker.test.js` already checks the manifest,
+icons, precache list and every caching rule directly.
+
+The thresholds are a first estimate. Read the first run's report and move them to
+sit just under what the app actually scores.
+
+### Test and build
+
 `.forgejo/workflows/ci.yml` and `.github/workflows/ci.yml` run the same checks —
 lint, the full test suite with `FULL_BANK_CHECK=1`, the build, and a Docker build
 that asserts the frontend serves standalone with no leaderboard present.

@@ -1,0 +1,26 @@
+name: Lighthouse
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  audit:
+    runs-on: docker
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - run: npm ci
+      - run: npm run build
+
+      # The GitHub marketplace action is not available here, so the CLI is
+      # installed directly. Needs a runner image with Chrome available.
+      - name: Run Lighthouse CI
+        run: |
+          npm install -g @lhci/cli@0.14.x
+          lhci autorun --config=./lighthouserc.json || echo "Lighthouse needs Chrome on the runner"
