@@ -33,7 +33,7 @@ function appBundle() {
     return bundledApp;
 }
 
-export async function bootApp({ localStorage: seed = {}, serviceWorker = null, url = 'http://localhost/' } = {}) {
+export async function bootApp({ localStorage: seed = {}, serviceWorker = null, url = 'http://localhost/', touch = false } = {}) {
     // Swallow the expected "fetch is not defined" noise, surface real errors.
     const virtualConsole = new VirtualConsole();
     virtualConsole.on('jsdomError', (err) => {
@@ -54,6 +54,24 @@ export async function bootApp({ localStorage: seed = {}, serviceWorker = null, u
     // Seeded before the scripts run, since app.js reads localStorage on init.
     for (const [key, value] of Object.entries(seed)) {
         dom.window.localStorage.setItem(key, value);
+    }
+
+    // jsdom defines `ontouchstart`, so app.js would take its touch branch for
+    // every test — cells readOnly, focus() never called, input only via the
+    // numpad. That is a real code path, but it is not the one most of these
+    // tests mean to exercise, and it matches neither platform by accident.
+    // Choose explicitly: desktop unless a test asks for touch.
+    if (touch) {
+        Object.defineProperty(dom.window.navigator, 'maxTouchPoints', {
+            value: 5,
+            configurable: true,
+        });
+    } else {
+        delete dom.window.ontouchstart;
+        Object.defineProperty(dom.window.navigator, 'maxTouchPoints', {
+            value: 0,
+            configurable: true,
+        });
     }
 
     // Must exist before the app runs: registration is guarded by a

@@ -26,6 +26,25 @@ function classicScriptOutput() {
 }
 
 /**
+ * Drop `crossorigin` from the module build's tags.
+ *
+ * These are same-origin assets, so the attribute buys nothing — but it makes
+ * the browser send an `Origin` header, and against a server that replies
+ * `Vary: Origin` that turns every service worker cache lookup into a miss.
+ * The worker also passes ignoreVary, so this is belt and braces.
+ */
+function sameOriginAssets() {
+    return {
+        name: 'same-origin-assets',
+        enforce: 'post',
+        apply: 'build',
+        transformIndexHtml(html) {
+            return html.replace(/\s+crossorigin/g, '');
+        },
+    };
+}
+
+/**
  * Generate dist/sw.js with the built asset names baked in.
  *
  * Runs after the output directory is complete and reads it, rather than
@@ -128,7 +147,7 @@ return {
     // so it ships none. Its script must stay a classic script.
     plugins: standalone
         ? [injectApiBase(), classicScriptOutput()]
-        : [injectApiBase(), pwa()],
+        : [injectApiBase(), sameOriginAssets(), pwa()],
 
     server: {
         port: 8000,

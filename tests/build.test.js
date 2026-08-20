@@ -127,6 +127,13 @@ describe('modular build', () => {
         expect(read(modular, 'index.html')).toContain('type="module"');
     });
 
+    // crossorigin makes the browser send an Origin header; against a server
+    // replying `Vary: Origin` that turns every service worker cache lookup into
+    // a miss. These are same-origin assets, so the attribute buys nothing.
+    it('does not mark same-origin assets crossorigin', () => {
+        expect(read(modular, 'index.html')).not.toContain('crossorigin');
+    });
+
     it('does not reference the bank chunk from the HTML', () => {
         // It must be fetched on demand, not preloaded up front.
         const bank = scriptsOf(modular).find((f) => f.startsWith('puzzle-bank.'));

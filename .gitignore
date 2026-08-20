@@ -33,3 +33,6 @@ dist-standalone/
 
 # Personal notes, not for the repo
 LOCAL-*.md
+e2e-results/
+test-results/
+playwright-report/
