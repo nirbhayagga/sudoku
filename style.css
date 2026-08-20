@@ -2008,3 +2008,11 @@ kbd {
         font-size: 0.75rem;
     }
 }
+/* Import validation message. role="alert" so it is announced; previously a
+   failed import only flashed the textarea border and said nothing. */
+.modal-error {
+    min-height: 1.2em;
+    margin: 0.5rem 0 0;
+    color: var(--text-error);
+    font-size: 0.9rem;
+}
