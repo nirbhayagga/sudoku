@@ -30,3 +30,6 @@ CLAUDE.md
 # Local deployment settings
 .env
 dist-standalone/
+
+# Personal notes, not for the repo
+LOCAL-*.md
