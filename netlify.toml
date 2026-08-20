@@ -1,0 +1,14 @@
+# Netlify build settings. Cloudflare Pages needs no file — set the same
+# build command (`npm run build`) and output directory (`dist`) in its
+# dashboard. Both hosts read the generated dist/_headers for cache rules.
+
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+# Set SUDOKU_API_BASE in the site's environment variables to point the
+# leaderboard at a self-hosted API. Without it the app ships leaderboard-free
+# and hides that UI automatically.

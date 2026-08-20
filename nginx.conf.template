@@ -1,0 +1,62 @@
+# Processed by the nginx image's envsubst entrypoint at container start
+# (/etc/nginx/templates/*.template -> /etc/nginx/conf.d/). Only ${BRACED} names
+# are substituted, so plain nginx variables like $uri are left alone.
+
+server {
+    listen 80;
+    server_name _;
+
+    root /usr/share/nginx/html;
+    index index.html;
+
+    # index.html must never be cached: it is the only file that knows the
+    # current asset hashes, so a stale copy pins clients to old JS/CSS.
+    location = /index.html {
+        add_header Cache-Control "no-cache" always;
+        add_header X-Frame-Options "SAMEORIGIN" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    }
+
+    location / {
+        try_files $uri $uri/ /index.html;
+        add_header Cache-Control "no-cache" always;
+        add_header X-Frame-Options "SAMEORIGIN" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    }
+
+    # Built assets carry a content hash in their filename, so their bytes can
+    # never change under a given name — safe to cache indefinitely.
+    location /assets/ {
+        add_header Cache-Control "public, max-age=31536000, immutable" always;
+        add_header X-Content-Type-Options "nosniff" always;
+    }
+
+    # Leaderboard API.
+    #
+    # The upstream is held in a variable deliberately. With a literal hostname,
+    # nginx resolves it while loading the config and REFUSES TO START when the
+    # leaderboard container is absent — taking the whole app down instead of
+    # degrading. Via a variable, resolution happens per request: with no
+    # leaderboard running the health check simply 502s and the frontend hides
+    # its leaderboard UI, which is the intended graceful degradation.
+    location /api/ {
+        resolver ${NGINX_RESOLVER} valid=10s ipv6=off;
+        set $leaderboard ${LEADERBOARD_UPSTREAM};
+        proxy_pass $leaderboard$request_uri;
+
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+
+        # Fail fast so a missing backend doesn't hang the UI.
+        proxy_connect_timeout 2s;
+        proxy_read_timeout 10s;
+    }
+
+    # Gzip
+    gzip on;
+    gzip_types text/plain text/css application/javascript application/json;
+    gzip_min_length 256;
+}
