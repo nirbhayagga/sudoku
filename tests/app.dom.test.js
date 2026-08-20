@@ -1538,3 +1538,103 @@ describe('share links', () => {
         });
     });
 });
+
+describe('hints', () => {
+    beforeEach(async () => {
+        await startGame(app);
+    });
+
+    const hintedIndex = () => app.cells().findIndex((c) => c.classList.contains('hint'));
+
+    describe('choosing a cell', () => {
+        // The old engine picked uniformly at random, so a hint could land in a
+        // far corner and teach nothing.
+        it('reveals the selected cell when one is focused', () => {
+            const empty = [...Array(81).keys()].filter((i) => EASY_PUZZLE[i] === '0');
+            const target = empty[empty.length - 1]; // deliberately not the first
+
+            app.inputs()[target].focus();
+            app.click('#btn-hint');
+
+            expect(hintedIndex()).toBe(target);
+            expect(app.inputs()[target].value).toBe(EASY_SOLUTION[target]);
+        });
+
+        it('ignores a selected cell that is already correct', () => {
+            const empty = EASY_PUZZLE.indexOf('0');
+            app.type(empty, EASY_SOLUTION[empty]);
+            app.inputs()[empty].focus();
+
+            app.click('#btn-hint');
+            expect(hintedIndex()).not.toBe(empty);
+        });
+
+        it('picks a logically deducible cell when nothing is selected', () => {
+            app.inputs()[0].blur();
+            app.click('#btn-hint');
+            expect(hintedIndex()).toBeGreaterThanOrEqual(0);
+            expect(app.$('#status').textContent).toMatch(/only|narrowed/i);
+        });
+    });
+
+    describe('explaining itself', () => {
+        it('names the cell it revealed', () => {
+            app.inputs()[EASY_PUZZLE.indexOf('0')].focus();
+            app.click('#btn-hint');
+            expect(app.$('#status').textContent).toMatch(/R\d C?\d|R\dC\d/);
+        });
+
+        it('gives a reason when it deduced the cell', () => {
+            app.inputs()[0].blur();
+            app.click('#btn-hint');
+            expect(app.$('#status').textContent).toMatch(/only \d fits|only place for \d|narrowed to/);
+        });
+    });
+
+    describe('correctness', () => {
+        it('always reveals the true digit', () => {
+            for (let n = 0; n < 8; n++) {
+                app.inputs()[0].blur();
+                app.click('#btn-hint');
+                const idx = app.cells().findIndex(
+                    (c) => c.classList.contains('hint') && !c.dataset.checked
+                );
+                if (idx < 0) break;
+                app.cells()[idx].dataset.checked = '1';
+                expect(app.inputs()[idx].value, `cell ${idx}`).toBe(EASY_SOLUTION[idx]);
+            }
+        });
+
+        // Candidate arithmetic is unsound once a wrong digit is on the board,
+        // so every deduction is verified against the solution before use.
+        it('stays correct when the board contains a mistake', () => {
+            const empty = [...Array(81).keys()].filter((i) => EASY_PUZZLE[i] === '0');
+            const wrongAt = empty[0];
+            app.type(wrongAt, EASY_SOLUTION[wrongAt] === '1' ? '2' : '1');
+
+            app.inputs()[0].blur();
+            app.click('#btn-hint');
+
+            const idx = hintedIndex();
+            expect(idx).toBeGreaterThanOrEqual(0);
+            expect(app.inputs()[idx].value).toBe(EASY_SOLUTION[idx]);
+        });
+
+        it('does nothing once the puzzle is solved', () => {
+            completePuzzle(app);
+            const before = app.$('#status').textContent;
+            app.click('#btn-hint');
+            // giveHint returns early on a won game, so the "no more hints"
+            // branch below it is effectively unreachable and kept as a guard.
+            expect(app.$('#status').textContent).toBe(before);
+            expect(app.$('#win-details').textContent).toMatch(/No hints used/);
+        });
+    });
+
+    it('still counts towards the total', () => {
+        app.click('#btn-hint');
+        app.click('#btn-hint');
+        completePuzzle(app);
+        expect(app.$('#win-details').textContent).toMatch(/2 hints used/);
+    });
+});
