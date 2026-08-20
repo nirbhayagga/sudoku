@@ -1,8 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { bootApp } from './helpers/boot-app.js';
-import { loadSudoku } from './helpers/load-globals.js';
-
-const { SudokuSolver, PUZZLES } = loadSudoku();
+import { SudokuSolver } from '../solver.js';
+import { PUZZLES } from '../puzzle-bank.js';
 
 // A fixed level keeps every run deterministic: startGame() reads #level-input
 // and takes bankList[level - 1] rather than picking at random.

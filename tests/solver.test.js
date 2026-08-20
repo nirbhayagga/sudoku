@@ -1,11 +1,5 @@
-import { describe, it, expect, beforeAll } from 'vitest';
-import { loadSudoku } from './helpers/load-globals.js';
-
-let SudokuSolver;
-
-beforeAll(() => {
-    ({ SudokuSolver } = loadSudoku(['solver.js']));
-});
+import { describe, it, expect } from 'vitest';
+import { SudokuSolver } from '../solver.js';
 
 // A well-known hard puzzle and its solution.
 const PUZZLE = '530070000600195000098000060800060003400803001700020006060000280000419005000080079';

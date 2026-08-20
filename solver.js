@@ -1,4 +1,3 @@
-/* exported SudokuSolver */
 /**
  * Sudoku Solver — Constraint Propagation + Backtracking (Norvig-style)
  *
@@ -10,7 +9,7 @@
  *   getInternals()  →  { squares, unitList, units, peers, DIGITS, parseGrid, assign, eliminate, search }
  */
 
-const SudokuSolver = (() => {
+export const SudokuSolver = (() => {
     // ── Precompute indices ─────────────────────────────────────────────
     const ROWS = 'ABCDEFGHI';
     const COLS = '123456789';

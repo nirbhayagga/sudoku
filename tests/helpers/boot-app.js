@@ -1,14 +1,37 @@
 /**
- * Boots index.html in jsdom with all four scripts executed, giving tests the
- * real DOM the app wires itself to.
+ * Boots index.html in jsdom with the app running against it.
+ *
+ * app.js is an ES module now, and jsdom cannot execute module graphs, so the
+ * source is bundled in-memory with esbuild and evaluated as a classic script —
+ * the same shape the production build ships. Bundling is done once and reused
+ * across boots, which keeps it to a few milliseconds per test.
  *
  * jsdom has no fetch, so checkLeaderboardHealth() fails and the app degrades to
  * its no-backend state — which is exactly the configuration most users run.
  */
 import fs from 'node:fs';
 import path from 'node:path';
+import esbuild from 'esbuild';
 import { JSDOM, VirtualConsole } from 'jsdom';
-import { repoRoot } from './load-globals.js';
+import { repoRoot } from './paths.js';
+
+let bundledApp = null;
+
+/** Bundle app.js and its imports into one classic script. */
+function appBundle() {
+    if (bundledApp === null) {
+        const result = esbuild.buildSync({
+            entryPoints: [path.join(repoRoot, 'app.js')],
+            bundle: true,
+            format: 'iife',
+            target: ['es2020'],
+            write: false,
+            logLevel: 'silent',
+        });
+        bundledApp = result.outputFiles[0].text;
+    }
+    return bundledApp;
+}
 
 export async function bootApp({ localStorage: seed = {} } = {}) {
     // Swallow the expected "fetch is not defined" noise, surface real errors.
@@ -33,14 +56,7 @@ export async function bootApp({ localStorage: seed = {} } = {}) {
         dom.window.localStorage.setItem(key, value);
     }
 
-    // Concatenated into one script: top-level `const` is scoped per eval() call,
-    // so separate evals would not see each other's globals. Browsers share a
-    // global lexical scope across <script> tags, and build.js concatenates too,
-    // so this matches both.
-    const sources = ['solver.js', 'generator.js', 'puzzle-bank.js', 'app.js']
-        .map((file) => fs.readFileSync(path.join(repoRoot, file), 'utf8'))
-        .join('\n;\n');
-    dom.window.eval(sources);
+    dom.window.eval(appBundle());
 
     const { window } = dom;
     const $ = (sel) => window.document.querySelector(sel);
