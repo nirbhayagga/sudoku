@@ -246,7 +246,8 @@ inlined, which opens straight off a disk or a USB stick. No single build can do
 both.
 
 `base: './'` in both, so assets resolve relatively and the build works from a
-subpath — which is how GitHub Pages serves a project site.
+subpath — which is how GitHub Pages, and Cloudflare Pages without a custom
+domain, serve a project site.
 
 ```bash
 npm run dev              # dev server with hot reload
@@ -350,6 +351,32 @@ Container environment:
 
 ### Static hosting
 
+Cloudflare Pages is the recommended host: it reads `_headers`, which GitHub
+Pages ignores entirely, and custom domains are a single step when DNS already
+lives at Cloudflare.
+
+**Setup** — no separate repository, no config file, no changes to this repo:
+
+1. Cloudflare dashboard → Workers & Pages → Create → Pages → Connect to Git
+2. Pick this repository and the `main` branch
+3. Build command `npm run build`, output directory `dist`, `NODE_VERSION` `20`
+4. Custom Domains → add e.g. `sudoku.example.com`
+
+Every push to `main` deploys, and pull requests get their own preview URL.
+
+Leave `SUDOKU_API_BASE` unset unless you intend to expose the leaderboard API
+publicly — see Graceful Degradation below.
+
+**If the repository reaches GitHub by mirror**, Cloudflare only sees a push when
+the mirror syncs, which is on a schedule unless sync-on-push is enabled. To
+deploy straight from CI instead, skip the Git integration and upload the build:
+
+```bash
+npx wrangler pages deploy dist --project-name=sudoku
+```
+
+with `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` in the environment.
+
 A project site on GitHub Pages is served from `/<repo>/`, not the domain root.
 The build uses relative asset paths so this works unchanged, and the Playwright
 `subpath` project serves the real build one directory down and drives it — asset
@@ -362,9 +389,9 @@ because an absolute path anywhere would work locally and 404 in production.
 
 | Host | Setup |
 |---|---|
-| **Cloudflare Pages** | Build command `npm run build`, output directory `dist` |
+| **Cloudflare Pages** | Connect the repo; build command `npm run build`, output directory `dist` |
 | **Netlify** | `netlify.toml` is committed — connect the repo |
-| **GitHub Pages** | `.github/workflows/pages.yml` deploys on push to `main`, gated on lint and tests |
+| **GitHub Pages** | Works, but ignores `_headers`; needs a workflow to publish `dist/` |
 | **S3 / any nginx** | Upload `dist/`; mirror the `public/_headers` rules in your config |
 
 A static deployment has no backend, so the leaderboard hides itself. To keep it,
@@ -375,7 +402,7 @@ SUDOKU_API_BASE=https://sudoku-api.example.com npm run build
 ```
 
 Set the same value as an environment variable in the host's dashboard (or as the
-`SUDOKU_API_BASE` repository variable for GitHub Pages). The API needs a matching
+`SUDOKU_API_BASE` environment variable in the host's dashboard). The API needs a matching
 `CORS_ORIGIN`:
 
 ```bash
