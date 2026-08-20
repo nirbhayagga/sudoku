@@ -1,0 +1,41 @@
+name: Lighthouse
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - run: npm ci
+
+      # Audits the real production output, not the dev server.
+      - run: npm run build
+
+      # Thresholds live in lighthouserc.json and guard what has already been
+      # earned: a ~17 kB initial load and AA contrast on every theme.
+      #
+      # PWA installability is deliberately NOT asserted here — Lighthouse 12
+      # removed the PWA category — and does not need to be: tests/service-worker
+      # and tests/build already assert the manifest, icons, precache list and
+      # every caching rule directly.
+      #
+      # The score thresholds are a first estimate. Check the first run's report
+      # and tighten or relax them to sit just under what the app actually scores,
+      # so they catch regressions without failing on noise.
+      - name: Run Lighthouse CI
+        uses: treosh/lighthouse-ci-action@v12
+        with:
+          configPath: ./lighthouserc.json
+          uploadArtifacts: true
+          temporaryPublicStorage: true
