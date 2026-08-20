@@ -7,9 +7,10 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
 
-COPY vite.config.js sw-template.js index.html style.css ./
-COPY solver.js generator.js puzzle-bank.js difficulties.js app.js ./
-COPY public ./public
+# Everything not excluded by .dockerignore. Listing sources individually meant
+# every new module silently 404'd in the container until someone remembered to
+# add it here.
+COPY . .
 RUN npm run build
 
 # ── Runtime stage ─────────────────────────────────────────────────────
