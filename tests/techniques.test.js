@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
     candidatesFor, candidateGrid, peersOf, cellName, UNITS,
     findNakedSingle, findHiddenSingle, findNakedPair, findPointingPair,
-    applyRemovals, nextStep,
+    findNakedTriple, findXWing, applyRemovals, nextStep,
 } from '../techniques.js';
 import { SudokuSolver } from '../solver.js';
 import { PUZZLES } from '../puzzle-bank.js';
@@ -158,6 +158,107 @@ describe('pointing pair', () => {
     });
 });
 
+describe('naked triple', () => {
+    it('finds three cells covering exactly three digits', () => {
+        const grid = candidateGrid(EMPTY);
+        grid[0] = new Set(['1', '2', '3']);
+        grid[1] = new Set(['1', '2', '3']);
+        grid[2] = new Set(['1', '2', '3']);
+
+        const step = findNakedTriple(grid);
+        expect(step).toMatchObject({ type: 'naked-triple' });
+        expect(step.digits).toEqual(['1', '2', '3']);
+        expect(step.cells.sort((a, b) => a - b)).toEqual([0, 1, 2]);
+    });
+
+    // The cells need not each hold all three digits — this is what makes a
+    // triple hard to see by eye.
+    it('finds a triple whose cells hold only two digits each', () => {
+        const grid = candidateGrid(EMPTY);
+        grid[0] = new Set(['1', '2']);
+        grid[1] = new Set(['2', '3']);
+        grid[2] = new Set(['1', '3']);
+
+        const step = findNakedTriple(grid);
+        expect(step).toMatchObject({ type: 'naked-triple' });
+        expect(step.digits).toEqual(['1', '2', '3']);
+    });
+
+    it('removes all three digits from the rest of the unit', () => {
+        const grid = candidateGrid(EMPTY);
+        grid[0] = new Set(['1', '2']);
+        grid[1] = new Set(['2', '3']);
+        grid[2] = new Set(['1', '3']);
+
+        const step = findNakedTriple(grid);
+        const inRow = step.removals.filter((r) => r.cell >= 3 && r.cell <= 8);
+        expect(inRow).toHaveLength(18); // six cells x three digits
+    });
+
+    it('finds nothing when the union is four digits', () => {
+        const grid = candidateGrid(EMPTY);
+        grid[0] = new Set(['1', '2']);
+        grid[1] = new Set(['2', '3']);
+        grid[2] = new Set(['3', '4']);
+        for (let i = 3; i < 81; i++) if (grid[i]) grid[i] = new Set(['9']);
+        expect(findNakedTriple(grid)).toBeNull();
+    });
+});
+
+describe('x-wing', () => {
+    it('finds a digit forming a rectangle across two rows', () => {
+        const grid = candidateGrid(EMPTY);
+        // Confine 7 to columns 1 and 5 in rows 0 and 3.
+        for (const row of [0, 3]) {
+            for (let c = 0; c < 9; c++) {
+                if (c !== 1 && c !== 5) grid[row * 9 + c].delete('7');
+            }
+        }
+
+        const step = findXWing(grid);
+        expect(step).toMatchObject({ type: 'x-wing', digits: ['7'] });
+        expect(step.cells.sort((a, b) => a - b)).toEqual([1, 5, 28, 32]);
+    });
+
+    it('removes the digit from the rest of those columns', () => {
+        const grid = candidateGrid(EMPTY);
+        for (const row of [0, 3]) {
+            for (let c = 0; c < 9; c++) {
+                if (c !== 1 && c !== 5) grid[row * 9 + c].delete('7');
+            }
+        }
+
+        const step = findXWing(grid);
+        // Seven other rows, two columns each.
+        expect(step.removals).toHaveLength(14);
+        expect(step.removals.every((r) => r.digit === '7')).toBe(true);
+        expect(step.removals.every((r) => [1, 5].includes(r.cell % 9))).toBe(true);
+    });
+
+    it('works with rows and columns swapped', () => {
+        const grid = candidateGrid(EMPTY);
+        for (const col of [2, 6]) {
+            for (let r = 0; r < 9; r++) {
+                if (r !== 0 && r !== 4) grid[r * 9 + col].delete('3');
+            }
+        }
+
+        const step = findXWing(grid);
+        expect(step).toMatchObject({ type: 'x-wing', digits: ['3'] });
+        expect(step.reason).toMatch(/column/);
+    });
+
+    it('finds nothing when the two lines use different columns', () => {
+        const grid = candidateGrid(EMPTY);
+        for (let c = 0; c < 9; c++) {
+            if (c !== 1 && c !== 5) grid[c].delete('7');
+            if (c !== 2 && c !== 6) grid[27 + c].delete('7');
+        }
+        const step = findXWing(grid);
+        if (step) expect(step.digits[0]).not.toBe('7');
+    });
+});
+
 describe('applyRemovals', () => {
     it('deletes the named candidates', () => {
         const grid = candidateGrid(EMPTY);
@@ -220,7 +321,7 @@ describe('nextStep', () => {
                 const solution = SudokuSolver.solveSudoku(p.puzzle).solution;
                 const grid = candidateGrid(p.puzzle);
 
-                for (const find of [findNakedPair, findPointingPair]) {
+                for (const find of [findNakedPair, findPointingPair, findNakedTriple, findXWing]) {
                     const elimination = find(grid);
                     if (!elimination) continue;
                     for (const { cell, digit } of elimination.removals) {
