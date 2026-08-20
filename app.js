@@ -1095,6 +1095,7 @@ function loadBank() {
                 }
             }
 
+            store.recordStart(currentDifficulty);
             refreshAutoNotes();
             store.deleteSavedGame();
             debounceSave();
@@ -1427,32 +1428,42 @@ function loadBank() {
 
     function renderStats() {
         const stats = store.getStats();
+        const summary = store.getSummary();
         const diffs = ['easy', 'medium', 'hard', 'expert', 'evil', 'nightmare'];
 
-        let hasData = false;
-        for (const d of diffs) {
-            if (stats[d] && stats[d].played > 0) { hasData = true; break; }
-        }
-
-        if (!hasData) {
-            statsContent.innerHTML = '<p style="text-align:center;color:var(--text-muted);">No games played yet.</p>';
+        if (summary.started === 0) {
+            statsContent.innerHTML =
+                '<p style="text-align:center;color:var(--text-muted);">No games played yet.</p>';
             return;
         }
 
-        let html = `<table class="stats-table">
-      <thead><tr><th>Difficulty</th><th>Played</th><th>Best Time</th><th>Avg Time</th><th>Hints</th></tr></thead>
+        const pct = Math.round(summary.winRate * 100);
+        let html = `<div class="stats-summary">
+      <div class="stat-tile"><span class="stat-value">${summary.won}</span><span class="stat-label">Solved</span></div>
+      <div class="stat-tile"><span class="stat-value">${pct}%</span><span class="stat-label">Win rate</span></div>
+      <div class="stat-tile"><span class="stat-value">${summary.streak.current}</span><span class="stat-label">Day streak</span></div>
+      <div class="stat-tile"><span class="stat-value">${summary.streak.best}</span><span class="stat-label">Best streak</span></div>
+      <div class="stat-tile"><span class="stat-value">${formatTime(summary.totalTime)}</span><span class="stat-label">Time played</span></div>
+    </div>`;
+
+        html += `<table class="stats-table">
+      <thead><tr><th>Difficulty</th><th>Solved</th><th>Win rate</th><th>Best</th><th>Average</th><th>Hints</th><th>Auto</th></tr></thead>
       <tbody>`;
 
         for (const d of diffs) {
             const s = stats[d];
-            if (!s || s.played === 0) continue;
-            const avg = Math.round(s.totalTime / s.won);
+            if (!s || (!s.started && !s.won)) continue;
+            const started = s.started || s.won;
+            const avg = s.won ? Math.round(s.totalTime / s.won) : 0;
+            const rate = started ? Math.round((s.won / started) * 100) : 0;
             html += `<tr>
         <td>${DIFFICULTY_LABELS[d]}</td>
-        <td>${s.played}</td>
-        <td>${formatTime(s.bestTime)}</td>
-        <td>${formatTime(avg)}</td>
+        <td>${s.won}</td>
+        <td>${rate}%</td>
+        <td>${s.won ? formatTime(s.bestTime) : '—'}</td>
+        <td>${s.won ? formatTime(avg) : '—'}</td>
         <td>${s.totalHints}</td>
+        <td>${s.autoNotesGames || 0}</td>
       </tr>`;
         }
 
