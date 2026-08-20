@@ -194,11 +194,10 @@ describe('difficulty ladder', () => {
     // had near-identical clue counts and were the same difficulty. These assert
     // the property that actually matters: each tier demands more solving effort.
     //
-    // 'nightmare' is deliberately excluded. Its 17-clue puzzles come from a
-    // published catalogue and are a different kind of hard: few givens make them
-    // long and scan-heavy for a human, but a large fraction need no search at
-    // all, so they do not sit on this scale.
-    const LADDER = ['easy', 'medium', 'hard', 'expert', 'evil'];
+    // 'nightmare' belongs on this scale now that it holds the hardest 3,000 of
+    // the published 17-clue catalogue rather than an arbitrary sample of it;
+    // previously 45% of that tier needed no search at all.
+    const LADDER = ['easy', 'medium', 'hard', 'expert', 'evil', 'nightmare'];
     const SAMPLE = 120;
 
     /** Evenly spaced sample, so the measurement is reproducible. */
@@ -239,5 +238,18 @@ describe('difficulty ladder', () => {
         const evil = rate('evil');
         expect(evil.median).toBeGreaterThan(expert.median);
         expect(evil.pureLogic).toBeLessThan(expert.pureLogic);
+    });
+
+    it('makes nightmare the hardest tier', () => {
+        const nightmare = rate('nightmare');
+        for (const difficulty of ['easy', 'medium', 'hard', 'expert', 'evil']) {
+            expect(nightmare.median, difficulty).toBeGreaterThan(rate(difficulty).median);
+        }
+    });
+
+    // No tier may be solvable by propagation alone at the top end.
+    it('leaves no pure-logic puzzles in the two hardest tiers', () => {
+        expect(rate('evil').pureLogic).toBe(0);
+        expect(rate('nightmare').pureLogic).toBe(0);
     });
 });

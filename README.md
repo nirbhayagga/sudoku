@@ -11,7 +11,7 @@ The app has two modes, toggled via tabs at the top:
 Play sudoku puzzles with built-in hints, pencil marks, undo/redo, and more.
 
 - **6 difficulty levels** — Easy, Medium, Hard, Expert, Evil, Nightmare, graded by measured solving effort rather than clue count alone
-- **5,500 pre-generated puzzles** — 500 per difficulty (Easy–Evil) + 3,000 Nightmare (17-clue), served instantly from a puzzle bank
+- **5,500 pre-generated puzzles** — 500 per difficulty (Easy–Evil) + 3,000 Nightmare (the hardest 17-clue puzzles from the published 49,158-puzzle catalogue), served instantly from a puzzle bank
 - **Level selector** — Enter a specific level number or leave blank for a random puzzle
 - **7 color themes** — Midnight, Sakura, Ocean, Forest, Arctic, Naruto, Wicked — saved in localStorage
 - **Digit highlighting** — Focus a cell and all matching digits glow across the board (works on both desktop and mobile)
@@ -77,7 +77,7 @@ sudoku_solver/
   vitest.config.js    Test config
   scripts/serve.js    Dependency-free dev server with /api/ proxy
   scripts/generate-bank.js  Regenerate or reorder a difficulty tier
-  tests/              Test suite (227 tests)
+  tests/              Test suite (229 tests)
 
   Dockerfile          Multi-stage build -> nginx-alpine
   nginx.conf.template Nginx config (envsubst at container start)
@@ -103,7 +103,7 @@ npm ci --prefix leaderboard-api # leaderboard deps, needed for its tests
 
 npm run dev      # serve the source tree at :8000, proxying /api/ to :3001
 npm run lint     # eslint
-npm test         # 227 tests
+npm test         # 229 tests
 npm run build    # produce dist/
 npm run check    # lint + test + build, what CI runs
 ```
