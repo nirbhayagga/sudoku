@@ -72,13 +72,14 @@ sudoku_solver/
   puzzle-bank.js      5,500 pre-generated puzzles (bare strings; ids derived at load)
   app.js              UI controller (modes, themes, notes, undo, stats, save)
 
-  vite.config.js      Build config — minified, content-hashed dist/
+  vite.config.js      Build config — two targets, see The Build
+  difficulties.js     Labels and tier sizes, kept out of the lazy bank chunk
   sw-template.js      Service worker source (asset list injected at build)
   public/             Copied verbatim into dist/ — manifest, icons, _headers
   eslint.config.js    Lint rules
   vitest.config.js    Test config
   scripts/generate-bank.js  Regenerate or reorder a difficulty tier
-  tests/              Test suite (280 tests)
+  tests/              Test suite (294 tests)
 
   Dockerfile          Multi-stage build -> nginx-alpine
   nginx.conf.template Nginx config (envsubst at container start)
@@ -101,7 +102,7 @@ npm ci --prefix leaderboard-api # leaderboard deps, needed for its tests
 
 npm run dev      # Vite dev server at :8000 with hot reload, /api/ proxied to :3001
 npm run lint     # eslint
-npm test         # 280 tests
+npm test         # 294 tests
 npm run build    # produce dist/
 npm run check    # lint + test + build, what CI runs
 ```
@@ -169,26 +170,45 @@ control: `index.html` is served `no-cache`, the service worker fetches
 navigations network-first, and `sw.js` is itself uncached, so a reload always
 picks up a new deploy.
 
-Two deliberate choices in `vite.config.js`:
+There are **two build targets**, because they want opposite things:
 
-- **The bundle is a single IIFE and the `type="module"` attribute is stripped.**
-  Browsers refuse to load ES modules over `file://`, so a module script would
-  cost this project its "just open it" property. As a classic script, `dist/`
-  still runs straight off the filesystem. Served over HTTP nothing differs.
-- **`base: './'`** so assets resolve relatively and the build works from a
-  subpath, which is how GitHub Pages serves a project site.
+| | `npm run build` | `npm run build:standalone` |
+|---|---|---|
+| Output | `dist/` | `dist-standalone/` |
+| Format | ES modules, code-split | One classic-script IIFE |
+| Initial load | **~17 kB gzipped** | ~130 kB gzipped |
+| Puzzle bank | Separate chunk, fetched on first game | Inlined |
+| Service worker | Yes | No |
+| Runs from `file://` | No | **Yes** |
+
+The default build splits the puzzle bank out. It is over 90% of the payload and
+is not needed to draw the grid, resume a saved game (the board is in
+localStorage) or use solver mode, so deferring it takes first load from ~130 kB
+to ~17 kB gzipped. The service worker still precaches the chunk, so offline play
+is unaffected.
+
+Code splitting only works in ES module format, and browsers refuse to load
+module scripts over `file://` (opaque origin, so CORS rejects them). That is why
+the standalone target exists: a single classic-script IIFE with everything
+inlined, which opens straight off a disk or a USB stick. No single build can do
+both.
+
+`base: './'` in both, so assets resolve relatively and the build works from a
+subpath — which is how GitHub Pages serves a project site.
 
 ```bash
-npm run dev      # dev server with hot reload
-npm run build    # dist/
-npm run preview  # serve the built dist/
+npm run dev              # dev server with hot reload
+npm run build            # dist/ — modular, lazy-loaded bank
+npm run build:standalone # dist-standalone/ — single file, opens from file://
+npm run build:all        # both
+npm run preview          # serve the built dist/
 
 # Point a static deployment at a leaderboard hosted elsewhere:
 SUDOKU_API_BASE=https://sudoku-api.example.com npm run build
 ```
 
 Development needs the dev server: `file://` cannot load ES modules, so the raw
-source tree is not directly openable even though the build output is.
+source tree is not directly openable even though the standalone build is.
 
 ## Running Locally
 
@@ -197,11 +217,10 @@ npm install
 npm run dev      # http://localhost:8000
 ```
 
-Or build once and open the result with no server at all — `dist/index.html`
-works straight from the filesystem:
+Or build the standalone target and open it with no server at all:
 
 ```bash
-npm run build && xdg-open dist/index.html
+npm run build:standalone && xdg-open dist-standalone/index.html
 ```
 
 The leaderboard is unavailable without a backend; everything else works.

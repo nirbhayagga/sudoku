@@ -29,3 +29,4 @@ CLAUDE.md
 
 # Local deployment settings
 .env
+dist-standalone/

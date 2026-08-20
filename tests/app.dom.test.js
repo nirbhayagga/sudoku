@@ -110,8 +110,9 @@ describe('solver mode', () => {
         expect(app.readGrid()).toBe('0'.repeat(81));
     });
 
-    it('loads an example puzzle', () => {
+    it('loads an example puzzle', async () => {
         app.click('#btn-example');
+        await app.tick(50); // the bank is fetched on demand
         expect(app.readGrid()).not.toBe('0'.repeat(81));
     });
 
