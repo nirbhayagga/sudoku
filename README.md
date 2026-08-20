@@ -224,9 +224,13 @@ Two shapes of deployment, and they can be combined:
 | `docker-compose.remote.yml` | Git repo URL | No clone needed on the host |
 | `docker-compose.standalone.yml` | Local directory | No Traefik, `localhost:8080` |
 
+Host and repo come from the environment, so nothing site-specific lives in the
+compose files. Copy `.env.example` to `.env` and set them:
+
 ```bash
-git clone https://git.example.com/nirb/sudoku.git
+git clone <your-repo-url> sudoku
 cd sudoku
+cp .env.example .env      # set SUDOKU_HOST (and SUDOKU_REPO for remote builds)
 docker compose up -d --build
 
 # Update:

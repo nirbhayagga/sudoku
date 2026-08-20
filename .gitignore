@@ -26,3 +26,6 @@ coverage/
 
 # Agent scratch
 CLAUDE.md
+
+# Local deployment settings
+.env

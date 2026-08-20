@@ -17,7 +17,7 @@ services:
     #   - "8080:80"
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.sudoku.rule=Host(`sudoku.example.com`)"
+      - "traefik.http.routers.sudoku.rule=Host(`${SUDOKU_HOST:-sudoku.example.com}`)"
       - "traefik.http.routers.sudoku.entrypoints=websecure"
       - "traefik.http.routers.sudoku.tls=true"
       - "traefik.http.routers.sudoku.tls.certresolver=letsencrypt"
