@@ -1,3 +1,6 @@
+## Local build (recommended) — clone the repo on the host and:
+##   docker compose up -d --build
+
 services:
   sudoku:
     build: .
@@ -5,6 +8,11 @@ services:
     restart: unless-stopped
     depends_on:
       - leaderboard
+    environment:
+      # Docker's embedded DNS. The leaderboard hostname is resolved per request,
+      # so this stack still starts if the leaderboard container is down.
+      NGINX_RESOLVER: 127.0.0.11
+      LEADERBOARD_UPSTREAM: http://leaderboard:3001
     # ports:
     #   - "8080:80"
     labels:
@@ -21,6 +29,9 @@ services:
     build: ./leaderboard-api
     container_name: sudoku-leaderboard
     restart: unless-stopped
+    environment:
+      # Restrict to your own domain once the frontend is deployed.
+      CORS_ORIGIN: "*"
     volumes:
       - leaderboard-data:/app/data
     networks:

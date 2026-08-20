@@ -1,0 +1,30 @@
+## Standalone — no Traefik, no external network. Everything on localhost:8080.
+##   docker compose -f docker-compose.standalone.yml up -d --build
+##
+## To run the frontend with no backend at all, start only the sudoku service:
+##   docker compose -f docker-compose.standalone.yml up -d --build sudoku
+## nginx resolves the leaderboard per request, so it starts fine without one and
+## the app simply hides its leaderboard UI.
+
+services:
+  sudoku:
+    build: .
+    container_name: sudoku
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    environment:
+      NGINX_RESOLVER: 127.0.0.11
+      LEADERBOARD_UPSTREAM: http://leaderboard:3001
+
+  leaderboard:
+    build: ./leaderboard-api
+    container_name: sudoku-leaderboard
+    restart: unless-stopped
+    environment:
+      CORS_ORIGIN: "*"
+    volumes:
+      - leaderboard-data:/app/data
+
+volumes:
+  leaderboard-data:

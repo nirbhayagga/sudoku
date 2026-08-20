@@ -1,0 +1,16 @@
+.git
+.github
+.forgejo
+node_modules
+dist
+coverage
+tests
+leaderboard-api
+*.md
+*.txt
+docker-compose*.yml
+Dockerfile
+.dockerignore
+eslint.config.js
+vitest.config.js
+scripts
