@@ -348,6 +348,22 @@ The app runs in four configurations, and detects which one it is in:
 
 Everything except the leaderboard works identically in all four.
 
+## Credits
+
+The Nightmare tier is drawn from the published catalogue of 49,158 known
+17-clue sudoku puzzles compiled by Gordon Royle (University of Western
+Australia). 17 is the proven minimum: McGuire, Tugemann and Civario showed in
+2012 that no 16-clue puzzle with a unique solution exists.
+
+Every imported puzzle is re-verified as uniquely solvable by `solver.js` before
+it reaches the bank — see `scripts/generate-bank.js`.
+
+The solving engine follows Peter Norvig's constraint-propagation approach.
+
+## License
+
+MIT — see [LICENSE](LICENSE).
+
 ## Browser Compatibility
 
 Tested in Chrome, Firefox, Safari, and Edge. Full mobile support for iOS and Android.

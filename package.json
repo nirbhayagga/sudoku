@@ -2,6 +2,7 @@
   "name": "sudoku",
   "version": "1.0.0",
   "private": true,
+  "license": "MIT",
   "description": "Browser-based sudoku solver and player",
   "type": "module",
   "scripts": {
