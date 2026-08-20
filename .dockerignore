@@ -1,16 +1,25 @@
+# Everything the image does not need. The Dockerfile copies the rest wholesale,
+# so anything omitted here ends up in the build context.
+
 .git
 .github
 .forgejo
 node_modules
 dist
+dist-standalone
 coverage
 tests
 leaderboard-api
+scripts
 *.md
 *.txt
+.env
+.env.example
 docker-compose*.yml
 Dockerfile
 .dockerignore
+.gitignore
+.npmrc
 eslint.config.js
 vitest.config.js
-scripts
+LICENSE

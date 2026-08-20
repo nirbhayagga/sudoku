@@ -6,6 +6,11 @@
 import { SudokuSolver } from './solver.js';
 import { SudokuGenerator } from './generator.js';
 import { DIFFICULTY_LABELS, BANK_SIZES } from './difficulties.js';
+import { formatTime, escapeHtml } from './format.js';
+import { createDialogs } from './dialogs.js';
+import { applyTheme, DEFAULT_THEME } from './theme.js';
+import * as store from './storage.js';
+import * as leaderboard from './leaderboard-client.js';
 
 /**
  * The puzzle bank is ~450 kB — over 90% of the app — and is not needed to draw
@@ -816,118 +821,34 @@ function loadBank() {
         solverExampleIdx = (solverExampleIdx + 1) % solverExamples.length;
     }
 
-    // ══════════════════════════════════════════════════════════════════
-    //  DIALOGS (shared accessibility behaviour)
-    // ══════════════════════════════════════════════════════════════════
-    //
-    // Every overlay goes through here so they all behave the same: Escape
-    // closes, Tab is confined to the dialog, focus moves in on open and returns
-    // to whatever opened it on close, and the page behind is hidden from
-    // assistive technology. Without the trap, Tab walks into the grid behind the
-    // overlay, which is invisible to a sighted user and nonsense to a screen
-    // reader.
+    /**
+     * Probe the leaderboard and show its UI only if something answered. The
+     * backend is optional, so absence is a normal state, not an error.
+     */
+    async function revealLeaderboardUi() {
+        const available = await leaderboard.checkHealth();
+        if (btnLeaderboard) btnLeaderboard.style.display = available ? 'inline-flex' : 'none';
+        if (winSubmit) winSubmit.style.display = available ? 'flex' : 'none';
+    }
 
-    // Regions hidden from assistive tech while a dialog is open. The overlays
-    // are siblings of these, never descendants, so nothing focused ends up
-    // inside an aria-hidden subtree.
-    const pageRegions = [
+    // ── Dialogs ────────────────────────────────────────────────────────
+    // Overlays are siblings of these regions, never descendants, so nothing
+    // focused ends up inside an aria-hidden subtree.
+    const dialogs = createDialogs([
         document.querySelector('.header'),
         document.querySelector('.mode-toggle'),
         document.getElementById('app'),
         document.querySelector('.shortcuts'),
-    ].filter(Boolean);
-
-    let activeDialog = null;
-
-    const FOCUSABLE = 'a[href], button, input, select, textarea, [tabindex]:not([tabindex="-1"])';
-
-    /**
-     * Visible in the sense that matters for focus. Checks inline display only:
-     * that is how this app hides things (the win screen's submit block, for
-     * example), and it works without layout, which jsdom has none of.
-     */
-    function isFocusVisible(el) {
-        if (el.disabled || el.hidden) return false;
-        for (let node = el; node && node !== document.body; node = node.parentElement) {
-            if (node.style && node.style.display === 'none') return false;
-        }
-        return true;
-    }
-
-    function focusableIn(dialog) {
-        return [...dialog.querySelectorAll(FOCUSABLE)].filter(isFocusVisible);
-    }
-
-    function openDialog(overlay, { initialFocus } = {}) {
-        if (activeDialog && activeDialog.overlay !== overlay) closeDialog(activeDialog.overlay);
-
-        activeDialog = { overlay, returnFocusTo: document.activeElement };
-        overlay.classList.add('active');
-        for (const region of pageRegions) region.setAttribute('aria-hidden', 'true');
-
-        const target = initialFocus || focusableIn(overlay)[0];
-        if (target) target.focus();
-    }
-
-    function closeDialog(overlay) {
-        overlay.classList.remove('active');
-        for (const region of pageRegions) region.removeAttribute('aria-hidden');
-
-        if (activeDialog && activeDialog.overlay === overlay) {
-            const { returnFocusTo } = activeDialog;
-            activeDialog = null;
-            // Send focus back where it came from, so a keyboard user is not
-            // dropped at the top of the document.
-            if (returnFocusTo && document.contains(returnFocusTo) && isFocusVisible(returnFocusTo)) {
-                returnFocusTo.focus();
-            }
-        }
-    }
-
-    function isDialogOpen() {
-        return activeDialog !== null;
-    }
-
-    document.addEventListener('keydown', (e) => {
-        if (!activeDialog) return;
-
-        if (e.key === 'Escape') {
-            e.preventDefault();
-            e.stopPropagation();
-            closeDialog(activeDialog.overlay);
-            return;
-        }
-
-        if (e.key !== 'Tab') return;
-
-        const focusable = focusableIn(activeDialog.overlay);
-        if (focusable.length === 0) {
-            e.preventDefault();
-            return;
-        }
-
-        const first = focusable[0];
-        const last = focusable[focusable.length - 1];
-        const current = document.activeElement;
-
-        // Wrap at both ends, and pull focus back in if it escaped entirely.
-        if (e.shiftKey && (current === first || !activeDialog.overlay.contains(current))) {
-            e.preventDefault();
-            last.focus();
-        } else if (!e.shiftKey && (current === last || !activeDialog.overlay.contains(current))) {
-            e.preventDefault();
-            first.focus();
-        }
-    }, true);
+    ].filter(Boolean));
 
     // ── Import Modal ───────────────────────────────────────────────────
     function openModal() {
         if (importError) importError.textContent = '';
         importText.value = '';
-        openDialog(modalOverlay, { initialFocus: importText });
+        dialogs.open(modalOverlay, { initialFocus: importText });
     }
 
-    function closeModal() { closeDialog(modalOverlay); }
+    function closeModal() { dialogs.close(modalOverlay); }
 
     function doImport() {
         const raw = importText.value.trim();
@@ -994,14 +915,12 @@ function loadBank() {
             const bankList = PUZZLES[currentDifficulty];
             if (bankList && bankList.length > 0) {
                 // Track played puzzles to avoid repeats
-                const playedKey = `played_${currentDifficulty}`;
-                let played = [];
-                try { played = JSON.parse(localStorage.getItem(playedKey) || '[]'); } catch (e) { }
+                let played = store.getPlayed(currentDifficulty);
 
                 // If all puzzles played, reset the tracking
                 if (played.length >= bankList.length) {
                     played = [];
-                    localStorage.setItem(playedKey, '[]');
+                    store.clearPlayed(currentDifficulty);
                 }
 
                 // Check for user-specified level
@@ -1016,9 +935,7 @@ function loadBank() {
                     const unplayed = bankList.filter(p => !played.includes(p.id));
                     pick = unplayed[Math.floor(Math.random() * unplayed.length)];
 
-                    // Mark as played
-                    played.push(pick.id);
-                    try { localStorage.setItem(playedKey, JSON.stringify(played)); } catch (e) { }
+                    store.markPlayed(currentDifficulty, pick.id);
                 }
 
                 puzzle = pick.puzzle;
@@ -1084,7 +1001,7 @@ function loadBank() {
                 }
             }
 
-            deleteSavedGame();
+            store.deleteSavedGame();
             debounceSave();
             updateNumpadCompletion();
         }).catch(() => {
@@ -1206,12 +1123,12 @@ function loadBank() {
             const hintStr = hintsUsed > 0 ? `${hintsUsed} hint${hintsUsed > 1 ? 's' : ''} used` : 'No hints used';
             winDetails.textContent = `Time: ${timeStr} — ${hintStr}`;
 
-            setTimeout(() => openDialog(winOverlay), 600);
+            setTimeout(() => dialogs.open(winOverlay), 600);
             setStatus('Puzzle complete!', 'success');
 
             // Update stats
-            updateStats(currentDifficulty, timerSeconds, hintsUsed);
-            deleteSavedGame();
+            store.recordWin(currentDifficulty, timerSeconds, hintsUsed);
+            store.deleteSavedGame();
         }
     }
 
@@ -1280,18 +1197,9 @@ function loadBank() {
         }
     }
 
-    function formatTime(s) {
-        const mins = Math.floor(s / 60);
-        const secs = s % 60;
-        return `${mins}:${secs.toString().padStart(2, '0')}`;
-    }
-
     // ══════════════════════════════════════════════════════════════════
     //  localStorage SAVE / RESUME
     // ══════════════════════════════════════════════════════════════════
-
-    const SAVE_KEY = 'sudoku_saved_game';
-    const STATS_KEY = 'sudoku_stats';
 
     function debounceSave() {
         if (saveTimeout) clearTimeout(saveTimeout);
@@ -1315,21 +1223,7 @@ function loadBank() {
             timestamp: Date.now(),
         };
 
-        try {
-            localStorage.setItem(SAVE_KEY, JSON.stringify(state));
-        } catch (e) { /* quota exceeded, ignore */ }
-    }
-
-    function loadSavedGame() {
-        try {
-            const raw = localStorage.getItem(SAVE_KEY);
-            if (!raw) return null;
-            return JSON.parse(raw);
-        } catch (e) { return null; }
-    }
-
-    function deleteSavedGame() {
-        localStorage.removeItem(SAVE_KEY);
+        store.saveGameState(state);
     }
 
     function resumeGame(state) {
@@ -1416,7 +1310,7 @@ function loadBank() {
         });
         document.getElementById('btn-resume-no').addEventListener('click', () => {
             banner.remove();
-            deleteSavedGame();
+            store.deleteSavedGame();
         });
     }
 
@@ -1424,35 +1318,8 @@ function loadBank() {
     //  STATS
     // ══════════════════════════════════════════════════════════════════
 
-    function getStats() {
-        try {
-            const raw = localStorage.getItem(STATS_KEY);
-            return raw ? JSON.parse(raw) : {};
-        } catch (e) { return {}; }
-    }
-
-    function saveStats(stats) {
-        try { localStorage.setItem(STATS_KEY, JSON.stringify(stats)); } catch (e) { }
-    }
-
-    function updateStats(difficulty, timeSeconds, hints) {
-        const stats = getStats();
-        if (!stats[difficulty]) {
-            stats[difficulty] = { played: 0, won: 0, bestTime: null, totalTime: 0, totalHints: 0 };
-        }
-        const s = stats[difficulty];
-        s.played++;
-        s.won++;
-        s.totalTime += timeSeconds;
-        s.totalHints += hints;
-        if (s.bestTime === null || timeSeconds < s.bestTime) {
-            s.bestTime = timeSeconds;
-        }
-        saveStats(stats);
-    }
-
     function renderStats() {
-        const stats = getStats();
+        const stats = store.getStats();
         const diffs = ['easy', 'medium', 'hard', 'expert', 'evil', 'nightmare'];
 
         let hasData = false;
@@ -1488,13 +1355,13 @@ function loadBank() {
 
     function openStats() {
         renderStats();
-        openDialog(statsOverlay);
+        dialogs.open(statsOverlay);
     }
 
-    function closeStats() { closeDialog(statsOverlay); }
+    function closeStats() { dialogs.close(statsOverlay); }
 
     function resetStats() {
-        localStorage.removeItem(STATS_KEY);
+        store.resetStats();
         renderStats();
     }
 
@@ -1532,7 +1399,7 @@ function loadBank() {
         solverControls.style.display = mode === 'solver' ? 'flex' : 'none';
         playControls.style.display = mode === 'play' ? 'flex' : 'none';
         btnStats.style.display = mode === 'play' ? 'inline-flex' : 'none';
-        if (btnLeaderboard && leaderboardAvailable) {
+        if (btnLeaderboard && leaderboard.isAvailable()) {
             btnLeaderboard.style.display = mode === 'play' ? 'inline-flex' : 'none';
         }
 
@@ -1554,7 +1421,7 @@ function loadBank() {
             setStatus('Click "New Game" to start');
 
             // Check for saved game
-            const saved = loadSavedGame();
+            const saved = store.loadSavedGame();
             if (saved) showResumeBanner(saved);
         }
     }
@@ -1587,7 +1454,7 @@ function loadBank() {
         if (e.ctrlKey && e.key === 'i') {
             e.preventDefault();
             // Never stack a second dialog on top of an open one.
-            if (mode === 'solver' && !isDialogOpen()) openModal();
+            if (mode === 'solver' && !dialogs.isOpen()) openModal();
         }
     });
 
@@ -1644,7 +1511,7 @@ function loadBank() {
     btnStatsReset.addEventListener('click', resetStats);
 
     btnWinNew.addEventListener('click', () => {
-        closeDialog(winOverlay);
+        dialogs.close(winOverlay);
         startGame();
     });
 
@@ -1658,7 +1525,7 @@ function loadBank() {
     btnModalNo.addEventListener('click', closeModal);
     modalOverlay.addEventListener('click', (e) => { if (e.target === modalOverlay) closeModal(); });
     statsOverlay.addEventListener('click', (e) => { if (e.target === statsOverlay) closeStats(); });
-    winOverlay.addEventListener('click', (e) => { if (e.target === winOverlay) closeDialog(winOverlay); });
+    winOverlay.addEventListener('click', (e) => { if (e.target === winOverlay) dialogs.close(winOverlay); });
 
     // ══════════════════════════════════════════════════════════════════
     //  NUMPAD (mobile/tablet)
@@ -1760,34 +1627,6 @@ function loadBank() {
     //  THEME SELECTOR
     // ══════════════════════════════════════════════════════════════════
 
-    const THEME_COLORS = {
-        midnight: '#0a0a0f',
-        sakura: '#f5e1d8',
-        ocean: '#0b1628',
-        forest: '#091209',
-        arctic: '#dce4ef',
-        naruto: '#0f0800',
-        wicked: '#050d08'
-    };
-
-    function applyTheme(theme) {
-        if (theme && theme !== 'midnight') {
-            document.documentElement.setAttribute('data-theme', theme);
-        } else {
-            document.documentElement.removeAttribute('data-theme');
-        }
-        // Update meta theme-color for mobile browsers
-        const meta = document.querySelector('meta[name="theme-color"]');
-        if (meta) meta.setAttribute('content', THEME_COLORS[theme] || THEME_COLORS.midnight);
-
-        // Update active state in dropdown
-        themeDropdown.querySelectorAll('.theme-option').forEach(opt => {
-            opt.classList.toggle('active', opt.dataset.theme === theme);
-        });
-
-        try { localStorage.setItem('sudoku-theme', theme); } catch (e) { }
-    }
-
     themeToggle.addEventListener('click', (e) => {
         e.stopPropagation();
         themeDropdown.classList.toggle('open');
@@ -1807,72 +1646,13 @@ function loadBank() {
     });
 
     // Restore saved theme
-    const savedTheme = localStorage.getItem('sudoku-theme') || 'midnight';
-    applyTheme(savedTheme);
+    // Restore the saved theme. Persisting is skipped here: reading it back and
+    // writing it straight out again would be pointless work on every load.
+    applyTheme(store.getTheme(DEFAULT_THEME), { dropdown: themeDropdown, persist: false });
 
     // ══════════════════════════════════════════════════════════════════
     //  LEADERBOARD (graceful degradation)
     // ══════════════════════════════════════════════════════════════════
-
-    // Detect API base, in priority order:
-    //   1. window.SUDOKU_API_BASE — injected by build.js from $SUDOKU_API_BASE.
-    //      Lets a static deployment (Cloudflare Pages, GitHub Pages, S3) talk to
-    //      a leaderboard hosted somewhere else. Requires CORS_ORIGIN on the API.
-    //   2. file:// — a local dev leaderboard on the default port.
-    //   3. Same origin — the Docker setup, where nginx proxies /api/.
-    const API_BASE = (() => {
-        if (typeof window.SUDOKU_API_BASE === 'string') {
-            return window.SUDOKU_API_BASE.replace(/\/$/, '');
-        }
-        if (window.location.protocol === 'file:') return 'http://localhost:3001';
-        return '';
-    })();
-
-    let leaderboardAvailable = false;
-    let currentLbDiff = 'easy';
-
-    async function checkLeaderboardHealth() {
-        try {
-            const resp = await fetch(`${API_BASE}/api/health`, { signal: AbortSignal.timeout(2000) });
-            if (resp.ok) {
-                leaderboardAvailable = true;
-                if (btnLeaderboard) btnLeaderboard.style.display = 'inline-flex';
-                if (winSubmit) winSubmit.style.display = 'flex';
-            }
-        } catch (e) {
-            leaderboardAvailable = false;
-            if (btnLeaderboard) btnLeaderboard.style.display = 'none';
-            if (winSubmit) winSubmit.style.display = 'none';
-        }
-    }
-
-    async function fetchLeaderboard(difficulty) {
-        if (!leaderboardAvailable) return [];
-        try {
-            const resp = await fetch(`${API_BASE}/api/leaderboard/${difficulty}`);
-            if (resp.ok) return await resp.json();
-        } catch (e) { /* silently fail */ }
-        return [];
-    }
-
-    async function submitScore(name, difficulty, time, hints, level) {
-        if (!leaderboardAvailable) return null;
-        try {
-            const resp = await fetch(`${API_BASE}/api/leaderboard`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name, difficulty, time, hints, level })
-            });
-            if (resp.ok) return await resp.json();
-        } catch (e) { /* silently fail */ }
-        return null;
-    }
-
-    function escapeHtml(str) {
-        const div = document.createElement('div');
-        div.textContent = str;
-        return div.innerHTML;
-    }
 
     function renderLeaderboard(entries) {
         if (!lbContent) return;
@@ -1906,18 +1686,18 @@ function loadBank() {
         lbContent.innerHTML = '<p class="lb-empty">Loading...</p>';
         // Only opened once; re-opening on a tab switch would steal focus back
         // to the first tab on every click.
-        if (!lbOverlay.classList.contains('active')) openDialog(lbOverlay);
+        if (!lbOverlay.classList.contains('active')) dialogs.open(lbOverlay);
         if (lbTabs) {
             lbTabs.querySelectorAll('.lb-tab').forEach(t =>
                 t.classList.toggle('active', t.dataset.diff === currentLbDiff)
             );
         }
-        const entries = await fetchLeaderboard(currentLbDiff);
+        const entries = await leaderboard.fetchLeaderboard(currentLbDiff);
         renderLeaderboard(entries);
     }
 
     function closeLeaderboard() {
-        if (lbOverlay) closeDialog(lbOverlay);
+        if (lbOverlay) dialogs.close(lbOverlay);
     }
 
     // Leaderboard button
@@ -1955,12 +1735,18 @@ function loadBank() {
             btnWinSubmit.disabled = true;
             btnWinSubmit.textContent = 'Submitting...';
 
-            const result = await submitScore(name, currentDifficulty, timerSeconds, hintsUsed, currentLevel);
+            const result = await leaderboard.submitScore({
+                name,
+                difficulty: currentDifficulty,
+                time: timerSeconds,
+                hints: hintsUsed,
+                level: currentLevel,
+            });
 
             if (result && result.rank) {
                 btnWinSubmit.textContent = `Rank #${result.rank}!`;
                 // Save name for next time
-                try { localStorage.setItem('sudoku-player-name', name); } catch (e) { }
+                store.setPlayerName(name);
             } else {
                 btnWinSubmit.textContent = 'Error';
             }
@@ -1973,7 +1759,7 @@ function loadBank() {
 
     // Restore saved player name
     if (winNameInput) {
-        const savedName = localStorage.getItem('sudoku-player-name');
+        const savedName = store.getPlayerName();
         if (savedName) winNameInput.value = savedName;
         winNameInput.addEventListener('input', () => {
             winNameInput.style.borderColor = '';
@@ -2006,7 +1792,7 @@ function loadBank() {
 
     buildGrid();
     switchMode('play');
-    checkLeaderboardHealth();
+    revealLeaderboardUi();
 
     // ── Offline support ────────────────────────────────────────────────
     // Registered only over http(s): service workers are unavailable on file://,

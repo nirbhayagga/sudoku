@@ -71,7 +71,12 @@ sudoku_solver/
   solver.js           Constraint propagation + backtracking engine
   generator.js        Runtime puzzle generator with uniqueness verification
   puzzle-bank.js      5,500 pre-generated puzzles (bare strings; ids derived at load)
-  app.js              UI controller (modes, themes, notes, undo, stats, save)
+  app.js              UI controller (grid, cell input, play and solver modes)
+  format.js           Time and HTML-escaping helpers
+  storage.js          All localStorage access, failure-tolerant
+  theme.js            Theme application
+  dialogs.js          Focus trap, Escape, focus restore for overlays
+  leaderboard-client.js  Optional API client
 
   vite.config.js      Build config — two targets, see The Build
   difficulties.js     Labels and tier sizes, kept out of the lazy bank chunk
@@ -80,7 +85,7 @@ sudoku_solver/
   eslint.config.js    Lint rules
   vitest.config.js    Test config
   scripts/generate-bank.js  Regenerate or reorder a difficulty tier
-  tests/              Test suite (309 tests)
+  tests/              Test suite (340 tests)
 
   Dockerfile          Multi-stage build -> nginx-alpine
   nginx.conf.template Nginx config (envsubst at container start)
@@ -103,7 +108,7 @@ npm ci --prefix leaderboard-api # leaderboard deps, needed for its tests
 
 npm run dev      # Vite dev server at :8000 with hot reload, /api/ proxied to :3001
 npm run lint     # eslint
-npm test         # 309 tests
+npm test         # 340 tests
 npm run build    # produce dist/
 npm run check    # lint + test + build, what CI runs
 ```
@@ -142,6 +147,8 @@ existing scores for it.
 | `tests/leaderboard-api.test.js` | API routes, validation, sanitisation, rate limiting |
 | `tests/build.test.js` | Build output shape, determinism, and that the bundle still runs |
 | `tests/service-worker.test.js` | Precache manifest, cache lifecycle, and every fetch strategy |
+| `tests/format.test.js` | Time formatting and HTML escaping |
+| `tests/storage.test.js` | Persistence, including when storage throws |
 
 ```bash
 npx vitest run tests/solver.test.js      # one file
