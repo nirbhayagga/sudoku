@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  check:
+    runs-on: docker
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install frontend dev dependencies
+        run: npm ci
+
+      - name: Install leaderboard API dependencies
+        run: npm ci --prefix leaderboard-api
+
+      - name: Lint
+        run: npm run lint
+
+      # FULL_BANK_CHECK verifies uniqueness for all 5,500 puzzles rather than a
+      # sample — a few seconds here, but it catches a bad bank before deploy.
+      - name: Test
+        run: npm test
+        env:
+          FULL_BANK_CHECK: '1'
+
+      - name: Build
+        run: npm run build
+
+      - name: Upload build output
+        uses: actions/upload-artifact@v3
+        with:
+          name: dist
+          path: dist/
+
+  docker:
+    runs-on: docker
+    needs: check
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build frontend image
+        run: docker build -t sudoku:ci .
+
+      - name: Build leaderboard image
+        run: docker build -t sudoku-leaderboard:ci ./leaderboard-api
+
+      # The frontend must come up with no leaderboard present — nginx resolves
+      # the upstream per request precisely so this works.
+      - name: Frontend starts standalone
+        run: |
+          docker run -d --name sudoku-ci -p 8080:80 sudoku:ci
+          for i in $(seq 1 30); do
+            if curl -sf -o /dev/null http://localhost:8080/; then break; fi
+            sleep 1
+          done
+          curl -sf -o /dev/null http://localhost:8080/ || (docker logs sudoku-ci && exit 1)
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/api/health)" = "502"
+          docker rm -f sudoku-ci
