@@ -8,7 +8,7 @@ COPY package.json package-lock.json ./
 RUN npm ci
 
 COPY vite.config.js sw-template.js index.html style.css ./
-COPY solver.js generator.js puzzle-bank.js app.js ./
+COPY solver.js generator.js puzzle-bank.js difficulties.js app.js ./
 COPY public ./public
 RUN npm run build
 

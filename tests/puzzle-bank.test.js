@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { SudokuSolver } from '../solver.js';
-import { PUZZLES, ALL_PUZZLES, DIFFICULTY_LABELS } from '../puzzle-bank.js';
+import { PUZZLES, ALL_PUZZLES } from '../puzzle-bank.js';
+import { DIFFICULTY_LABELS, BANK_SIZES } from '../difficulties.js';
 
 const EXPECTED_COUNTS = {
     easy: 500,
@@ -31,8 +32,17 @@ describe('bank structure', () => {
 
     it('has a label for every difficulty', () => {
         for (const difficulty of Object.keys(PUZZLES)) {
-            expect(DIFFICULTY_LABELS[difficulty]).toBeTruthy();
+            expect(DIFFICULTY_LABELS[difficulty], difficulty).toBeTruthy();
         }
+    });
+
+    // BANK_SIZES drives the level input before the bank has loaded, so a
+    // mismatch would offer levels that do not exist.
+    it('matches the sizes declared in difficulties.js', () => {
+        for (const [difficulty, list] of Object.entries(PUZZLES)) {
+            expect(BANK_SIZES[difficulty], difficulty).toBe(list.length);
+        }
+        expect(Object.keys(BANK_SIZES).sort()).toEqual(Object.keys(PUZZLES).sort());
     });
 
     for (const [difficulty, count] of Object.entries(EXPECTED_COUNTS)) {

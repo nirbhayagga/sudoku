@@ -3,6 +3,10 @@
 //  Easy/Medium/Hard/Expert/Evil: 500 each
 //  Nightmare: 3,000 — the hardest of the published 49,158 17-clue puzzles
 //
+//  Loaded on demand: this file is ~450 kB and is not needed until a game
+//  starts. Difficulty labels and sizes live in difficulties.js so the startup
+//  path does not pull this in. See loadBank() in app.js.
+//
 //  Puzzles are stored as bare 81-character strings and the { id, puzzle }
 //  objects are built at load. Ids encode position (e01, n00001), so deriving
 //  them rather than storing them costs nothing and keeps the file ~180 kB
@@ -5546,12 +5550,3 @@ for (const [diff, list] of Object.entries(PUZZLES)) {
         ALL_PUZZLES.push({ ...p, difficulty: diff });
     }
 }
-
-export const DIFFICULTY_LABELS = {
-    easy: 'Easy',
-    medium: 'Medium',
-    hard: 'Hard',
-    expert: 'Expert',
-    evil: 'Evil',
-    nightmare: 'Nightmare',
-};

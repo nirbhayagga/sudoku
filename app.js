@@ -5,7 +5,19 @@
  */
 import { SudokuSolver } from './solver.js';
 import { SudokuGenerator } from './generator.js';
-import { PUZZLES, ALL_PUZZLES, DIFFICULTY_LABELS } from './puzzle-bank.js';
+import { DIFFICULTY_LABELS, BANK_SIZES } from './difficulties.js';
+
+/**
+ * The puzzle bank is ~450 kB — over 90% of the app — and is not needed to draw
+ * the grid, resume a saved game (the board lives in localStorage) or use solver
+ * mode. It is fetched on first use and the promise cached, so the initial load
+ * carries only the ~10 kB of everything else.
+ */
+let bankPromise = null;
+function loadBank() {
+    if (!bankPromise) bankPromise = import('./puzzle-bank.js');
+    return bankPromise;
+}
 
 (() => {
     // ── Prevent iOS Safari elastic scroll / bounce ──────────────────
@@ -139,7 +151,7 @@ import { PUZZLES, ALL_PUZZLES, DIFFICULTY_LABELS } from './puzzle-bank.js';
     // Numpad elements
     const numpadEl = document.getElementById('numpad');
 
-    const SOLVER_ALL_PUZZLES = ALL_PUZZLES.slice();
+    let solverExamples = null;
 
     // ══════════════════════════════════════════════════════════════════
     //  GRID BUILDING
@@ -782,15 +794,26 @@ import { PUZZLES, ALL_PUZZLES, DIFFICULTY_LABELS } from './puzzle-bank.js';
         inputs[0].focus();
     }
 
-    function loadSolverExample() {
-        const p = SOLVER_ALL_PUZZLES[solverExampleIdx];
+    async function loadSolverExample() {
+        if (!solverExamples) {
+            setStatus('Loading puzzles...');
+            try {
+                const { ALL_PUZZLES } = await loadBank();
+                solverExamples = ALL_PUZZLES.slice();
+            } catch (e) {
+                setStatus('Could not load puzzles', 'error');
+                return;
+            }
+        }
+
+        const p = solverExamples[solverExampleIdx];
         const diff = DIFFICULTY_LABELS[p.difficulty] || p.difficulty;
         writeGrid(p.puzzle, true);
         solved = false;
         solveTimeEl.textContent = '';
         solveTimeEl.classList.remove('visible');
         setStatus(`Loaded: ${diff} (${p.id})`);
-        solverExampleIdx = (solverExampleIdx + 1) % SOLVER_ALL_PUZZLES.length;
+        solverExampleIdx = (solverExampleIdx + 1) % solverExamples.length;
     }
 
     // ── Import Modal ───────────────────────────────────────────────────
@@ -859,8 +882,9 @@ import { PUZZLES, ALL_PUZZLES, DIFFICULTY_LABELS } from './puzzle-bank.js';
 
         setStatus('Loading puzzle...');
 
-        // Use setTimeout to let the UI update
-        setTimeout(() => {
+        // Awaiting the bank also yields to the event loop, so the status above
+        // paints before the solver runs.
+        loadBank().then(({ PUZZLES }) => {
             let puzzle, solution;
 
             // ── PRIMARY: pick from pre-generated bank ────────────────────
@@ -960,7 +984,9 @@ import { PUZZLES, ALL_PUZZLES, DIFFICULTY_LABELS } from './puzzle-bank.js';
             deleteSavedGame();
             debounceSave();
             updateNumpadCompletion();
-        }, 16);
+        }).catch(() => {
+            setStatus('Could not load puzzles', 'error');
+        });
     }
 
     function resetGame() {
@@ -1437,7 +1463,7 @@ import { PUZZLES, ALL_PUZZLES, DIFFICULTY_LABELS } from './puzzle-bank.js';
         });
 
         if (levelInput && levelMaxDisplay) {
-            const max = diff === 'nightmare' ? 3000 : 500;
+            const max = BANK_SIZES[diff] || 500;
             levelInput.max = max;
             levelMaxDisplay.textContent = '/ ' + max;
             // Clear current selection on diff change unless empty

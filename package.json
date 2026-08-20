@@ -14,7 +14,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "check": "npm run lint && npm run test && npm run build"
+    "check": "npm run lint && npm run test && npm run build:all",
+    "build:standalone": "vite build --mode standalone",
+    "build:all": "npm run build && npm run build:standalone"
   },
   "devDependencies": {
     "esbuild": "^0.25.0",

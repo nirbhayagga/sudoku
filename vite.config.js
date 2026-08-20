@@ -100,14 +100,35 @@ function injectApiBase() {
     };
 }
 
-export default defineConfig({
+/**
+ * Two build targets, because they want opposite things:
+ *
+ *   default     ES modules with code splitting, so the puzzle bank loads on
+ *               demand and first load is ~10 kB instead of ~123 kB. For any
+ *               HTTP deployment: Docker, Pages, Netlify.
+ *
+ *   standalone  A single classic-script IIFE with everything inlined, which is
+ *               the only shape that runs from file://. Browsers apply CORS to
+ *               module scripts and file:// has an opaque origin, so a modular
+ *               build cannot be opened from disk.
+ *
+ * Rollup can only code-split in ES module format, so no single build does both.
+ */
+export default defineConfig(({ mode }) => {
+const standalone = mode === 'standalone';
+
+return {
     // public/ is copied verbatim into dist/ — that is how _headers (cache rules
     // for Cloudflare Pages and Netlify) reaches the build.
     // Relative asset URLs, so the build works from a subpath (GitHub Pages
     // serves at /<repo>/) and from the filesystem.
     base: './',
 
-    plugins: [injectApiBase(), classicScriptOutput(), pwa()],
+    // The standalone build is for file://, where service workers do not exist,
+    // so it ships none. Its script must stay a classic script.
+    plugins: standalone
+        ? [injectApiBase(), classicScriptOutput()]
+        : [injectApiBase(), pwa()],
 
     server: {
         port: 8000,
@@ -121,7 +142,7 @@ export default defineConfig({
     },
 
     build: {
-        outDir: 'dist',
+        outDir: standalone ? 'dist-standalone' : 'dist',
         emptyOutDir: true,
         assetsDir: 'assets',
         // The puzzle bank is ~435 kB of irreducible data, so the default 500 kB
@@ -132,11 +153,15 @@ export default defineConfig({
         // Single self-contained IIFE — see classicScriptOutput above.
         rollupOptions: {
             output: {
-                format: 'iife',
-                inlineDynamicImports: true,
+                // iife cannot code-split, so dynamic imports are inlined back
+                // into the single file — which is exactly what standalone wants.
+                format: standalone ? 'iife' : 'es',
+                inlineDynamicImports: standalone,
                 entryFileNames: 'assets/[name].[hash].js',
+                chunkFileNames: 'assets/[name].[hash].js',
                 assetFileNames: 'assets/[name].[hash].[ext]',
             },
         },
     },
+};
 });
