@@ -1406,3 +1406,135 @@ describe('daily puzzle', () => {
         expect(app.window.localStorage.getItem('sudoku_daily_done')).toBeNull();
     });
 });
+
+describe('share links', () => {
+    it('offers a share button', () => {
+        expect(app.$('#btn-share')).not.toBeNull();
+    });
+
+    describe('opening a link', () => {
+        it('loads a bank puzzle by difficulty and level', async () => {
+            const shared = await bootApp({ url: 'http://localhost/?d=hard&level=7' });
+            await shared.tick(60);
+
+            const expected = PUZZLES.hard[6].puzzle;
+            expect(shared.$('.diff-btn.active').dataset.diff).toBe('hard');
+            for (let i = 0; i < 81; i++) {
+                if (expected[i] !== '0') expect(shared.inputs()[i].value).toBe(expected[i]);
+            }
+            shared.close();
+        });
+
+        it('loads a raw board into solver mode', async () => {
+            const board = EASY_PUZZLE;
+            const shared = await bootApp({ url: `http://localhost/?p=${board}` });
+            await shared.tick(30);
+
+            expect(shared.$('.mode-tab.active').dataset.mode).toBe('solver');
+            expect(shared.readGrid()).toBe(board);
+            shared.close();
+        });
+
+        it('loads a day from a daily link', async () => {
+            const shared = await bootApp({ url: 'http://localhost/?daily=2026-08-20' });
+            await shared.tick(60);
+
+            const { difficulty, level } = dailyPuzzle('2026-08-20');
+            expect(shared.$('.diff-btn.active').dataset.diff).toBe(difficulty);
+            expect(shared.$('#level-input').value).toBe(String(level));
+            shared.close();
+        });
+
+        it('ignores a malformed link and starts normally', async () => {
+            const shared = await bootApp({ url: 'http://localhost/?p=nonsense' });
+            expect(shared.readGrid()).toBe('0'.repeat(81));
+            expect(shared.$('.mode-tab.active').dataset.mode).toBe('play');
+            shared.close();
+        });
+
+        // Following a link is an explicit request for that puzzle.
+        it('does not offer to resume when a link names a puzzle', async () => {
+            const shared = await bootApp({
+                url: 'http://localhost/?d=easy&level=1',
+                localStorage: {
+                    sudoku_saved_game: JSON.stringify({
+                        puzzle: EASY_PUZZLE, solution: EASY_SOLUTION, difficulty: 'easy',
+                        userValues: EASY_PUZZLE, notes: Array.from({ length: 81 }, () => []),
+                        timerSeconds: 5, hintsUsed: 0,
+                        lockedCells: [...EASY_PUZZLE].map((c) => c !== '0'),
+                        hintCells: Array(81).fill(false), timestamp: Date.now(),
+                    }),
+                },
+            });
+            expect(shared.$('.resume-banner')).toBeNull();
+            shared.close();
+        });
+
+        it('still offers to resume with no link', async () => {
+            const shared = await bootApp({
+                localStorage: {
+                    sudoku_saved_game: JSON.stringify({
+                        puzzle: EASY_PUZZLE, solution: EASY_SOLUTION, difficulty: 'easy',
+                        userValues: EASY_PUZZLE, notes: Array.from({ length: 81 }, () => []),
+                        timerSeconds: 5, hintsUsed: 0,
+                        lockedCells: [...EASY_PUZZLE].map((c) => c !== '0'),
+                        hintCells: Array(81).fill(false), timestamp: Date.now(),
+                    }),
+                },
+            });
+            expect(shared.$('.resume-banner')).not.toBeNull();
+            shared.close();
+        });
+    });
+
+    describe('copying a link', () => {
+        it('copies a bank link for the current game', async () => {
+            const copied = [];
+            const withClipboard = await bootApp();
+            Object.defineProperty(withClipboard.window, 'isSecureContext', { value: true, configurable: true });
+            Object.defineProperty(withClipboard.window.navigator, 'clipboard', {
+                value: { writeText: async (t) => copied.push(t) },
+                configurable: true,
+            });
+
+            withClipboard.click('.diff-btn[data-diff="easy"]');
+            withClipboard.$('#level-input').value = '4';
+            withClipboard.click('#btn-new-game');
+            await withClipboard.tick(60);
+
+            withClipboard.click('#btn-share');
+            await withClipboard.tick(20);
+
+            expect(copied).toHaveLength(1);
+            expect(copied[0]).toContain('d=easy');
+            expect(copied[0]).toContain('level=4');
+            withClipboard.close();
+        });
+
+        // No clipboard on file:// or an insecure origin, so the link must still
+        // be reachable rather than silently lost.
+        it('shows the link when the clipboard is unavailable', async () => {
+            await startGame(app);
+            app.click('#btn-share');
+            await app.tick(20);
+
+            expect(app.$('#share-overlay').classList.contains('active')).toBe(true);
+            expect(app.$('#share-text').value).toContain('d=easy');
+        });
+
+        it('says there is nothing to share on an empty solver grid', async () => {
+            app.click('#tab-solver');
+            app.click('#btn-share');
+            await app.tick(20);
+            expect(app.$('#status').textContent).toMatch(/nothing to share/i);
+        });
+
+        it('shares a hand-entered board from solver mode', async () => {
+            app.click('#tab-solver');
+            app.type(0, '5');
+            app.click('#btn-share');
+            await app.tick(20);
+            expect(app.$('#share-text').value).toMatch(/\?p=5/);
+        });
+    });
+});

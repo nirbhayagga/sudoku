@@ -13,6 +13,7 @@ Play sudoku puzzles with built-in hints, pencil marks, undo/redo, and more.
 - **6 difficulty levels** — Easy, Medium, Hard, Expert, Evil, Nightmare, graded by measured solving effort rather than clue count alone
 - **5,500 pre-generated puzzles** — 500 per difficulty (Easy–Evil) + 3,000 Nightmare (the hardest 17-clue puzzles from the published 49,158-puzzle catalogue), served instantly from a puzzle bank
 - **Level selector** — Enter a specific level number or leave blank for a random puzzle
+- **Share a puzzle** — Copy a link to the board you are on: `?d=evil&level=42` for a bank puzzle, `?p=<81 digits>` for any grid, `?daily=YYYY-MM-DD` for a day. Opening one loads it straight away
 - **Daily puzzle** — One board a day, derived from the date so everyone gets the same one; difficulty ramps across the week and the leaderboard for that level compares like with like
 - **7 color themes** — Midnight, Sakura, Ocean, Forest, Arctic, Naruto, Wicked — saved in localStorage
 - **Digit highlighting** — Focus a cell and all matching digits glow across the board (works on both desktop and mobile)
@@ -84,12 +85,13 @@ sudoku_solver/
   vite.config.js      Build config — two targets, see The Build
   difficulties.js     Labels and tier sizes, kept out of the lazy bank chunk
   daily.js            Date-derived puzzle of the day
+  share.js            Puzzle links: build, parse, clipboard
   sw-template.js      Service worker source (asset list injected at build)
   public/             Copied verbatim into dist/ — manifest, icons, _headers
   eslint.config.js    Lint rules
   vitest.config.js    Test config
   scripts/generate-bank.js  Regenerate or reorder a difficulty tier
-  tests/              Test suite (404 tests)
+  tests/              Test suite (438 tests)
 
   Dockerfile          Multi-stage build -> nginx-alpine
   nginx.conf.template Nginx config (envsubst at container start)
@@ -112,7 +114,7 @@ npm ci --prefix leaderboard-api # leaderboard deps, needed for its tests
 
 npm run dev      # Vite dev server at :8000 with hot reload, /api/ proxied to :3001
 npm run lint     # eslint
-npm test         # 404 tests
+npm test         # 438 tests
 npm run build    # produce dist/
 npm run check    # lint + test + build, what CI runs
 ```
