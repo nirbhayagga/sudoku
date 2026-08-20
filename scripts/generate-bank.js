@@ -48,7 +48,11 @@ function loadEngine() {
     return vm.runInContext('({ SudokuSolver, SudokuGenerator, PUZZLES })', context);
 }
 
-/** Id format used by the bank: prefix letter + zero-padded position. */
+/**
+ * Id format used by the bank: prefix letter + zero-padded position. Read back
+ * from the loaded bank, which derives ids from ID_PREFIX/ID_WIDTH, so generated
+ * ids stay consistent with everything already stored against them.
+ */
 function idFormat(existing) {
     const sample = existing[0].id;
     const prefix = sample[0];
@@ -274,11 +278,12 @@ function patchBank(difficulty, entries) {
     const end = source.indexOf('\n    ],\n', start);
     if (end === -1) throw new Error(`Could not locate the end of "${difficulty}"`);
 
+    // Bare strings: puzzle-bank.js derives ids from position at load time.
     const body = entries
-        .map((e) => `        { id: '${e.id}', puzzle: '${e.puzzle}' }`)
-        .join(',\n');
+        .map((e) => `        '${e.puzzle}',`)
+        .join('\n');
 
-    const replaced = `${startMarker}\n${body},\n    ],\n`;
+    const replaced = `${startMarker}\n${body}\n    ],\n`;
     fs.writeFileSync(file, source.slice(0, start) + replaced + source.slice(end + '\n    ],\n'.length));
 }
 

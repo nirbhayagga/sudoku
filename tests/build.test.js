@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
+import { gzipSync } from 'node:zlib';
 import os from 'node:os';
 import path from 'node:path';
 import { JSDOM, VirtualConsole } from 'jsdom';
@@ -72,6 +73,18 @@ describe('build output', () => {
         const sources = ['solver.js', 'generator.js', 'puzzle-bank.js', 'app.js']
             .reduce((n, f) => n + fs.statSync(path.join(repoRoot, f)).size, 0);
         expect(built).toBeLessThan(sources);
+    });
+
+    // A payload budget, so bloat has to be a deliberate decision rather than a
+    // surprise. The bank dominates: it is 5,500 puzzles of 81 characters, which
+    // is ~435 kB of irreducible data that gzip takes down to about 120 kB.
+    it('stays within the gzipped payload budget', () => {
+        const assetDir = path.join(dist, 'assets');
+        const total = fs.readdirSync(assetDir).reduce(
+            (n, f) => n + gzipSync(fs.readFileSync(path.join(assetDir, f))).length,
+            0
+        );
+        expect(total).toBeLessThan(150 * 1024);
     });
 
     it('produces a byte-identical bundle when rebuilt', () => {
