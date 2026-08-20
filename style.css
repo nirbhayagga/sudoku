@@ -2047,3 +2047,32 @@ kbd {
     content: " ✓";
     color: var(--success);
 }
+
+/* ── Hint explanations ────────────────────────────────────────────── */
+/* The first press of Hint explains without revealing: the cell in question is
+   marked, the cells that justify the deduction are lit, and everything else
+   recedes so the pattern is visible. */
+.grid-container.hint-explaining .cell-wrapper:not(.hint-target):not(.hint-evidence) {
+    opacity: 0.35;
+    transition: opacity var(--transition);
+}
+
+.cell-wrapper.hint-target {
+    outline: 2px solid var(--hint-color);
+    outline-offset: -2px;
+    background: var(--hint-glow);
+    animation: hint-pulse 1.4s ease-in-out infinite;
+}
+
+.cell-wrapper.hint-evidence {
+    background: var(--bg-cell-focus);
+}
+
+@keyframes hint-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 var(--hint-glow); }
+    50% { box-shadow: 0 0 0 6px transparent; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .cell-wrapper.hint-target { animation: none; }
+}

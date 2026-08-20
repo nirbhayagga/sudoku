@@ -296,6 +296,7 @@ function loadBank() {
             highlightConflicts(idx);
 
             refreshAutoNotes();
+            clearHintNudge();
 
             // Check for win
             checkWin();
@@ -773,6 +774,7 @@ function loadBank() {
         recheckAllConflicts();
         updateNumpadCompletion();
         refreshAutoNotes();
+        clearHintNudge();
 
         // Move selection to the undone cell
         if (isTouchDevice) {
@@ -797,6 +799,7 @@ function loadBank() {
         recheckAllConflicts();
         updateNumpadCompletion();
         refreshAutoNotes();
+        clearHintNudge();
 
         // Move selection to the redone cell
         if (isTouchDevice) {
@@ -1012,6 +1015,7 @@ function loadBank() {
         btnNotesToggle.textContent = 'Notes: OFF';
         btnNotesToggle.classList.remove('notes-active');
 
+        clearHintNudge();
         setStatus('Loading puzzle...');
 
         // Awaiting the bank also yields to the event loop, so the status above
@@ -1219,6 +1223,7 @@ function loadBank() {
         }
 
         startTimer();
+        clearHintNudge();
         setStatus('Puzzle reset');
         refreshAutoNotes();
         debounceSave();
@@ -1239,6 +1244,23 @@ function loadBank() {
      *
      * @returns {{idx: number, reason: string}|null}
      */
+    /** The 20 cells sharing a row, column or box with this one. */
+    function peersOf(idx) {
+        const row = Math.floor(idx / 9);
+        const col = idx % 9;
+        const boxRow = Math.floor(row / 3) * 3;
+        const boxCol = Math.floor(col / 3) * 3;
+
+        const peers = new Set();
+        for (let c = 0; c < 9; c++) peers.add(row * 9 + c);
+        for (let r = 0; r < 9; r++) peers.add(r * 9 + col);
+        for (let r = boxRow; r < boxRow + 3; r++) {
+            for (let c = boxCol; c < boxCol + 3; c++) peers.add(r * 9 + c);
+        }
+        peers.delete(idx);
+        return [...peers];
+    }
+
     function findHintCell(board) {
         const candidates = new Map();
         for (let i = 0; i < 81; i++) {
@@ -1248,12 +1270,19 @@ function loadBank() {
 
         const trustworthy = (idx, digit) => digit === currentSolution[idx];
 
-        // Naked single: only one digit can go here.
+        // Naked single: only one digit can go here. The evidence is the filled
+        // peers that ruled out the other eight digits.
         for (const [idx, set] of candidates) {
             if (set.size === 1) {
                 const [digit] = [...set];
                 if (trustworthy(idx, digit)) {
-                    return { idx, reason: `only ${digit} fits in this cell` };
+                    return {
+                        idx,
+                        digit,
+                        reason: `only ${digit} fits in this cell`,
+                        nudge: 'Every other digit is already used in this cell\'s row, column or box.',
+                        evidence: peersOf(idx).filter((i) => board[i] !== '0'),
+                    };
                 }
             }
         }
@@ -1277,7 +1306,13 @@ function loadBank() {
                 const digit = String(d);
                 const homes = unit.cells.filter((i) => candidates.has(i) && candidates.get(i).has(digit));
                 if (homes.length === 1 && trustworthy(homes[0], digit)) {
-                    return { idx: homes[0], reason: `the only place for ${digit} in this ${unit.name}` };
+                    return {
+                        idx: homes[0],
+                        digit,
+                        reason: `the only place for ${digit} in this ${unit.name}`,
+                        nudge: `In the highlighted ${unit.name}, ${digit} can only go in one cell.`,
+                        evidence: unit.cells.filter((i) => i !== homes[0]),
+                    };
                 }
             }
         }
@@ -1287,11 +1322,48 @@ function loadBank() {
         let best = null;
         for (const [idx, set] of candidates) {
             if (!trustworthy(idx, currentSolution[idx])) continue;
-            if (!best || set.size < best.size) best = { idx, size: set.size };
+            if (!best || set.size < best.size) best = { idx, size: set.size, set };
         }
-        if (best) return { idx: best.idx, reason: `narrowed to ${best.size} candidates` };
+        if (best) {
+            return {
+                idx: best.idx,
+                digit: currentSolution[best.idx],
+                reason: `narrowed to ${best.size} candidates`,
+                nudge: `This cell is down to ${[...best.set].join(', ')} — the most constrained on the board.`,
+                evidence: peersOf(best.idx).filter((i) => board[i] !== '0'),
+            };
+        }
 
         return null;
+    }
+
+    /**
+     * A hint asked for but not yet revealed. The first press explains and
+     * highlights; the second fills it in. Cleared by any board change, since
+     * the deduction may no longer hold.
+     */
+    let pendingHint = null;
+
+    function clearHintNudge() {
+        if (!pendingHint) return;
+        for (const i of pendingHint.evidence) wrappers[i].classList.remove('hint-evidence');
+        wrappers[pendingHint.idx].classList.remove('hint-target');
+        gridEl.classList.remove('hint-explaining');
+        pendingHint = null;
+        if (btnHint) btnHint.textContent = 'Hint';
+    }
+
+    /** Show the reasoning without filling anything in. Costs nothing. */
+    function showHintNudge(candidate) {
+        clearHintNudge();
+        pendingHint = candidate;
+
+        gridEl.classList.add('hint-explaining');
+        wrappers[candidate.idx].classList.add('hint-target');
+        for (const i of candidate.evidence) wrappers[i].classList.add('hint-evidence');
+
+        if (btnHint) btnHint.textContent = 'Reveal';
+        setStatus(`${candidate.nudge} Press again to reveal.`);
     }
 
     function giveHint() {
@@ -1310,29 +1382,41 @@ function loadBank() {
             return;
         }
 
-        // A selected cell is an explicit request: hint that one.
+        // Second press on a standing nudge reveals it.
+        if (pendingHint && fixable.includes(pendingHint.idx)) {
+            const { idx, reason } = pendingHint;
+            clearHintNudge();
+            revealHint(idx, reason);
+            return;
+        }
+        clearHintNudge();
+
         // lastTouchedIdx is the touch fallback — selection there is visual and
         // survives blur. On desktop a blurred cell means nothing is selected,
         // so honouring it would make the hint ignore its own deduction.
         const selected = focusedIdx >= 0
             ? focusedIdx
             : (isTouchDevice ? lastTouchedIdx : -1);
-        let hintIdx;
-        let reason = '';
 
+        // Pointing at a specific cell asks for the answer there, not a lesson.
         if (selected >= 0 && fixable.includes(selected)) {
-            hintIdx = selected;
-        } else {
-            const found = findHintCell(readGrid());
-            if (found) {
-                hintIdx = found.idx;
-                reason = found.reason;
-            } else {
-                // Deduction is unreliable, which means something on the board is
-                // wrong; fall back to any cell that still needs fixing.
-                hintIdx = fixable[Math.floor(Math.random() * fixable.length)];
-            }
+            revealHint(selected, '');
+            return;
         }
+
+        const found = findHintCell(readGrid());
+        if (found) {
+            showHintNudge(found);
+            return;
+        }
+
+        // Deduction is unreliable, which means something on the board is wrong;
+        // fall back to any cell that still needs fixing.
+        revealHint(fixable[Math.floor(Math.random() * fixable.length)], '');
+    }
+
+    /** Fill in a hinted cell. This is the step that counts against you. */
+    function revealHint(hintIdx, reason) {
         const prevVal = inputs[hintIdx].value;
         const prevNotes = new Set(cellNotes[hintIdx]);
 
@@ -1918,6 +2002,7 @@ function loadBank() {
             pushUndo(idx, prevVal, digit, prevNotes, new Set());
             highlightConflicts(idx);
             refreshAutoNotes();
+            clearHintNudge();
             checkWin();
             debounceSave();
             updateNumpadCompletion();

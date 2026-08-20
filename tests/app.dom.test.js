@@ -299,8 +299,15 @@ describe('hints', () => {
     });
 
     it('counts hints towards the win summary', () => {
+        // With a cell selected each press reveals immediately, so two presses
+        // are two hints. Deselected, a press only nudges — see the scoring
+        // tests in the hints suite.
+        const empty = [...Array(81).keys()].filter((i) => EASY_PUZZLE[i] === '0');
+        app.inputs()[empty[0]].focus();
         app.click('#btn-hint');
+        app.inputs()[empty[1]].focus();
         app.click('#btn-hint');
+
         completePuzzle(app);
         expect(app.$('#win-details').textContent).toMatch(/2 hints used/);
     });
@@ -1545,6 +1552,106 @@ describe('hints', () => {
     });
 
     const hintedIndex = () => app.cells().findIndex((c) => c.classList.contains('hint'));
+    const deselect = () => app.document.activeElement.blur();
+
+    // The first press explains without filling anything in; the second reveals.
+    // Learning the pattern is free, being told costs a hint.
+    describe('nudge before reveal', () => {
+        it('explains without revealing on the first press', () => {
+            deselect();
+            app.click('#btn-hint');
+
+            expect(hintedIndex()).toBe(-1);
+            expect(app.readGrid()).toBe(EASY_PUZZLE);
+            expect(app.$('#status').textContent).toMatch(/press again to reveal/i);
+        });
+
+        it('marks the cell and the evidence behind it', () => {
+            deselect();
+            app.click('#btn-hint');
+
+            expect(app.$$('.cell-wrapper.hint-target')).toHaveLength(1);
+            expect(app.$$('.cell-wrapper.hint-evidence').length).toBeGreaterThan(0);
+            expect(app.$('#grid').classList.contains('hint-explaining')).toBe(true);
+        });
+
+        it('reveals on the second press', () => {
+            deselect();
+            app.click('#btn-hint');
+            const target = app.cells().findIndex((c) => c.classList.contains('hint-target'));
+
+            app.click('#btn-hint');
+            expect(hintedIndex()).toBe(target);
+            expect(app.inputs()[target].value).toBe(EASY_SOLUTION[target]);
+        });
+
+        it('clears the explanation once revealed', () => {
+            deselect();
+            app.click('#btn-hint');
+            app.click('#btn-hint');
+            expect(app.$$('.cell-wrapper.hint-target')).toHaveLength(0);
+            expect(app.$('#grid').classList.contains('hint-explaining')).toBe(false);
+        });
+
+        it('relabels the button so the next press is obvious', () => {
+            deselect();
+            expect(app.$('#btn-hint').textContent).toBe('Hint');
+            app.click('#btn-hint');
+            expect(app.$('#btn-hint').textContent).toBe('Reveal');
+            app.click('#btn-hint');
+            expect(app.$('#btn-hint').textContent).toBe('Hint');
+        });
+
+        // The deduction may not survive a change, so a stale nudge must go.
+        it('drops a standing nudge when the board changes', () => {
+            deselect();
+            app.click('#btn-hint');
+            expect(app.$$('.cell-wrapper.hint-target')).toHaveLength(1);
+
+            const empty = EASY_PUZZLE.indexOf('0');
+            app.type(empty, EASY_SOLUTION[empty]);
+
+            expect(app.$$('.cell-wrapper.hint-target')).toHaveLength(0);
+            expect(app.$('#btn-hint').textContent).toBe('Hint');
+        });
+
+        it('drops it on undo too', () => {
+            const empty = EASY_PUZZLE.indexOf('0');
+            app.type(empty, EASY_SOLUTION[empty]);
+            deselect();
+            app.click('#btn-hint');
+            app.click('#btn-undo');
+            expect(app.$$('.cell-wrapper.hint-target')).toHaveLength(0);
+        });
+    });
+
+    describe('scoring', () => {
+        // Nudging is free; only being told costs you.
+        it('does not count a nudge', () => {
+            deselect();
+            app.click('#btn-hint');   // nudge only
+            completePuzzle(app);
+            expect(app.$('#win-details').textContent).toMatch(/No hints used/);
+        });
+
+        it('counts the reveal', () => {
+            deselect();
+            app.click('#btn-hint');
+            app.click('#btn-hint');   // reveal
+            completePuzzle(app);
+            expect(app.$('#win-details').textContent).toMatch(/1 hint used/);
+        });
+
+        it('counts one hint per reveal, not per press', () => {
+            for (let n = 0; n < 2; n++) {
+                deselect();
+                app.click('#btn-hint');
+                app.click('#btn-hint');
+            }
+            completePuzzle(app);
+            expect(app.$('#win-details').textContent).toMatch(/2 hints used/);
+        });
+    });
 
     describe('choosing a cell', () => {
         // The old engine picked uniformly at random, so a hint could land in a
@@ -1571,7 +1678,8 @@ describe('hints', () => {
 
         it('picks a logically deducible cell when nothing is selected', () => {
             app.document.activeElement.blur();
-            app.click('#btn-hint');
+            app.click('#btn-hint');   // nudge
+            app.click('#btn-hint');   // reveal
             expect(hintedIndex()).toBeGreaterThanOrEqual(0);
             expect(app.$('#status').textContent).toMatch(/only|narrowed/i);
         });
@@ -1587,6 +1695,8 @@ describe('hints', () => {
         it('gives a reason when it deduced the cell', () => {
             app.document.activeElement.blur();
             app.click('#btn-hint');
+            expect(app.$('#status').textContent).toMatch(/row, column or box|can only go in one cell|most constrained/);
+            app.click('#btn-hint');
             expect(app.$('#status').textContent).toMatch(/only \d fits|only place for \d|narrowed to/);
         });
     });
@@ -1595,7 +1705,8 @@ describe('hints', () => {
         it('always reveals the true digit', () => {
             for (let n = 0; n < 8; n++) {
                 app.document.activeElement.blur();
-                app.click('#btn-hint');
+                app.click('#btn-hint');   // nudge
+                app.click('#btn-hint');   // reveal
                 const idx = app.cells().findIndex(
                     (c) => c.classList.contains('hint') && !c.dataset.checked
                 );
@@ -1614,6 +1725,7 @@ describe('hints', () => {
 
             app.document.activeElement.blur();
             app.click('#btn-hint');
+            app.click('#btn-hint');
 
             const idx = hintedIndex();
             expect(idx).toBeGreaterThanOrEqual(0);
@@ -1631,11 +1743,11 @@ describe('hints', () => {
         });
     });
 
-    it('still counts towards the total', () => {
+    it('reveals immediately for a selected cell, with no nudge step', () => {
+        const empty = [...Array(81).keys()].filter((i) => EASY_PUZZLE[i] === '0');
+        app.inputs()[empty[3]].focus();
         app.click('#btn-hint');
-        app.click('#btn-hint');
-        completePuzzle(app);
-        expect(app.$('#win-details').textContent).toMatch(/2 hints used/);
+        expect(hintedIndex()).toBe(empty[3]);
     });
 });
 
