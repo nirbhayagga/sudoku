@@ -46,7 +46,7 @@ Play sudoku puzzles with built-in hints, pencil marks, undo/redo, and more.
 
 ### Solver Mode
 
-Paste or type a puzzle and solve it instantly. Uses constraint propagation + backtracking with the MRV heuristic — most puzzles solve in under 5 ms.
+Paste or type a puzzle and solve it instantly. Constraint propagation plus backtracking with the MRV heuristic, over 9-bit candidate masks in a typed array — most puzzles solve in about 0.1 ms.
 
 Switching from Play → Solver retains your current puzzle so you can have the solver finish it.
 

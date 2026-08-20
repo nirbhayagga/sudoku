@@ -12,7 +12,7 @@
 import { SudokuSolver } from './solver.js';
 
 export const SudokuGenerator = (() => {
-    const { copyValues } = SudokuSolver.getInternals();
+    const { ALL, assign, copyValues, mostConstrained, toString } = SudokuSolver.getInternals();
 
     /**
      * Difficulty targets.
@@ -57,39 +57,30 @@ export const SudokuGenerator = (() => {
      * Fills the board using the solver with randomized digit ordering.
      */
     function generateSolvedBoard() {
-        const { squares: sq, DIGITS: dg, assign } = SudokuSolver.getInternals();
-
-        // Start with all possibilities open
-        const values = {};
-        for (const s of sq) values[s] = dg;
+        // Candidates are 9-bit masks, one Uint16 per cell — see solver.js.
+        const values = new Uint16Array(81).fill(ALL);
 
         function randomSearch(vals) {
             if (!vals) return null;
-            if (sq.every(s => vals[s].length === 1)) return vals;
 
-            // MRV heuristic
-            let minLen = 10, minSquare = null;
-            for (const s of sq) {
-                const len = vals[s].length;
-                if (len > 1 && len < minLen) {
-                    minLen = len;
-                    minSquare = s;
-                }
-            }
+            const cell = mostConstrained(vals);
+            if (cell === -1) return vals; // every cell settled
 
-            // Randomize digit order for variety
-            const digits = shuffle(vals[minSquare].split(''));
-            for (const d of digits) {
-                const result = randomSearch(assign(copyValues(vals), minSquare, d));
+            // Randomised digit order is what makes each board different; the
+            // solver's own search is deterministic by design.
+            const mask = vals[cell];
+            const digits = [];
+            for (let d = 0; d < 9; d++) if (mask & (1 << d)) digits.push(d);
+
+            for (const d of shuffle(digits)) {
+                const result = randomSearch(assign(copyValues(vals), cell, d));
                 if (result) return result;
             }
             return null;
         }
 
         const solved = randomSearch(values);
-        if (!solved) return null;
-
-        return sq.map(s => solved[s]).join('');
+        return solved ? toString(solved) : null;
     }
 
     /**
