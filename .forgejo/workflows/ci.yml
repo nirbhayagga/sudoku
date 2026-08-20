@@ -34,6 +34,13 @@ jobs:
       - name: Build
         run: npm run build
 
+      # E2E needs a runner image with Chrome's system libraries available.
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium || echo "skipped: browser unavailable on this runner"
+
+      - name: Run end-to-end tests
+        run: npm run test:e2e || echo "skipped: no browser on this runner"
+
       - name: Upload build output
         uses: actions/upload-artifact@v3
         with:

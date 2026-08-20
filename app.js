@@ -823,7 +823,9 @@ function loadBank() {
             wrappers[i].classList.remove('given', 'solved', 'error', 'solve-anim', 'hint',
                 'hint-anim', 'locked', 'user-error', 'correct-check', 'win-anim',
                 'conflict', 'conflict-flash', 'digit-highlight', 'focused');
-            inputs[i].readOnly = false;
+            // Cells stay readOnly on touch devices whatever else changes: that
+            // is the only thing stopping iOS opening a keyboard over the board.
+            inputs[i].readOnly = isTouchDevice;
             clearCellNotes(i);
 
             if (markAsGiven && inputs[i].value) {
@@ -893,7 +895,7 @@ function loadBank() {
                 'hint-anim', 'locked', 'user-error', 'correct-check', 'win-anim',
                 'conflict', 'conflict-flash', 'digit-highlight', 'focused');
             wrappers[i].style.animationDelay = '';
-            inputs[i].readOnly = false;
+            inputs[i].readOnly = isTouchDevice; // never editable directly on touch
             clearCellNotes(i);
         }
         solved = false;
@@ -1309,7 +1311,12 @@ function loadBank() {
         }
 
         // A selected cell is an explicit request: hint that one.
-        const selected = focusedIdx >= 0 ? focusedIdx : lastTouchedIdx;
+        // lastTouchedIdx is the touch fallback — selection there is visual and
+        // survives blur. On desktop a blurred cell means nothing is selected,
+        // so honouring it would make the hint ignore its own deduction.
+        const selected = focusedIdx >= 0
+            ? focusedIdx
+            : (isTouchDevice ? lastTouchedIdx : -1);
         let hintIdx;
         let reason = '';
 

@@ -16,9 +16,12 @@
     "test:coverage": "vitest run --coverage",
     "check": "npm run lint && npm run test && npm run build:all",
     "build:standalone": "vite build --mode standalone",
-    "build:all": "npm run build && npm run build:standalone"
+    "build:all": "npm run build && npm run build:standalone",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.1",
     "@vitest/coverage-v8": "^3.2.7",
     "esbuild": "^0.25.0",
     "eslint": "^9.18.0",

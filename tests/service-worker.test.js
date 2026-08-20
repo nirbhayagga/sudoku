@@ -112,6 +112,23 @@ describe('precache manifest', () => {
     });
 });
 
+describe('cache matching', () => {
+    // Servers commonly send `Vary: Origin`. A crossorigin module script sends an
+    // Origin header the precache's own fetch never sent, so without ignoreVary
+    // every lookup misses and offline silently fails while the cache looks full.
+    // This cost a real debugging session; the assertion is here so it cannot
+    // regress.
+    it('ignores Vary when matching', () => {
+        expect(swSource).toContain('ignoreVary: true');
+    });
+
+    it('uses the option on every cache lookup', () => {
+        const lookups = swSource.match(/caches\.match\(/g) || [];
+        const withOptions = swSource.match(/caches\.match\([^)]*MATCH_OPTIONS/g) || [];
+        expect(withOptions.length).toBe(lookups.length);
+    });
+});
+
 describe('install', () => {
     it('precaches every listed file', async () => {
         const caches = makeCaches();

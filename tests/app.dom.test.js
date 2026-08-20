@@ -1570,7 +1570,7 @@ describe('hints', () => {
         });
 
         it('picks a logically deducible cell when nothing is selected', () => {
-            app.inputs()[0].blur();
+            app.document.activeElement.blur();
             app.click('#btn-hint');
             expect(hintedIndex()).toBeGreaterThanOrEqual(0);
             expect(app.$('#status').textContent).toMatch(/only|narrowed/i);
@@ -1585,7 +1585,7 @@ describe('hints', () => {
         });
 
         it('gives a reason when it deduced the cell', () => {
-            app.inputs()[0].blur();
+            app.document.activeElement.blur();
             app.click('#btn-hint');
             expect(app.$('#status').textContent).toMatch(/only \d fits|only place for \d|narrowed to/);
         });
@@ -1594,7 +1594,7 @@ describe('hints', () => {
     describe('correctness', () => {
         it('always reveals the true digit', () => {
             for (let n = 0; n < 8; n++) {
-                app.inputs()[0].blur();
+                app.document.activeElement.blur();
                 app.click('#btn-hint');
                 const idx = app.cells().findIndex(
                     (c) => c.classList.contains('hint') && !c.dataset.checked
@@ -1612,7 +1612,7 @@ describe('hints', () => {
             const wrongAt = empty[0];
             app.type(wrongAt, EASY_SOLUTION[wrongAt] === '1' ? '2' : '1');
 
-            app.inputs()[0].blur();
+            app.document.activeElement.blur();
             app.click('#btn-hint');
 
             const idx = hintedIndex();
@@ -1637,4 +1637,54 @@ describe('hints', () => {
         completePuzzle(app);
         expect(app.$('#win-details').textContent).toMatch(/2 hints used/);
     });
+});
+
+describe('touch platform', () => {
+    // jsdom defines ontouchstart, so without an explicit choice every test above
+    // would silently run the touch branch. These pin the branch itself.
+    let touchApp;
+
+    beforeEach(async () => {
+        touchApp = await bootApp({ touch: true });
+        touchApp.click('.diff-btn[data-diff="easy"]');
+        touchApp.$('#level-input').value = '1';
+        touchApp.click('#btn-new-game');
+        await touchApp.tick(50);
+    });
+    afterEach(() => touchApp.close());
+
+    // The whole reason the touch branch exists: a focusable cell means iOS
+    // opens a keyboard over the board.
+    it('leaves every cell readOnly, including empty ones', () => {
+        const editable = touchApp.inputs().filter((i) => !i.readOnly);
+        expect(editable).toHaveLength(0);
+    });
+
+    it('suppresses the virtual keyboard via inputMode', () => {
+        expect(touchApp.inputs()[0].getAttribute('inputmode')).toBe('none');
+    });
+
+    it('keeps cells readOnly after a reset', () => {
+        touchApp.click('#btn-reset');
+        expect(touchApp.inputs().filter((i) => !i.readOnly)).toHaveLength(0);
+    });
+
+    it('keeps cells readOnly in solver mode too', () => {
+        touchApp.click('#tab-solver');
+        touchApp.click('#btn-clear');
+        expect(touchApp.inputs().filter((i) => !i.readOnly)).toHaveLength(0);
+    });
+
+    it('marks a tapped cell as selected without focusing it', () => {
+        const empty = EASY_PUZZLE.indexOf('0');
+        touchApp.click(touchApp.cells()[empty]);
+        expect(touchApp.cells()[empty].classList.contains('focused')).toBe(true);
+        // focus() is never called on touch: iOS would scroll the page and open
+        // a keyboard.
+        expect(touchApp.document.activeElement).not.toBe(touchApp.inputs()[empty]);
+    });
+
+    // Driving the numpad end-to-end is left to e2e/mobile.spec.js. jsdom's
+    // synthetic events do not reproduce the real tap sequence, and a real
+    // browser tests it properly.
 });
