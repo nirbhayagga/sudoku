@@ -8,6 +8,7 @@ import { SudokuGenerator } from './generator.js';
 import { DIFFICULTY_LABELS, BANK_SIZES } from './difficulties.js';
 import { dailyPuzzle, formatDay } from './daily.js';
 import { parseShareLink, bankLink, puzzleLink, copyToClipboard } from './share.js';
+import { candidatesFor, candidateGrid, peersOf, cellName, nextStep } from './techniques.js';
 import { formatTime, escapeHtml } from './format.js';
 import { createDialogs } from './dialogs.js';
 import { applyTheme, DEFAULT_THEME } from './theme.js';
@@ -526,32 +527,6 @@ function loadBank() {
         pushUndo(idx, '', '', prevNotes, new Set(cellNotes[idx]));
         renderNotes(idx);
         debounceSave();
-    }
-
-    /**
-     * Digits still legal in a cell, given only what is currently on the board.
-     * Deliberately ignores the solution: this is bookkeeping a player could do
-     * by hand, not a hint.
-     */
-    function candidatesFor(board, idx) {
-        const row = Math.floor(idx / 9);
-        const col = idx % 9;
-        const boxRow = Math.floor(row / 3) * 3;
-        const boxCol = Math.floor(col / 3) * 3;
-
-        const used = new Set();
-        for (let c = 0; c < 9; c++) used.add(board[row * 9 + c]);
-        for (let r = 0; r < 9; r++) used.add(board[r * 9 + col]);
-        for (let r = boxRow; r < boxRow + 3; r++) {
-            for (let c = boxCol; c < boxCol + 3; c++) used.add(board[r * 9 + c]);
-        }
-
-        const candidates = new Set();
-        for (let d = 1; d <= 9; d++) {
-            const digit = String(d);
-            if (!used.has(digit)) candidates.add(digit);
-        }
-        return candidates;
     }
 
     /** Recompute every empty cell's notes. No-op unless auto-notes is on. */
@@ -1244,97 +1219,38 @@ function loadBank() {
      *
      * @returns {{idx: number, reason: string}|null}
      */
-    /** The 20 cells sharing a row, column or box with this one. */
-    function peersOf(idx) {
-        const row = Math.floor(idx / 9);
-        const col = idx % 9;
-        const boxRow = Math.floor(row / 3) * 3;
-        const boxCol = Math.floor(col / 3) * 3;
-
-        const peers = new Set();
-        for (let c = 0; c < 9; c++) peers.add(row * 9 + c);
-        for (let r = 0; r < 9; r++) peers.add(r * 9 + col);
-        for (let r = boxRow; r < boxRow + 3; r++) {
-            for (let c = boxCol; c < boxCol + 3; c++) peers.add(r * 9 + c);
-        }
-        peers.delete(idx);
-        return [...peers];
-    }
-
+    /**
+     * The most useful cell to reveal: one the player could actually work out
+     * from the board right now, with the reasoning to show for it.
+     *
+     * Delegates to techniques.js, then checks the answer against the solution.
+     * Candidate arithmetic is meaningless once a wrong digit is on the board,
+     * and a hint that is wrong is worse than no hint at all.
+     */
     function findHintCell(board) {
-        const candidates = new Map();
-        for (let i = 0; i < 81; i++) {
-            if (board[i] === '0') candidates.set(i, candidatesFor(board, i));
-        }
-        if (candidates.size === 0) return null;
-
         const trustworthy = (idx, digit) => digit === currentSolution[idx];
 
-        // Naked single: only one digit can go here. The evidence is the filled
-        // peers that ruled out the other eight digits.
-        for (const [idx, set] of candidates) {
-            if (set.size === 1) {
-                const [digit] = [...set];
-                if (trustworthy(idx, digit)) {
-                    return {
-                        idx,
-                        digit,
-                        reason: `only ${digit} fits in this cell`,
-                        nudge: 'Every other digit is already used in this cell\'s row, column or box.',
-                        evidence: peersOf(idx).filter((i) => board[i] !== '0'),
-                    };
-                }
-            }
-        }
+        const step = nextStep(board);
+        if (step && trustworthy(step.idx, step.digit)) return step;
 
-        // Hidden single: this digit has only one home left in some unit.
-        const units = [];
-        for (let r = 0; r < 9; r++) units.push({ name: 'row', cells: Array.from({ length: 9 }, (_, c) => r * 9 + c) });
-        for (let c = 0; c < 9; c++) units.push({ name: 'column', cells: Array.from({ length: 9 }, (_, r) => r * 9 + c) });
-        for (let br = 0; br < 3; br++) {
-            for (let bc = 0; bc < 3; bc++) {
-                const cells = [];
-                for (let r = br * 3; r < br * 3 + 3; r++) {
-                    for (let c = bc * 3; c < bc * 3 + 3; c++) cells.push(r * 9 + c);
-                }
-                units.push({ name: 'box', cells });
-            }
-        }
-
-        for (const unit of units) {
-            for (let d = 1; d <= 9; d++) {
-                const digit = String(d);
-                const homes = unit.cells.filter((i) => candidates.has(i) && candidates.get(i).has(digit));
-                if (homes.length === 1 && trustworthy(homes[0], digit)) {
-                    return {
-                        idx: homes[0],
-                        digit,
-                        reason: `the only place for ${digit} in this ${unit.name}`,
-                        nudge: `In the highlighted ${unit.name}, ${digit} can only go in one cell.`,
-                        evidence: unit.cells.filter((i) => i !== homes[0]),
-                    };
-                }
-            }
-        }
-
-        // Nothing basic is available, so give the most constrained cell — the
-        // one needing the least work to justify.
+        // Nothing the technique engine knows can crack this position, so fall
+        // back to the most constrained cell. Duller, but always available.
+        const grid = candidateGrid(board);
         let best = null;
-        for (const [idx, set] of candidates) {
-            if (!trustworthy(idx, currentSolution[idx])) continue;
-            if (!best || set.size < best.size) best = { idx, size: set.size, set };
+        for (let idx = 0; idx < 81; idx++) {
+            if (!grid[idx] || !trustworthy(idx, currentSolution[idx])) continue;
+            if (!best || grid[idx].size < best.size) best = { idx, size: grid[idx].size, set: grid[idx] };
         }
-        if (best) {
-            return {
-                idx: best.idx,
-                digit: currentSolution[best.idx],
-                reason: `narrowed to ${best.size} candidates`,
-                nudge: `This cell is down to ${[...best.set].join(', ')} — the most constrained on the board.`,
-                evidence: peersOf(best.idx).filter((i) => board[i] !== '0'),
-            };
-        }
+        if (!best) return null;
 
-        return null;
+        return {
+            idx: best.idx,
+            digit: currentSolution[best.idx],
+            reason: `narrowed to ${best.size} candidates`,
+            nudge: `${cellName(best.idx)} is down to ${[...best.set].sort().join(', ')} — `
+                + 'the most constrained cell on the board.',
+            evidence: peersOf(best.idx).filter((i) => board[i] !== '0'),
+        };
     }
 
     /**
@@ -1430,9 +1346,8 @@ function loadBank() {
 
         pushUndo(hintIdx, prevVal, currentSolution[hintIdx], prevNotes, new Set());
 
-        const cellName = `R${Math.floor(hintIdx / 9) + 1}C${(hintIdx % 9) + 1}`;
         const because = reason ? ` — ${reason}` : '';
-        setStatus(`Hint: ${cellName}${because} (${hintsUsed} used)`);
+        setStatus(`Hint: ${cellName(hintIdx)}${because} (${hintsUsed} used)`);
 
         recheckAllConflicts();
         refreshAutoNotes();
