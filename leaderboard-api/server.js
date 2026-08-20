@@ -5,7 +5,8 @@ const path = require('path');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
-const DATA_FILE = path.join(__dirname, 'data', 'leaderboard.json');
+// Overridable so tests (and alternate deployments) can point at another store.
+const DATA_FILE = process.env.DATA_FILE || path.join(__dirname, 'data', 'leaderboard.json');
 
 app.use(cors({
     origin: process.env.CORS_ORIGIN || '*',
@@ -14,8 +15,8 @@ app.use(express.json());
 
 // Simple in-memory rate limiting for POST submissions
 const rateLimitMap = new Map();
-const RATE_LIMIT_WINDOW = 60 * 1000; // 1 minute
-const RATE_LIMIT_MAX = 5; // max submissions per window
+const RATE_LIMIT_WINDOW = Number(process.env.RATE_LIMIT_WINDOW_MS) || 60 * 1000;
+const RATE_LIMIT_MAX = Number(process.env.RATE_LIMIT_MAX) || 5; // submissions per window
 
 function rateLimit(req, res, next) {
     const ip = req.ip || req.connection.remoteAddress;
@@ -32,13 +33,14 @@ function rateLimit(req, res, next) {
     next();
 }
 
-// Clean up stale rate limit entries every 5 minutes
+// Clean up stale rate limit entries every 5 minutes.
+// unref() so this timer never keeps the process alive on shutdown.
 setInterval(() => {
     const now = Date.now();
     for (const [ip, entry] of rateLimitMap) {
         if (now - entry.start > RATE_LIMIT_WINDOW) rateLimitMap.delete(ip);
     }
-}, 5 * 60 * 1000);
+}, 5 * 60 * 1000).unref();
 
 // Ensure data directory exists
 const dataDir = path.dirname(DATA_FILE);
@@ -83,6 +85,8 @@ app.get('/api/leaderboard', (req, res) => {
 // POST /api/leaderboard
 // Body: { name, difficulty, time, hints, level }
 const VALID_DIFFICULTIES = ['easy', 'medium', 'hard', 'expert', 'evil', 'nightmare'];
+const MAX_TIME_SECONDS = 24 * 60 * 60; // a day; anything beyond is bogus
+const MAX_HINTS = 81;
 
 app.post('/api/leaderboard', rateLimit, (req, res) => {
     const { name, difficulty, time, hints, level } = req.body;
@@ -101,12 +105,31 @@ app.post('/api/leaderboard', rateLimit, (req, res) => {
         return res.status(400).json({ error: 'Invalid name' });
     }
 
+    // Every numeric field is coerced and bounded. These are rendered by the
+    // frontend, so anything that is not a number here becomes markup there;
+    // unvalidated they were a stored XSS vector as well as a way to corrupt
+    // the time-based sort.
+    const cleanTime = Number(time);
+    if (!Number.isFinite(cleanTime) || cleanTime < 0 || cleanTime > MAX_TIME_SECONDS) {
+        return res.status(400).json({ error: 'Invalid time' });
+    }
+
+    const parsedHints = Number(hints);
+    const cleanHints = Number.isFinite(parsedHints)
+        ? Math.min(MAX_HINTS, Math.max(0, Math.round(parsedHints)))
+        : 0;
+
+    const parsedLevel = Number(level);
+    const cleanLevel = Number.isFinite(parsedLevel) && parsedLevel >= 1
+        ? Math.round(parsedLevel)
+        : null;
+
     const entry = {
         name: cleanName,
         difficulty,
-        time: Math.round(time),
-        hints: hints || 0,
-        level: level || null,
+        time: Math.round(cleanTime),
+        hints: cleanHints,
+        level: cleanLevel,
         date: new Date().toISOString()
     };
 
@@ -132,6 +155,11 @@ app.get('/api/health', (req, res) => {
     res.json({ status: 'ok' });
 });
 
-app.listen(PORT, () => {
-    console.log(`Leaderboard API running on port ${PORT}`);
-});
+// Only listen when run directly — tests import the app and bind their own port.
+if (require.main === module) {
+    app.listen(PORT, () => {
+        console.log(`Leaderboard API running on port ${PORT}`);
+    });
+}
+
+module.exports = app;
