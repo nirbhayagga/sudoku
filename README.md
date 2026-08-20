@@ -96,13 +96,14 @@ sudoku/
   difficulties.js     Labels and tier sizes, kept out of the lazy bank chunk
   daily.js            Date-derived puzzle of the day
   share.js            Puzzle links: build, parse, clipboard
+  techniques.js       Human solving techniques, used to explain hints
   sw-template.js      Service worker source (asset list injected at build)
   public/             Copied verbatim into dist/ — manifest, icons, _headers
   eslint.config.js    Lint rules
   vitest.config.js    Test config
   scripts/generate-bank.js  Regenerate or reorder a difficulty tier
   scripts/check-contrast.js Audit (and fix) theme contrast
-  tests/              Test suite (478 tests + 60 end-to-end)
+  tests/              Test suite (502 tests + 60 end-to-end)
 
   Dockerfile          Multi-stage build -> nginx-alpine
   nginx.conf.template Nginx config (envsubst at container start)
@@ -125,7 +126,7 @@ npm ci --prefix leaderboard-api # leaderboard deps, needed for its tests
 
 npm run dev      # Vite dev server at :8000 with hot reload, /api/ proxied to :3001
 npm run lint     # eslint
-npm test         # 478 tests
+npm test         # 502 tests
 npm run build    # produce dist/
 npm run check    # lint + test + build, what CI runs
 ```
@@ -184,6 +185,7 @@ colour.
 | `tests/contrast.test.js` | WCAG AA contrast for every theme |
 | `tests/daily.test.js` | Deterministic puzzle of the day |
 | `tests/share.test.js` | Link building and parsing |
+| `tests/techniques.test.js` | Solving techniques, and that they never remove a correct candidate |
 
 ```bash
 npx vitest run tests/solver.test.js      # one file
