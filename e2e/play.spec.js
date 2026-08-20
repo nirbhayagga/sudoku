@@ -83,9 +83,15 @@ test.describe('playing', () => {
         await expect(page.locator('#game-timer')).not.toHaveText('0:00');
     });
 
-    test('reveals a hint and explains it', async ({ page }) => {
+    test('reveals a hint for the cell you pick', async ({ page }) => {
         await startGame(page);
+
+        // Selecting a cell asks for the answer there, so it reveals on one
+        // press. With nothing selected the first press only nudges, which is
+        // covered separately below.
+        await page.locator('.cell-wrapper:not(.locked)').first().click();
         await page.locator('#btn-hint').click();
+
         await expect(page.locator('.cell-wrapper.hint')).toHaveCount(1);
         await expect(page.locator('#status')).toHaveText(/R\d+C\d+/);
     });
@@ -114,5 +120,36 @@ test.describe('themes', () => {
         await page.locator('.theme-option[data-theme="forest"]').click();
         await page.reload();
         await expect(page.locator('html')).toHaveAttribute('data-theme', 'forest');
+    });
+});
+
+test.describe('explaining hints', () => {
+    test('dims the board and highlights the reasoning before revealing', async ({ page }) => {
+        await startGame(page);
+        // Click somewhere neutral so no cell is selected.
+        await page.locator('.status-bar').click();
+        await page.locator('#btn-hint').click();
+
+        await expect(page.locator('.cell-wrapper.hint-target')).toHaveCount(1);
+        await expect(page.locator('#btn-hint')).toHaveText('Reveal');
+
+        // The dimming is CSS, so only a real browser can confirm it applied.
+        // Polled rather than sampled once: opacity is transitioned, so an
+        // immediate read catches it before it has moved.
+        const dimmed = page.locator('.cell-wrapper:not(.hint-target):not(.hint-evidence)').first();
+        await expect
+            .poll(async () => Number(await dimmed.evaluate((el) => getComputedStyle(el).opacity)))
+            .toBeLessThan(1);
+
+        const target = page.locator('.cell-wrapper.hint-target');
+        await expect(target.locator('.cell-input')).toHaveValue('');
+
+        await page.locator('#btn-hint').click();
+        await expect(page.locator('.cell-wrapper.hint')).toHaveCount(1);
+        await expect(page.locator('#btn-hint')).toHaveText('Hint');
+
+        await expect
+            .poll(async () => Number(await dimmed.evaluate((el) => getComputedStyle(el).opacity)))
+            .toBe(1);
     });
 });
