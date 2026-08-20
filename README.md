@@ -1,6 +1,16 @@
 # Sudoku
 
-A fast, browser-based sudoku solver and player with 5,500 pre-generated puzzles, 7 color themes, pencil marks, a self-hosted leaderboard, and a polished gameplay experience. No runtime dependencies and no framework — the built output is a single self-contained script that even runs straight off the filesystem.
+Sudoku player and solver with 5,500 puzzles graded by measured solving effort
+rather than clue count. Installable PWA, plays offline, 20 kB first load, zero
+runtime dependencies.
+
+Difficulty is set by how much search a puzzle actually needs beyond pure logic,
+not by how many clues it starts with — two puzzles with the same number of
+givens routinely differ tenfold in effort. The Nightmare tier is the hardest
+3,000 of the published 49,158 seventeen-clue puzzles, the proven minimum.
+
+There is no framework and nothing to install to play: the standalone build is a
+single self-contained script that runs straight off the filesystem.
 
 ## Modes
 
@@ -69,7 +79,7 @@ Switching from Play → Solver retains your current puzzle so you can have the s
 ## Project Structure
 
 ```
-sudoku_solver/
+sudoku/
   index.html          Main page
   style.css           Styles, themes, and animations
   solver.js           Constraint propagation + backtracking engine
@@ -299,7 +309,7 @@ Host and repo come from the environment, so nothing site-specific lives in the
 compose files. Copy `.env.example` to `.env` and set them:
 
 ```bash
-git clone <your-repo-url> sudoku
+git clone https://github.com/nirb/sudoku.git
 cd sudoku
 cp .env.example .env      # set SUDOKU_HOST (and SUDOKU_REPO for remote builds)
 docker compose up -d --build
