@@ -197,6 +197,107 @@ export function findPointingPair(grid) {
     return null;
 }
 
+/**
+ * Three cells in a unit whose candidates, taken together, are exactly three
+ * digits. Between them they consume all three, so none can appear elsewhere in
+ * that unit. The cells need not each hold all three — {1,2} {2,3} {1,3} counts.
+ */
+export function findNakedTriple(grid) {
+    for (const unit of UNITS) {
+        const cells = unit.cells.filter((i) => grid[i] && grid[i].size >= 2 && grid[i].size <= 3);
+
+        for (let a = 0; a < cells.length; a++) {
+            for (let b = a + 1; b < cells.length; b++) {
+                for (let c = b + 1; c < cells.length; c++) {
+                    const trio = [cells[a], cells[b], cells[c]];
+                    const union = new Set([...grid[trio[0]], ...grid[trio[1]], ...grid[trio[2]]]);
+                    if (union.size !== 3) continue;
+
+                    const digits = [...union].sort();
+                    const removals = [];
+                    for (const cell of unit.cells) {
+                        if (trio.includes(cell) || !grid[cell]) continue;
+                        for (const digit of digits) {
+                            if (grid[cell].has(digit)) removals.push({ cell, digit });
+                        }
+                    }
+                    if (removals.length === 0) continue;
+
+                    return {
+                        type: 'naked-triple',
+                        removals,
+                        cells: trio,
+                        digits,
+                        reason: `${trio.map(cellName).join(', ')} share just ${digits.join(', ')}`,
+                        nudge: `${trio.map(cellName).join(', ')} between them use only `
+                            + `${digits.join(', ')}, so those digits leave the rest of this ${unit.kind}.`,
+                        evidence: [...trio, ...removals.map((r) => r.cell)],
+                    };
+                }
+            }
+        }
+    }
+    return null;
+}
+
+/**
+ * X-Wing. When a digit has exactly two possible cells in each of two rows, and
+ * both rows use the same pair of columns, the digit must occupy opposite
+ * corners of that rectangle either way — so it cannot appear anywhere else in
+ * those two columns. The same holds with rows and columns swapped.
+ *
+ * This is the usual wall for players solving by eye; it is the first technique
+ * needing two units considered together.
+ */
+export function findXWing(grid) {
+    for (const [orientation, lineCells, crossOf, crossCells] of [
+        ['row', rowCells, colOf, colCells],
+        ['column', colCells, rowOf, rowCells],
+    ]) {
+        for (const digit of DIGITS) {
+            // Lines where this digit has exactly two homes.
+            const candidates = [];
+            for (let line = 0; line < 9; line++) {
+                const homes = lineCells(line).filter((i) => grid[i] && grid[i].has(digit));
+                if (homes.length === 2) candidates.push({ line, homes, crosses: homes.map(crossOf) });
+            }
+
+            for (let a = 0; a < candidates.length; a++) {
+                for (let b = a + 1; b < candidates.length; b++) {
+                    const [first, second] = [candidates[a], candidates[b]];
+                    if (first.crosses[0] !== second.crosses[0] || first.crosses[1] !== second.crosses[1]) {
+                        continue;
+                    }
+
+                    const corners = [...first.homes, ...second.homes];
+                    const removals = [];
+                    for (const cross of first.crosses) {
+                        for (const cell of crossCells(cross)) {
+                            if (corners.includes(cell) || !grid[cell]) continue;
+                            if (grid[cell].has(digit)) removals.push({ cell, digit });
+                        }
+                    }
+                    if (removals.length === 0) continue;
+
+                    const other = orientation === 'row' ? 'columns' : 'rows';
+                    return {
+                        type: 'x-wing',
+                        removals,
+                        cells: corners,
+                        digits: [digit],
+                        reason: `${digit} forms an X-Wing across two ${orientation}s`,
+                        nudge: `In two ${orientation}s, ${digit} can only sit in the same two ${other}. `
+                            + `It must take opposite corners of that rectangle, so ${digit} leaves `
+                            + `the rest of those ${other}.`,
+                        evidence: [...corners, ...removals.map((r) => r.cell)],
+                    };
+                }
+            }
+        }
+    }
+    return null;
+}
+
 /** Apply an elimination to the grid. */
 export function applyRemovals(grid, removals) {
     for (const { cell, digit } of removals) {
@@ -209,7 +310,9 @@ export function applyRemovals(grid, removals) {
 
 /** Placements first, cheapest explanation first. */
 const PLACEMENTS = [findNakedSingle, findHiddenSingle];
-const ELIMINATIONS = [findNakedPair, findPointingPair];
+// Cheapest to explain first, so a hint never reaches for X-Wing when a pair
+// would do.
+const ELIMINATIONS = [findNakedPair, findPointingPair, findNakedTriple, findXWing];
 
 /**
  * The next step a person could take: a placement, reached directly or after the
