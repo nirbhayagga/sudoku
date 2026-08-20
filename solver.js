@@ -1,3 +1,4 @@
+/* exported SudokuSolver */
 /**
  * Sudoku Solver — Constraint Propagation + Backtracking (Norvig-style)
  *
@@ -5,6 +6,7 @@
  *   solveSudoku(boardStr)  →  { solution: string|null, timeMs: number }
  *   countSolutions(boardStr, limit)  →  number (capped at limit)
  *   validateSolution(solutionStr)  →  boolean
+ *   rateDifficulty(boardStr)  →  number (search nodes; 0 = pure logic)
  *   getInternals()  →  { squares, unitList, units, peers, DIGITS, parseGrid, assign, eliminate, search }
  */
 
@@ -163,6 +165,44 @@ const SudokuSolver = (() => {
         return count;
     }
 
+    /**
+     * How much guessing a puzzle needs beyond pure constraint propagation,
+     * measured as search nodes explored. 0 means logic alone cracks it.
+     *
+     * A far better difficulty signal than clue count: two puzzles with the same
+     * number of givens can differ by an order of magnitude here. Returns -1 for
+     * an invalid board.
+     */
+    function rateDifficulty(boardStr) {
+        const values = parseGrid(boardStr);
+        if (!values) return -1;
+
+        let nodes = 0;
+        function rate(vals) {
+            if (!vals) return null;
+            if (squares.every(s => vals[s].length === 1)) return vals;
+
+            let minLen = 10, minSquare = null;
+            for (const s of squares) {
+                const len = vals[s].length;
+                if (len > 1 && len < minLen) {
+                    minLen = len;
+                    minSquare = s;
+                }
+            }
+
+            for (const d of vals[minSquare]) {
+                nodes++;
+                const result = rate(assign(copyValues(vals), minSquare, d));
+                if (result) return result;
+            }
+            return null;
+        }
+
+        rate(values);
+        return nodes;
+    }
+
     // ── Public API ─────────────────────────────────────────────────────
 
     function solveSudoku(boardStr) {
@@ -193,5 +233,5 @@ const SudokuSolver = (() => {
         return { squares, unitList, units, peers, DIGITS, parseGrid, assign, eliminate, search, copyValues };
     }
 
-    return { solveSudoku, countSolutions, validateSolution, getInternals };
+    return { solveSudoku, countSolutions, validateSolution, rateDifficulty, getInternals };
 })();
