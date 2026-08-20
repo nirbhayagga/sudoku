@@ -15,7 +15,7 @@ Play sudoku puzzles with built-in hints, pencil marks, undo/redo, and more.
 - **Level selector** — Enter a specific level number or leave blank for a random puzzle
 - **Share a puzzle** — Copy a link to the board you are on: `?d=evil&level=42` for a bank puzzle, `?p=<81 digits>` for any grid, `?daily=YYYY-MM-DD` for a day. Opening one loads it straight away
 - **Daily puzzle** — One board a day, derived from the date so everyone gets the same one; difficulty ramps across the week and the leaderboard for that level compares like with like
-- **7 color themes** — Midnight, Sakura, Ocean, Forest, Arctic, Naruto, Wicked — saved in localStorage
+- **7 color themes** — Midnight, Sakura, Ocean, Forest, Arctic, Naruto, Wicked — saved in localStorage, all meeting WCAG AA contrast
 - **Digit highlighting** — Focus a cell and all matching digits glow across the board (works on both desktop and mobile)
 - **Numpad completion** — Completed digits (placed 9 times) are greyed/crossed out on the mobile numpad
 - **Pencil marks / Notes** — Toggle with `N`, type digits to add/remove candidate marks
@@ -91,7 +91,8 @@ sudoku_solver/
   eslint.config.js    Lint rules
   vitest.config.js    Test config
   scripts/generate-bank.js  Regenerate or reorder a difficulty tier
-  tests/              Test suite (438 tests)
+  scripts/check-contrast.js Audit (and fix) theme contrast
+  tests/              Test suite (451 tests)
 
   Dockerfile          Multi-stage build -> nginx-alpine
   nginx.conf.template Nginx config (envsubst at container start)
@@ -114,7 +115,7 @@ npm ci --prefix leaderboard-api # leaderboard deps, needed for its tests
 
 npm run dev      # Vite dev server at :8000 with hot reload, /api/ proxied to :3001
 npm run lint     # eslint
-npm test         # 438 tests
+npm test         # 451 tests
 npm run build    # produce dist/
 npm run check    # lint + test + build, what CI runs
 ```
@@ -142,6 +143,21 @@ write if any is not.
 recorded in leaderboard entries — so rewriting or reordering a tier invalidates
 existing scores for it.
 
+### Theme contrast
+
+```bash
+node scripts/check-contrast.js         # report
+node scripts/check-contrast.js --fix   # adjust failing colours in place
+```
+
+Every theme is checked against WCAG AA (4.5:1) and a test fails the build if one
+slips. `--fix` walks a colour's lightness while preserving hue and saturation, so
+fixes are the smallest change that passes and the theme still looks like itself.
+
+`--accent` is the saturated brand colour used for borders and glows;
+`--accent-text` is its readable counterpart and the only one allowed as a text
+colour.
+
 ### Tests
 
 | File | Covers |
@@ -155,6 +171,9 @@ existing scores for it.
 | `tests/service-worker.test.js` | Precache manifest, cache lifecycle, and every fetch strategy |
 | `tests/format.test.js` | Time formatting and HTML escaping |
 | `tests/storage.test.js` | Persistence, including when storage throws |
+| `tests/contrast.test.js` | WCAG AA contrast for every theme |
+| `tests/daily.test.js` | Deterministic puzzle of the day |
+| `tests/share.test.js` | Link building and parsing |
 
 ```bash
 npx vitest run tests/solver.test.js      # one file
