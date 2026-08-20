@@ -20,7 +20,11 @@ export const API_BASE = (() => {
         return window.SUDOKU_API_BASE.replace(/\/$/, '');
     }
     if (window.location.protocol === 'file:') return 'http://localhost:3001';
-    return '';
+
+    // Same origin, but relative to the page rather than the domain root: a
+    // project site served from /sudoku/ must probe /sudoku/api/, and an
+    // absolute /api/ would miss a proxy mounted alongside the app.
+    return new URL('.', window.location.href).href.replace(/\/$/, '');
 })();
 
 const HEALTH_TIMEOUT_MS = 2000;

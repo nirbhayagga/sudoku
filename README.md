@@ -103,6 +103,7 @@ sudoku/
   vitest.config.js    Test config
   scripts/generate-bank.js  Regenerate or reorder a difficulty tier
   scripts/check-contrast.js Audit (and fix) theme contrast
+  scripts/serve-subpath.js  Serve dist/ one level down, as Pages does
   tests/              Test suite (510 tests + 60 end-to-end)
 
   Dockerfile          Multi-stage build -> nginx-alpine
@@ -349,6 +350,12 @@ Container environment:
 
 ### Static hosting
 
+A project site on GitHub Pages is served from `/<repo>/`, not the domain root.
+The build uses relative asset paths so this works unchanged, and the Playwright
+`subpath` project serves the real build one directory down and drives it — asset
+paths, manifest, icons, service worker scope and share links all verified there,
+because an absolute path anywhere would work locally and 404 in production.
+
 `npm run build` produces `dist/`, which any static host can serve. The generated
 `public/_headers` is copied into `dist/` and sets long-lived caching for hashed assets and no-cache for
 `index.html`; Cloudflare Pages and Netlify both read it.
@@ -357,7 +364,7 @@ Container environment:
 |---|---|
 | **Cloudflare Pages** | Build command `npm run build`, output directory `dist` |
 | **Netlify** | `netlify.toml` is committed — connect the repo |
-| **GitHub Pages** | `.github/workflows/pages.yml` deploys on push to `main` |
+| **GitHub Pages** | `.github/workflows/pages.yml` deploys on push to `main`, gated on lint and tests |
 | **S3 / any nginx** | Upload `dist/`; mirror the `public/_headers` rules in your config |
 
 A static deployment has no backend, so the leaderboard hides itself. To keep it,
