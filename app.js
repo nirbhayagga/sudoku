@@ -111,12 +111,24 @@
     let saveTimeout = null;
     let timerPaused = false;
 
+    // Level actually being played. Captured when the game starts because
+    // #level-input stays editable afterwards — reading it at submit time
+    // attributed scores to whatever number happened to be in the box.
+    let currentLevel = null;
+
+    /**
+     * While paused the timer is frozen and the grid is blurred, so accepting
+     * input would let a player solve at leisure and submit a near-zero time.
+     */
+    function isPlayBlocked() {
+        return mode === 'play' && timerPaused;
+    }
+
     // Mobile detection
     const isTouchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
 
     // Numpad elements
     const numpadEl = document.getElementById('numpad');
-    const numpadNotesBtn = document.getElementById('numpad-notes');
 
     const SOLVER_ALL_PUZZLES = ALL_PUZZLES.slice();
 
@@ -194,6 +206,11 @@
         const input = inputs[idx];
         const val = input.value;
 
+        if (isPlayBlocked()) {
+            input.value = currentPuzzle && currentPuzzle[idx] !== '0' ? currentPuzzle[idx] : '';
+            return;
+        }
+
         if (!/^[1-9]$/.test(val)) {
             input.value = '';
             return;
@@ -252,6 +269,12 @@
         const row = Math.floor(idx / 9);
         const col = idx % 9;
         const isLocked = mode === 'play' && wrappers[idx].classList.contains('locked');
+
+        // Arrow keys still navigate while paused; nothing may change the board.
+        if (isPlayBlocked() && !e.key.startsWith('Arrow') && e.key !== 'Tab') {
+            e.preventDefault();
+            return;
+        }
 
         // Prevent editing locked cells
         if (isLocked && (/^[0-9]$/.test(e.key) || e.key === 'Backspace' || e.key === 'Delete')) {
@@ -605,6 +628,7 @@
     }
 
     function doUndo() {
+        if (isPlayBlocked()) return;
         if (undoStack.length === 0 || !gameActive) return;
         const action = undoStack.pop();
         redoStack.push(action);
@@ -627,6 +651,7 @@
     }
 
     function doRedo() {
+        if (isPlayBlocked()) return;
         if (redoStack.length === 0 || !gameActive) return;
         const action = redoStack.pop();
         undoStack.push(action);
@@ -849,11 +874,10 @@
                 puzzle = pick.puzzle;
 
                 // Update level input to show the randomly chosen level
-                if (levelInput) {
-                    const actualIndex = bankList.findIndex(p => p.id === pick.id);
-                    if (actualIndex !== -1) {
-                        levelInput.value = actualIndex + 1;
-                    }
+                const actualIndex = bankList.findIndex(p => p.id === pick.id);
+                currentLevel = actualIndex !== -1 ? actualIndex + 1 : null;
+                if (levelInput && currentLevel !== null) {
+                    levelInput.value = currentLevel;
                 }
 
                 // Solve to get solution
@@ -862,7 +886,9 @@
             }
 
             // ── FALLBACK: generator (Easy–Evil only, never Nightmare) ────
+            // A generated puzzle has no bank level, so scores carry none.
             if (!puzzle && currentDifficulty !== 'nightmare') {
+                currentLevel = null;
                 try {
                     const result = SudokuGenerator.generate(currentDifficulty);
                     if (result && result.puzzle && result.solution) {
@@ -940,6 +966,7 @@
 
     // ── Hints ──────────────────────────────────────────────────────────
     function giveHint() {
+        if (isPlayBlocked()) return;
         if (!gameActive || !currentSolution || gameWon) return;
 
         const emptyCells = [];
@@ -976,6 +1003,7 @@
 
     // ── Error Checking ─────────────────────────────────────────────────
     function checkErrors() {
+        if (isPlayBlocked()) return;
         if (!gameActive || !currentSolution || gameWon) return;
 
         let errorCount = 0;
@@ -1098,6 +1126,7 @@
             notes: cellNotes.map(s => [...s]),
             timerSeconds,
             hintsUsed,
+            level: currentLevel,
             lockedCells: Array.from({ length: 81 }, (_, i) => wrappers[i].classList.contains('locked')),
             hintCells: Array.from({ length: 81 }, (_, i) => wrappers[i].classList.contains('hint')),
             timestamp: Date.now(),
@@ -1124,6 +1153,7 @@
         currentPuzzle = state.puzzle;
         currentSolution = state.solution;
         currentDifficulty = state.difficulty;
+        currentLevel = state.level ?? null;
         timerSeconds = state.timerSeconds || 0;
         hintsUsed = state.hintsUsed || 0;
         gameWon = false;
@@ -1462,6 +1492,7 @@
     // ══════════════════════════════════════════════════════════════════
 
     function handleNumpadInput(digit) {
+        if (isPlayBlocked()) return;
         // Use lastTouchedIdx as fallback — focusedIdx is -1 after blur on mobile
         const idx = focusedIdx >= 0 ? focusedIdx : lastTouchedIdx;
         if (idx < 0) return;
@@ -1623,8 +1654,16 @@
     //  LEADERBOARD (graceful degradation)
     // ══════════════════════════════════════════════════════════════════
 
-    // Detect API base: in Docker, nginx proxies /api/. For local dev, use localhost:3001.
+    // Detect API base, in priority order:
+    //   1. window.SUDOKU_API_BASE — injected by build.js from $SUDOKU_API_BASE.
+    //      Lets a static deployment (Cloudflare Pages, GitHub Pages, S3) talk to
+    //      a leaderboard hosted somewhere else. Requires CORS_ORIGIN on the API.
+    //   2. file:// — a local dev leaderboard on the default port.
+    //   3. Same origin — the Docker setup, where nginx proxies /api/.
     const API_BASE = (() => {
+        if (typeof window.SUDOKU_API_BASE === 'string') {
+            return window.SUDOKU_API_BASE.replace(/\/$/, '');
+        }
         if (window.location.protocol === 'file:') return 'http://localhost:3001';
         return '';
     })();
@@ -1686,12 +1725,15 @@
             <tbody>`;
         entries.forEach((e, i) => {
             const date = new Date(e.date).toLocaleDateString();
+            // Everything is escaped, including the numeric fields: the API is
+            // the only thing validating them and this is built with innerHTML,
+            // so defence in depth costs nothing here.
             html += `<tr>
                 <td>${i + 1}</td>
                 <td>${escapeHtml(e.name)}</td>
-                <td>${formatTime(e.time)}</td>
-                <td>${e.hints || 0}</td>
-                <td>${date}</td>
+                <td>${escapeHtml(formatTime(Number(e.time) || 0))}</td>
+                <td>${escapeHtml(String(Number(e.hints) || 0))}</td>
+                <td>${escapeHtml(date)}</td>
             </tr>`;
         });
         html += '</tbody></table>';
@@ -1751,8 +1793,7 @@
             btnWinSubmit.disabled = true;
             btnWinSubmit.textContent = 'Submitting...';
 
-            const levelVal = levelInput ? parseInt(levelInput.value, 10) : null;
-            const result = await submitScore(name, currentDifficulty, timerSeconds, hintsUsed, levelVal);
+            const result = await submitScore(name, currentDifficulty, timerSeconds, hintsUsed, currentLevel);
 
             if (result && result.rank) {
                 btnWinSubmit.textContent = `Rank #${result.rank}!`;
@@ -1776,6 +1817,26 @@
             winNameInput.style.borderColor = '';
         });
     }
+
+    // ── Save on the way out ────────────────────────────────────────────
+    // saveGame() is debounced by 2s, so up to two seconds of play was lost
+    // whenever a tab was closed or a phone backgrounded the app — which iOS
+    // does aggressively, and it may never resume the page afterwards.
+    function flushSave() {
+        if (saveTimeout) {
+            clearTimeout(saveTimeout);
+            saveTimeout = null;
+        }
+        saveGame();
+    }
+
+    // visibilitychange is the reliable one on mobile; pagehide covers desktop
+    // navigation. 'beforeunload' is deliberately not used — it is unreliable on
+    // iOS and can block bfcache.
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden') flushSave();
+    });
+    window.addEventListener('pagehide', flushSave);
 
     // ══════════════════════════════════════════════════════════════════
     //  INIT
