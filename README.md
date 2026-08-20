@@ -189,12 +189,18 @@ colour.
 npx vitest run tests/solver.test.js      # one file
 npx vitest -t "detects a completed"      # one test by name
 npm run test:watch                       # watch mode
+npm run test:coverage                    # coverage for the non-DOM modules
 FULL_BANK_CHECK=1 npm test               # verify all 5,500 puzzles, not a sample
 ```
 
 By default the bank suite checks a deterministic 100-puzzle sample per
 difficulty (~1s). `FULL_BANK_CHECK=1` verifies every puzzle (~10s) and is what
 CI runs.
+
+Coverage covers the modules that can be imported directly (97%+). `app.js` and
+the DOM modules are excluded on purpose: they are exercised through jsdom by way
+of an esbuild bundle, which coverage cannot instrument, so including them would
+report 0% for the most heavily tested code in the project.
 
 Unit tests import the modules directly. UI tests use `tests/helpers/boot-app.js`,
 which bundles the app in-memory with esbuild and runs it against the real

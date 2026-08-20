@@ -19,6 +19,7 @@
     "build:all": "npm run build && npm run build:standalone"
   },
   "devDependencies": {
+    "@vitest/coverage-v8": "^3.2.7",
     "esbuild": "^0.25.0",
     "eslint": "^9.18.0",
     "globals": "^15.14.0",
