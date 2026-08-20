@@ -86,11 +86,18 @@ describe('build output', () => {
         expect(fs.existsSync(path.join(dist, '_headers'))).toBe(true);
     });
 
+    it('emits the service worker and PWA assets', () => {
+        expect(fs.existsSync(path.join(dist, 'sw.js'))).toBe(true);
+        expect(fs.existsSync(path.join(dist, 'manifest.webmanifest'))).toBe(true);
+        expect(fs.existsSync(path.join(dist, 'icons/icon-192.png'))).toBe(true);
+    });
+
     // A payload budget, so bloat has to be a deliberate decision. The bank
     // dominates: 5,500 puzzles of 81 characters is ~435 kB of irreducible data.
     it('stays within the gzipped payload budget', () => {
-        const total = assetsOf(dist).reduce(
-            (n, f) => n + gzipSync(fs.readFileSync(path.join(dist, 'assets', f))).length,
+        const assets = assetsOf(dist).map((f) => path.join(dist, 'assets', f));
+        const total = [...assets, path.join(dist, 'sw.js')].reduce(
+            (n, f) => n + gzipSync(fs.readFileSync(f)).length,
             0
         );
         expect(total).toBeLessThan(150 * 1024);

@@ -1,0 +1,19 @@
+{
+  "name": "Sudoku",
+  "short_name": "Sudoku",
+  "description": "Sudoku player and solver with 5,500 puzzles across six difficulties.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0a0a0f",
+  "theme_color": "#0a0a0f",
+  "categories": ["games", "puzzle"],
+  "icons": [
+    { "src": "./icons/icon.svg", "type": "image/svg+xml", "sizes": "any" },
+    { "src": "./icons/icon-192.png", "type": "image/png", "sizes": "192x192" },
+    { "src": "./icons/icon-512.png", "type": "image/png", "sizes": "512x512" },
+    { "src": "./icons/icon-maskable-192.png", "type": "image/png", "sizes": "192x192", "purpose": "maskable" },
+    { "src": "./icons/icon-maskable-512.png", "type": "image/png", "sizes": "512x512", "purpose": "maskable" }
+  ]
+}

@@ -1,5 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import fs from 'node:fs';
+import path from 'node:path';
 import { bootApp } from './helpers/boot-app.js';
+import { repoRoot } from './helpers/paths.js';
 import { SudokuSolver } from '../solver.js';
 import { PUZZLES } from '../puzzle-bank.js';
 
@@ -830,5 +833,64 @@ describe('accessibility', () => {
             app.click('#btn-paste');
             expect(app.$('#import-error').textContent).toBe('');
         });
+    });
+});
+
+describe('progressive web app', () => {
+    it('links the manifest and icons', () => {
+        expect(app.$('link[rel="manifest"]')).not.toBeNull();
+        expect(app.$('link[rel="apple-touch-icon"]')).not.toBeNull();
+        expect(app.$('link[rel="icon"][type="image/svg+xml"]')).not.toBeNull();
+    });
+
+    it('points every icon link at a file that exists', () => {
+        const links = [
+            ...app.$$('link[rel="icon"]'),
+            ...app.$$('link[rel="apple-touch-icon"]'),
+            ...app.$$('link[rel="manifest"]'),
+        ];
+        expect(links.length).toBeGreaterThan(0);
+        for (const link of links) {
+            const href = link.getAttribute('href').replace(/^\.\//, '');
+            expect(fs.existsSync(path.join(repoRoot, 'public', href)), href).toBe(true);
+        }
+    });
+
+    it('registers a service worker over http', async () => {
+        const registered = [];
+        const withSW = await bootApp({
+            serviceWorker: {
+                register: (url, opts) => {
+                    registered.push({ url: String(url), opts });
+                    return Promise.resolve();
+                },
+            },
+        });
+        // jsdom fires 'load' itself once the document settles; dispatching one
+        // by hand here would double-register and hide that.
+        await withSW.tick(20);
+
+        expect(registered).toHaveLength(1);
+        expect(registered[0].url).toMatch(/sw\.js$/);
+        expect(registered[0].opts.scope).toBe('./');
+        withSW.close();
+    });
+
+    it('survives a registration that rejects', async () => {
+        const withSW = await bootApp({
+            serviceWorker: { register: () => Promise.reject(new Error('denied')) },
+        });
+        await withSW.tick(20);
+
+        // Offline support is a bonus; losing it must never affect the game.
+        expect(withSW.cells()).toHaveLength(81);
+        withSW.close();
+    });
+
+    it('does not break when service workers are unavailable', () => {
+        // Safari in private mode, older browsers, and file:// all land here.
+        expect(app.window.navigator.serviceWorker).toBeUndefined();
+        expect(() => app.window.dispatchEvent(new app.window.Event('load'))).not.toThrow();
+        expect(app.cells()).toHaveLength(81);
     });
 });

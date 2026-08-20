@@ -33,7 +33,7 @@ function appBundle() {
     return bundledApp;
 }
 
-export async function bootApp({ localStorage: seed = {} } = {}) {
+export async function bootApp({ localStorage: seed = {}, serviceWorker = null } = {}) {
     // Swallow the expected "fetch is not defined" noise, surface real errors.
     const virtualConsole = new VirtualConsole();
     virtualConsole.on('jsdomError', (err) => {
@@ -54,6 +54,15 @@ export async function bootApp({ localStorage: seed = {} } = {}) {
     // Seeded before the scripts run, since app.js reads localStorage on init.
     for (const [key, value] of Object.entries(seed)) {
         dom.window.localStorage.setItem(key, value);
+    }
+
+    // Must exist before the app runs: registration is guarded by a
+    // `'serviceWorker' in navigator` check evaluated at startup.
+    if (serviceWorker) {
+        Object.defineProperty(dom.window.navigator, 'serviceWorker', {
+            value: serviceWorker,
+            configurable: true,
+        });
     }
 
     dom.window.eval(appBundle());

@@ -28,6 +28,7 @@ Play sudoku puzzles with built-in hints, pencil marks, undo/redo, and more.
 - **Leaderboard** — Submit scores to a self-hosted leaderboard (optional; app works fine without it)
 - **Mobile optimized** — On-screen numpad, touch-friendly 44px targets, no virtual keyboard popup, safe-area-inset support for iPhone notch/Dynamic Island, landscape mode handling
 - **Pause** — Freezes the timer, blurs the grid, and blocks all input until resumed
+- **Installable / offline** — Add to home screen and play with no network
 - **Force Update** — Button in theme dropdown to reload with cache-busting
 
 ### Solver Mode
@@ -73,11 +74,12 @@ sudoku_solver/
   app.js              UI controller (modes, themes, notes, undo, stats, save)
 
   vite.config.js      Build config — minified, content-hashed dist/
+  sw-template.js      Service worker source (asset list injected at build)
+  public/             Copied verbatim into dist/ — manifest, icons, _headers
   eslint.config.js    Lint rules
   vitest.config.js    Test config
-  public/_headers     Cache rules, copied verbatim into dist/
   scripts/generate-bank.js  Regenerate or reorder a difficulty tier
-  tests/              Test suite (251 tests)
+  tests/              Test suite (278 tests)
 
   Dockerfile          Multi-stage build -> nginx-alpine
   nginx.conf.template Nginx config (envsubst at container start)
@@ -100,7 +102,7 @@ npm ci --prefix leaderboard-api # leaderboard deps, needed for its tests
 
 npm run dev      # Vite dev server at :8000 with hot reload, /api/ proxied to :3001
 npm run lint     # eslint
-npm test         # 251 tests
+npm test         # 278 tests
 npm run build    # produce dist/
 npm run check    # lint + test + build, what CI runs
 ```
@@ -138,6 +140,7 @@ existing scores for it.
 | `tests/app.dom.test.js` | Full UI in jsdom — play, solver, notes, hints, undo, save/resume, themes |
 | `tests/leaderboard-api.test.js` | API routes, validation, sanitisation, rate limiting |
 | `tests/build.test.js` | Build output shape, determinism, and that the bundle still runs |
+| `tests/service-worker.test.js` | Precache manifest, cache lifecycle, and every fetch strategy |
 
 ```bash
 npx vitest run tests/solver.test.js      # one file
@@ -300,6 +303,29 @@ Set the same value as an environment variable in the host's dashboard (or as the
 ```bash
 CORS_ORIGIN=https://sudoku.example.com node server.js
 ```
+
+## Offline / Install
+
+The app is a PWA: it installs to a home screen and plays with no network.
+
+`sw-template.js` is the service worker source; the `pwa()` plugin in
+`vite.config.js` reads the finished `dist/` and writes `dist/sw.js` with the
+precache list and a cache version derived from the file names. Nothing is
+hardcoded, so new icons or assets are picked up automatically.
+
+The caching rules, and the reasoning:
+
+| Request | Strategy | Why |
+|---|---|---|
+| Navigations | Network first, cache fallback | A stale document would pin clients to old asset hashes, and a bad deploy could not be fixed by reloading |
+| Hashed assets | Cache first | The filename changes whenever the bytes do, so a cached copy is never wrong |
+| `/api/` | Never cached | Cached scores would be replayed, and a cached health check would report a backend that is down as available |
+
+`sw.js` itself is served `no-cache` (in both `nginx.conf.template` and
+`public/_headers`) — a cached service worker cannot be replaced.
+
+There is no service worker in development; `npm run dev` serves none, so there
+is nothing to unregister while iterating.
 
 ## Continuous Integration
 
