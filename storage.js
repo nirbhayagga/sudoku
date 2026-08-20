@@ -8,6 +8,7 @@
  */
 
 const SAVE_KEY = 'sudoku_saved_game';
+const STREAK_KEY = 'sudoku_streak';
 const STATS_KEY = 'sudoku_stats';
 const THEME_KEY = 'sudoku-theme';
 const NAME_KEY = 'sudoku-player-name';
@@ -45,7 +46,64 @@ export const deleteSavedGame = () => remove(SAVE_KEY);
 // ── Stats ──────────────────────────────────────────────────────────────
 export const getStats = () => readJson(STATS_KEY, {}) || {};
 export const saveStats = (stats) => writeJson(STATS_KEY, stats);
-export const resetStats = () => remove(STATS_KEY);
+export const resetStats = () => {
+    remove(STATS_KEY);
+    remove(STREAK_KEY);
+};
+
+/** Local calendar day as YYYY-MM-DD. Streaks follow the player's own days. */
+export function dayKey(date = new Date()) {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+}
+
+const emptyStreak = () => ({ current: 0, best: 0, lastWin: null });
+
+export const getStreak = () => readJson(STREAK_KEY, emptyStreak()) || emptyStreak();
+
+/**
+ * Advance the daily streak for a win on `date`.
+ *
+ * Several wins on one day count once — the streak measures days returned to,
+ * not games played. A gap of more than a day restarts it.
+ */
+export function recordStreak(date = new Date()) {
+    const streak = getStreak();
+    const today = dayKey(date);
+
+    if (streak.lastWin === today) return streak; // already counted today
+
+    const yesterday = new Date(date);
+    yesterday.setDate(yesterday.getDate() - 1);
+
+    streak.current = streak.lastWin === dayKey(yesterday) ? streak.current + 1 : 1;
+    streak.best = Math.max(streak.best || 0, streak.current);
+    streak.lastWin = today;
+
+    writeJson(STREAK_KEY, streak);
+    return streak;
+}
+
+/**
+ * Note that a game was started, which is what makes a win rate meaningful.
+ * Previously only wins were counted, so "played" and "won" were the same number.
+ */
+export function recordStart(difficulty) {
+    const stats = getStats();
+    if (!stats[difficulty]) stats[difficulty] = blankEntry();
+    stats[difficulty].started = (stats[difficulty].started || 0) + 1;
+    saveStats(stats);
+    return stats;
+}
+
+function blankEntry() {
+    return {
+        started: 0, played: 0, won: 0, bestTime: null,
+        totalTime: 0, totalHints: 0, autoNotesGames: 0,
+    };
+}
 
 /**
  * Record a completed game and return the updated stats.
@@ -54,17 +112,16 @@ export const resetStats = () => remove(STATS_KEY);
  * both are assists, but a hint reveals an answer while auto-notes only does
  * bookkeeping, so conflating them would misreport how a game was played.
  */
-export function recordWin(difficulty, timeSeconds, hints, autoNotes = false) {
+export function recordWin(difficulty, timeSeconds, hints, autoNotes = false, date = new Date()) {
     const stats = getStats();
-    if (!stats[difficulty]) {
-        stats[difficulty] = {
-            played: 0, won: 0, bestTime: null, totalTime: 0, totalHints: 0, autoNotesGames: 0,
-        };
-    }
+    if (!stats[difficulty]) stats[difficulty] = blankEntry();
 
     const entry = stats[difficulty];
     entry.played++;
     entry.won++;
+    // Stats saved before starts were tracked would otherwise show a win rate
+    // above 100%.
+    if ((entry.started || 0) < entry.won) entry.started = entry.won;
     entry.totalTime += timeSeconds;
     entry.totalHints += hints;
     // Older saved stats predate this field.
@@ -74,7 +131,29 @@ export function recordWin(difficulty, timeSeconds, hints, autoNotes = false) {
     }
 
     saveStats(stats);
+    recordStreak(date);
     return stats;
+}
+
+/** Totals across every difficulty, plus the streak. */
+export function getSummary() {
+    const stats = getStats();
+    const totals = { started: 0, won: 0, totalTime: 0, totalHints: 0, autoNotesGames: 0 };
+
+    for (const entry of Object.values(stats)) {
+        if (!entry || typeof entry !== 'object') continue;
+        totals.started += entry.started || entry.won || 0;
+        totals.won += entry.won || 0;
+        totals.totalTime += entry.totalTime || 0;
+        totals.totalHints += entry.totalHints || 0;
+        totals.autoNotesGames += entry.autoNotesGames || 0;
+    }
+
+    return {
+        ...totals,
+        winRate: totals.started ? totals.won / totals.started : 0,
+        streak: getStreak(),
+    };
 }
 
 // ── Preferences ────────────────────────────────────────────────────────

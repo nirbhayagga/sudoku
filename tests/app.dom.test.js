@@ -1279,3 +1279,66 @@ describe('auto-notes', () => {
         expect(app.$('#btn-auto-notes').textContent).toBe('Auto: ON');
     });
 });
+
+describe('stats display', () => {
+    it('says nothing has been played before any game', () => {
+        app.click('#btn-stats');
+        expect(app.$('#stats-content').textContent).toMatch(/no games played/i);
+    });
+
+    it('counts a started game even if it is not finished', async () => {
+        await startGame(app);
+        app.click('#btn-stats');
+        const stats = JSON.parse(app.window.localStorage.getItem('sudoku_stats'));
+        expect(stats.easy.started).toBe(1);
+        expect(stats.easy.won).toBe(0);
+    });
+
+    it('shows a win rate below 100% for abandoned games', async () => {
+        await startGame(app);
+        await startGame(app, 'easy', 2);
+        const second = PUZZLES.easy[1].puzzle;
+        completePuzzle(app, second, SudokuSolver.solveSudoku(second).solution);
+
+        app.click('#btn-stats');
+        const text = app.$('#stats-content').textContent;
+        expect(text).toMatch(/50%/);
+    });
+
+    it('shows the summary tiles', async () => {
+        await startGame(app);
+        completePuzzle(app);
+        app.click('#btn-stats');
+
+        const labels = app.$$('.stat-label').map((el) => el.textContent);
+        expect(labels).toEqual(
+            expect.arrayContaining(['Solved', 'Win rate', 'Day streak', 'Best streak', 'Time played'])
+        );
+    });
+
+    it('starts a day streak on a first win', async () => {
+        await startGame(app);
+        completePuzzle(app);
+        app.click('#btn-stats');
+        expect(JSON.parse(app.window.localStorage.getItem('sudoku_streak')).current).toBe(1);
+    });
+
+    it('reports auto-notes games in the table', async () => {
+        await startGame(app);
+        app.click('#btn-auto-notes');
+        completePuzzle(app);
+        app.click('#btn-stats');
+
+        const headers = app.$$('.stats-table th').map((th) => th.textContent);
+        expect(headers).toContain('Auto');
+    });
+
+    it('clears everything on reset', async () => {
+        await startGame(app);
+        completePuzzle(app);
+        app.click('#btn-stats');
+        app.click('#btn-stats-reset');
+        expect(app.window.localStorage.getItem('sudoku_stats')).toBeNull();
+        expect(app.window.localStorage.getItem('sudoku_streak')).toBeNull();
+    });
+});

@@ -181,3 +181,105 @@ describe('auto-notes in stats', () => {
         expect(store.recordWin('easy', 80, 0, true).easy.autoNotesGames).toBe(1);
     });
 });
+
+describe('starts and win rate', () => {
+    it('counts a start without a win', () => {
+        store.recordStart('easy');
+        expect(store.getStats().easy.started).toBe(1);
+        expect(store.getStats().easy.won).toBe(0);
+    });
+
+    // Previously `played` only moved on a win, so the win rate was always 100%.
+    it('computes a win rate from starts, not wins', () => {
+        store.recordStart('easy');
+        store.recordStart('easy');
+        store.recordStart('easy');
+        store.recordWin('easy', 100, 0);
+        expect(store.getSummary().winRate).toBeCloseTo(1 / 3);
+    });
+
+    it('reports a zero win rate before anything is solved', () => {
+        store.recordStart('easy');
+        expect(store.getSummary().winRate).toBe(0);
+    });
+
+    it('never exceeds 100% for stats saved before starts were tracked', () => {
+        localStorage.setItem('sudoku_stats', JSON.stringify({
+            easy: { played: 4, won: 4, bestTime: 60, totalTime: 400, totalHints: 0 },
+        }));
+        store.recordWin('easy', 50, 0);
+        expect(store.getSummary().winRate).toBeLessThanOrEqual(1);
+    });
+
+    it('totals across difficulties', () => {
+        store.recordStart('easy');
+        store.recordWin('easy', 100, 1);
+        store.recordStart('evil');
+        store.recordWin('evil', 500, 2);
+        const summary = store.getSummary();
+        expect(summary.won).toBe(2);
+        expect(summary.totalTime).toBe(600);
+        expect(summary.totalHints).toBe(3);
+    });
+});
+
+describe('daily streak', () => {
+    const at = (iso) => new Date(`${iso}T12:00:00`);
+
+    it('starts at one on a first win', () => {
+        expect(store.recordWin('easy', 60, 0, false, at('2026-03-01')).easy.won).toBe(1);
+        expect(store.getStreak()).toMatchObject({ current: 1, best: 1, lastWin: '2026-03-01' });
+    });
+
+    it('extends across consecutive days', () => {
+        store.recordWin('easy', 60, 0, false, at('2026-03-01'));
+        store.recordWin('easy', 60, 0, false, at('2026-03-02'));
+        store.recordWin('easy', 60, 0, false, at('2026-03-03'));
+        expect(store.getStreak().current).toBe(3);
+    });
+
+    // A streak counts days returned to, not games played.
+    it('counts several wins in one day once', () => {
+        store.recordWin('easy', 60, 0, false, at('2026-03-01'));
+        store.recordWin('easy', 70, 0, false, at('2026-03-01'));
+        store.recordWin('easy', 80, 0, false, at('2026-03-01'));
+        expect(store.getStreak().current).toBe(1);
+    });
+
+    it('restarts after a missed day', () => {
+        store.recordWin('easy', 60, 0, false, at('2026-03-01'));
+        store.recordWin('easy', 60, 0, false, at('2026-03-02'));
+        store.recordWin('easy', 60, 0, false, at('2026-03-05'));
+        expect(store.getStreak().current).toBe(1);
+    });
+
+    it('remembers the best streak after one is broken', () => {
+        for (const day of ['01', '02', '03', '04']) {
+            store.recordWin('easy', 60, 0, false, at(`2026-03-${day}`));
+        }
+        store.recordWin('easy', 60, 0, false, at('2026-03-10'));
+        expect(store.getStreak()).toMatchObject({ current: 1, best: 4 });
+    });
+
+    it('handles a month boundary', () => {
+        store.recordWin('easy', 60, 0, false, at('2026-03-31'));
+        store.recordWin('easy', 60, 0, false, at('2026-04-01'));
+        expect(store.getStreak().current).toBe(2);
+    });
+
+    it('is cleared by a stats reset', () => {
+        store.recordWin('easy', 60, 0, false, at('2026-03-01'));
+        store.resetStats();
+        expect(store.getStreak()).toMatchObject({ current: 0, best: 0 });
+    });
+});
+
+describe('dayKey', () => {
+    it('formats a local calendar day', () => {
+        expect(store.dayKey(new Date(2026, 0, 5, 23, 30))).toBe('2026-01-05');
+    });
+
+    it('pads months and days', () => {
+        expect(store.dayKey(new Date(2026, 8, 9))).toBe('2026-09-09');
+    });
+});

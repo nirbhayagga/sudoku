@@ -25,7 +25,7 @@ Play sudoku puzzles with built-in hints, pencil marks, undo/redo, and more.
 - **Timer** — Counts up during gameplay
 - **Win detection** — Celebration overlay with your time and hint count
 - **Save / Resume** — Game auto-saves to localStorage; offers to resume on reload
-- **Stats** — Tracks games played, best time, and average time per difficulty
+- **Stats** — Games solved, win rate, daily streak, best and average time, hints and auto-notes used, per difficulty and overall
 - **Leaderboard** — Submit scores to a self-hosted leaderboard (optional; app works fine without it)
 - **Accessible** — Live-announced status, labelled cells, dialogs with focus trapping and Escape to close, pinch zoom enabled
 - **Mobile optimized** — On-screen numpad, touch-friendly 44px targets, no virtual keyboard popup, safe-area-inset support for iPhone notch/Dynamic Island, landscape mode handling
@@ -87,7 +87,7 @@ sudoku_solver/
   eslint.config.js    Lint rules
   vitest.config.js    Test config
   scripts/generate-bank.js  Regenerate or reorder a difficulty tier
-  tests/              Test suite (367 tests)
+  tests/              Test suite (388 tests)
 
   Dockerfile          Multi-stage build -> nginx-alpine
   nginx.conf.template Nginx config (envsubst at container start)
@@ -110,7 +110,7 @@ npm ci --prefix leaderboard-api # leaderboard deps, needed for its tests
 
 npm run dev      # Vite dev server at :8000 with hot reload, /api/ proxied to :3001
 npm run lint     # eslint
-npm test         # 367 tests
+npm test         # 388 tests
 npm run build    # produce dist/
 npm run check    # lint + test + build, what CI runs
 ```

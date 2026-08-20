@@ -1997,3 +1997,35 @@ kbd {
     color: var(--text-error);
     font-size: 0.9rem;
 }
+
+/* ── Stats summary tiles ──────────────────────────────────────────── */
+.stats-summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(84px, 1fr));
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.stat-tile {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.15rem;
+    padding: 0.6rem 0.4rem;
+    background: var(--bg-cell);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+}
+
+.stat-value {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--accent);
+    line-height: 1.1;
+}
+
+.stat-label {
+    font-size: 0.7rem;
+    color: var(--text-secondary);
+    text-align: center;
+}
