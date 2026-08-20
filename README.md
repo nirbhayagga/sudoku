@@ -69,7 +69,7 @@ sudoku_solver/
   style.css           Styles, themes, and animations
   solver.js           Constraint propagation + backtracking engine
   generator.js        Runtime puzzle generator with uniqueness verification
-  puzzle-bank.js      5,500 pre-generated puzzles across 6 difficulty levels
+  puzzle-bank.js      5,500 pre-generated puzzles (bare strings; ids derived at load)
   app.js              UI controller (modes, themes, notes, undo, stats, save)
 
   build.js            Optional build — minified, content-hashed dist/
@@ -77,7 +77,7 @@ sudoku_solver/
   vitest.config.js    Test config
   scripts/serve.js    Dependency-free dev server with /api/ proxy
   scripts/generate-bank.js  Regenerate or reorder a difficulty tier
-  tests/              Test suite (247 tests)
+  tests/              Test suite (248 tests)
 
   Dockerfile          Multi-stage build -> nginx-alpine
   nginx.conf.template Nginx config (envsubst at container start)
@@ -103,7 +103,7 @@ npm ci --prefix leaderboard-api # leaderboard deps, needed for its tests
 
 npm run dev      # serve the source tree at :8000, proxying /api/ to :3001
 npm run lint     # eslint
-npm test         # 247 tests
+npm test         # 248 tests
 npm run build    # produce dist/
 npm run check    # lint + test + build, what CI runs
 ```
