@@ -1,0 +1,25 @@
+{
+  "name": "sudoku",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Browser-based sudoku solver and player",
+  "type": "module",
+  "scripts": {
+    "build": "node build.js",
+    "serve": "node build.js && node scripts/serve.js dist",
+    "dev": "node scripts/serve.js .",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "check": "npm run lint && npm run test && npm run build"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0",
+    "eslint": "^9.18.0",
+    "globals": "^15.14.0",
+    "jsdom": "^26.0.0",
+    "vitest": "^3.0.0"
+  }
+}
