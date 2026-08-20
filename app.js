@@ -1889,4 +1889,16 @@ import { PUZZLES, ALL_PUZZLES, DIFFICULTY_LABELS } from './puzzle-bank.js';
     buildGrid();
     switchMode('play');
     checkLeaderboardHealth();
+
+    // ── Offline support ────────────────────────────────────────────────
+    // Registered only over http(s): service workers are unavailable on file://,
+    // and the dev server intentionally ships none, so failure here is normal and
+    // must never affect gameplay.
+    if ('serviceWorker' in navigator && window.location.protocol.startsWith('http')) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker
+                .register(new URL('sw.js', window.location.href), { scope: './' })
+                .catch(() => { /* offline support unavailable; the app still works */ });
+        });
+    }
 })();

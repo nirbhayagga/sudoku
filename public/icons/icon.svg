@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Sudoku">
+  <rect width="512" height="512" rx="112" fill="#0a0a0f"/>
+  <g transform="translate(96 96)">
+    <!-- Three filled cells suggest a partly solved grid; they stay legible at 48px. -->
+    <rect x="0"   y="0"   width="96" height="96" rx="10" fill="#6366f1"/>
+    <rect x="112" y="112" width="96" height="96" rx="10" fill="#6366f1" opacity="0.62"/>
+    <rect x="224" y="224" width="96" height="96" rx="10" fill="#6366f1" opacity="0.32"/>
+    <g fill="none" stroke="#6366f1" stroke-width="12" stroke-linejoin="round" opacity="0.9">
+      <rect x="0"   y="0"   width="320" height="320" rx="14"/>
+      <path d="M112 0v320M224 0v320M0 112h320M0 224h320"/>
+    </g>
+  </g>
+</svg>

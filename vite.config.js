@@ -1,4 +1,7 @@
 import { defineConfig } from 'vite';
+import { createHash } from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
 
 /**
  * Emit a build that still runs from the filesystem.
@@ -18,6 +21,62 @@ function classicScriptOutput() {
             return html
                 .replace(/\s+type="module"/g, '')
                 .replace(/\s+crossorigin/g, '');
+        },
+    };
+}
+
+/**
+ * Generate dist/sw.js with the built asset names baked in.
+ *
+ * Runs after the output directory is complete and reads it, rather than
+ * inspecting the rollup bundle: the extracted CSS is emitted too late to appear
+ * there, and everything copied from public/ never appears there at all. Reading
+ * the finished directory means new icons or static files are picked up with no
+ * change here.
+ *
+ * The file list doubles as the cache version, so a rebuild that changes nothing
+ * produces an identical service worker and clients are not churned needlessly.
+ */
+function pwa() {
+    let outDir;
+
+    /** Every emitted file, as paths relative to outDir. */
+    function walk(dir, base = '') {
+        return fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+            const rel = base ? `${base}/${entry.name}` : entry.name;
+            return entry.isDirectory()
+                ? walk(path.join(dir, entry.name), rel)
+                : [rel];
+        });
+    }
+
+    return {
+        name: 'pwa',
+        apply: 'build',
+        configResolved(config) {
+            outDir = path.resolve(config.root, config.build.outDir);
+        },
+        closeBundle() {
+            const files = walk(outDir)
+                // index.html is covered by './'; sw.js must not cache itself;
+                // _headers is a host directive with nothing to serve offline.
+                .filter((f) => !['index.html', 'sw.js', '_headers'].includes(f))
+                .sort()
+                .map((f) => `./${f}`);
+
+            const precache = ['./', ...files];
+            const version = createHash('sha256')
+                .update(precache.join('|'))
+                .digest('hex')
+                .slice(0, 12);
+
+            const template = fs.readFileSync(path.resolve('sw-template.js'), 'utf8');
+            fs.writeFileSync(
+                path.join(outDir, 'sw.js'),
+                template
+                    .replace('__CACHE_VERSION__', `sudoku-${version}`)
+                    .replace('__PRECACHE_MANIFEST__', JSON.stringify(precache, null, 4))
+            );
         },
     };
 }
@@ -48,7 +107,7 @@ export default defineConfig({
     // serves at /<repo>/) and from the filesystem.
     base: './',
 
-    plugins: [injectApiBase(), classicScriptOutput()],
+    plugins: [injectApiBase(), classicScriptOutput(), pwa()],
 
     server: {
         port: 8000,

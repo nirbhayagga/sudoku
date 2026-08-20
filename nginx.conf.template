@@ -26,6 +26,13 @@ server {
         add_header Referrer-Policy "strict-origin-when-cross-origin" always;
     }
 
+    # The service worker must never be cached: a stale copy keeps serving an old
+    # precache list, and clients cannot be moved off it.
+    location = /sw.js {
+        add_header Cache-Control "no-cache" always;
+        add_header X-Content-Type-Options "nosniff" always;
+    }
+
     # Built assets carry a content hash in their filename, so their bytes can
     # never change under a given name — safe to cache indefinitely.
     location /assets/ {
