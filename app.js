@@ -79,7 +79,6 @@ import { PUZZLES, ALL_PUZZLES, DIFFICULTY_LABELS } from './puzzle-bank.js';
     // Theme picker & Update
     const themeToggle = document.getElementById('theme-toggle');
     const themeDropdown = document.getElementById('theme-dropdown');
-    const btnUpdateApp = document.getElementById('btn-update-app');
 
     // ── Cell Data Structures ───────────────────────────────────────────
     // Each cell is a wrapper div containing an input and a notes grid
@@ -1676,19 +1675,6 @@ import { PUZZLES, ALL_PUZZLES, DIFFICULTY_LABELS } from './puzzle-bank.js';
     document.addEventListener('click', () => {
         themeDropdown.classList.remove('open');
     });
-
-    // Force Update / Refresh
-    if (btnUpdateApp) {
-        btnUpdateApp.addEventListener('click', (e) => {
-            e.stopPropagation();
-            if (confirm('Reload the app to get the latest version?')) {
-                // Add timestamp to query string to bypass cache
-                const url = new URL(window.location.href);
-                url.searchParams.set('v', Date.now());
-                window.location.href = url.toString();
-            }
-        });
-    }
 
     // Restore saved theme
     const savedTheme = localStorage.getItem('sudoku-theme') || 'midnight';
