@@ -1074,3 +1074,208 @@ describe('dialog accessibility', () => {
         });
     });
 });
+
+describe('auto-notes', () => {
+    /** Digits currently pencilled into a cell. */
+    const notesOf = (harness, idx) =>
+        [...harness.cells()[idx].querySelectorAll('.note-digit')]
+            .filter((n) => n.classList.contains('visible'))
+            .map((n) => n.dataset.digit)
+            .sort();
+
+    /** Digits a cell could legally hold, computed from the board independently. */
+    function legalDigits(board, idx) {
+        const row = Math.floor(idx / 9);
+        const col = idx % 9;
+        const boxRow = Math.floor(row / 3) * 3;
+        const boxCol = Math.floor(col / 3) * 3;
+        const used = new Set();
+        for (let c = 0; c < 9; c++) used.add(board[row * 9 + c]);
+        for (let r = 0; r < 9; r++) used.add(board[r * 9 + col]);
+        for (let r = boxRow; r < boxRow + 3; r++) {
+            for (let c = boxCol; c < boxCol + 3; c++) used.add(board[r * 9 + c]);
+        }
+        return ['1', '2', '3', '4', '5', '6', '7', '8', '9'].filter((d) => !used.has(d));
+    }
+
+    beforeEach(async () => {
+        await startGame(app);
+    });
+
+    it('is off by default', () => {
+        expect(app.$('#btn-auto-notes').textContent).toBe('Auto: OFF');
+        expect(app.$('#btn-auto-notes').getAttribute('aria-pressed')).toBe('false');
+    });
+
+    it('fills every empty cell when switched on', () => {
+        app.click('#btn-auto-notes');
+        for (let i = 0; i < 81; i++) {
+            if (EASY_PUZZLE[i] === '0') {
+                expect(notesOf(app, i).length, `cell ${i}`).toBeGreaterThan(0);
+            }
+        }
+    });
+
+    it('fills exactly the digits the board still allows', () => {
+        app.click('#btn-auto-notes');
+        for (let i = 0; i < 81; i++) {
+            if (EASY_PUZZLE[i] !== '0') continue;
+            expect(notesOf(app, i), `cell ${i}`).toEqual(legalDigits(EASY_PUZZLE, i).sort());
+        }
+    });
+
+    // The whole basis for treating this as bookkeeping rather than a hint: it
+    // is derived from the visible board, never from the solution.
+    it('does not reveal the solution', () => {
+        app.click('#btn-auto-notes');
+        const multiCandidate = [...Array(81).keys()]
+            .filter((i) => EASY_PUZZLE[i] === '0' && notesOf(app, i).length > 1);
+
+        // If it were leaking answers, every cell would show a single digit.
+        expect(multiCandidate.length).toBeGreaterThan(0);
+        for (const i of multiCandidate) {
+            expect(notesOf(app, i)).toContain(EASY_SOLUTION[i]);
+        }
+    });
+
+    it('leaves filled cells with no notes', () => {
+        app.click('#btn-auto-notes');
+        for (let i = 0; i < 81; i++) {
+            if (EASY_PUZZLE[i] !== '0') expect(notesOf(app, i), `given ${i}`).toEqual([]);
+        }
+    });
+
+    describe('staying current', () => {
+        it('removes a digit from its peers once placed', () => {
+            app.click('#btn-auto-notes');
+            const empty = EASY_PUZZLE.indexOf('0');
+            const digit = EASY_SOLUTION[empty];
+            const row = Math.floor(empty / 9);
+            const peer = [...Array(9).keys()]
+                .map((c) => row * 9 + c)
+                .find((i) => i !== empty && EASY_PUZZLE[i] === '0' && notesOf(app, i).includes(digit));
+
+            app.type(empty, digit);
+            if (peer !== undefined) expect(notesOf(app, peer)).not.toContain(digit);
+        });
+
+        // This is what a one-shot fill cannot do.
+        it('restores candidates when a digit is erased', () => {
+            app.click('#btn-auto-notes');
+            const empty = EASY_PUZZLE.indexOf('0');
+            const before = notesOf(app, empty);
+
+            app.type(empty, EASY_SOLUTION[empty]);
+            expect(notesOf(app, empty)).toEqual([]);
+
+            app.press(empty, 'Backspace');
+            expect(notesOf(app, empty)).toEqual(before);
+        });
+
+        it('recomputes after an undo', () => {
+            app.click('#btn-auto-notes');
+            const empty = EASY_PUZZLE.indexOf('0');
+            const before = notesOf(app, empty);
+
+            app.type(empty, EASY_SOLUTION[empty]);
+            app.click('#btn-undo');
+            expect(notesOf(app, empty)).toEqual(before);
+        });
+
+        it('recomputes after a hint', () => {
+            app.click('#btn-auto-notes');
+            app.click('#btn-hint');
+            const hinted = app.cells().findIndex((c) => c.classList.contains('hint'));
+            expect(notesOf(app, hinted)).toEqual([]);
+        });
+    });
+
+    describe('interaction with manual notes', () => {
+        it('turns notes mode off when switched on', () => {
+            app.click('#btn-notes-toggle');
+            expect(app.$('#btn-notes-toggle').textContent).toBe('Notes: ON');
+            app.click('#btn-auto-notes');
+            expect(app.$('#btn-notes-toggle').textContent).toBe('Notes: OFF');
+        });
+
+        it('refuses hand-edited notes while on, and says why', () => {
+            app.click('#btn-auto-notes');
+            const empty = EASY_PUZZLE.indexOf('0');
+            const before = notesOf(app, empty);
+
+            app.click('#btn-notes-toggle');
+            app.type(empty, '5');
+
+            expect(notesOf(app, empty)).toEqual(before);
+            expect(app.$('#status').textContent).toMatch(/auto-notes off/i);
+        });
+
+        it('hands the notes back when switched off', () => {
+            app.click('#btn-auto-notes');
+            const empty = EASY_PUZZLE.indexOf('0');
+            const computed = notesOf(app, empty);
+            app.click('#btn-auto-notes');
+            expect(app.$('#btn-auto-notes').textContent).toBe('Auto: OFF');
+
+            // The computed marks stay put and become editable again, so
+            // toggling one of them removes it and it does not come back.
+            app.click('#btn-notes-toggle');
+            app.type(empty, computed[0]);
+            expect(notesOf(app, empty)).not.toContain(computed[0]);
+
+            app.type(empty, computed[0]);
+            expect(notesOf(app, empty)).toContain(computed[0]);
+        });
+    });
+
+    describe('recording', () => {
+        it('is reported in the win summary', () => {
+            app.click('#btn-auto-notes');
+            completePuzzle(app);
+            expect(app.$('#win-details').textContent).toMatch(/auto-notes used/i);
+        });
+
+        it('is not reported when it was never used', () => {
+            completePuzzle(app);
+            expect(app.$('#win-details').textContent).not.toMatch(/auto-notes/i);
+        });
+
+        it('counts the game in stats', () => {
+            app.click('#btn-auto-notes');
+            completePuzzle(app);
+            const stats = JSON.parse(app.window.localStorage.getItem('sudoku_stats'));
+            expect(stats.easy.autoNotesGames).toBe(1);
+        });
+
+        // Switching it off partway through does not un-use it.
+        it('stays recorded after being switched off', () => {
+            app.click('#btn-auto-notes');
+            app.click('#btn-auto-notes');
+            completePuzzle(app);
+            expect(app.$('#win-details').textContent).toMatch(/auto-notes used/i);
+        });
+
+        it('survives save and resume', async () => {
+            app.click('#btn-auto-notes');
+            app.type(EASY_PUZZLE.indexOf('0'), EASY_SOLUTION[EASY_PUZZLE.indexOf('0')]);
+            app.window.dispatchEvent(new app.window.Event('pagehide'));
+
+            const saved = JSON.parse(app.window.localStorage.getItem('sudoku_saved_game'));
+            expect(saved.autoNotes).toBe(true);
+            expect(saved.autoNotesUsed).toBe(true);
+        });
+
+        it('resets for a new game', async () => {
+            app.click('#btn-auto-notes');
+            app.click('#btn-auto-notes');
+            await startGame(app, 'easy', 2);
+            completePuzzle(app, PUZZLES.easy[1].puzzle, SudokuSolver.solveSudoku(PUZZLES.easy[1].puzzle).solution);
+            expect(app.$('#win-details').textContent).not.toMatch(/auto-notes/i);
+        });
+    });
+
+    it('is reachable from the keyboard', () => {
+        app.press(EASY_PUZZLE.indexOf('0'), 'a');
+        expect(app.$('#btn-auto-notes').textContent).toBe('Auto: ON');
+    });
+});

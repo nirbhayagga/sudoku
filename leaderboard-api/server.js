@@ -89,7 +89,7 @@ const MAX_TIME_SECONDS = 24 * 60 * 60; // a day; anything beyond is bogus
 const MAX_HINTS = 81;
 
 app.post('/api/leaderboard', rateLimit, (req, res) => {
-    const { name, difficulty, time, hints, level } = req.body;
+    const { name, difficulty, time, hints, level, autoNotes } = req.body;
 
     if (!name || !difficulty || time === undefined) {
         return res.status(400).json({ error: 'Missing required fields: name, difficulty, time' });
@@ -130,6 +130,9 @@ app.post('/api/leaderboard', rateLimit, (req, res) => {
         time: Math.round(cleanTime),
         hints: cleanHints,
         level: cleanLevel,
+        // Auto-notes fills candidates automatically. It reveals no answers, but
+        // it removes the scanning work, so entries record whether it was on.
+        autoNotes: autoNotes === true,
         date: new Date().toISOString()
     };
 

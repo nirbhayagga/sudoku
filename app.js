@@ -62,6 +62,7 @@ function loadBank() {
     const btnUndo = document.getElementById('btn-undo');
     const btnRedo = document.getElementById('btn-redo');
     const btnNotesToggle = document.getElementById('btn-notes-toggle');
+    const btnAutoNotes = document.getElementById('btn-auto-notes');
     const btnPause = document.getElementById('btn-pause');
     const diffSelector = document.getElementById('difficulty-selector');
     const levelInput = document.getElementById('level-input');
@@ -126,6 +127,13 @@ function loadBank() {
     let timerSegmentStart = 0;
     let hintsUsed = 0;
     let notesMode = false;
+    // Auto-notes fills every empty cell with the digits its row, column and box
+    // still allow, and keeps them current as the board changes. It reveals no
+    // answers — it is derived purely from what is on the board, never from
+    // currentSolution — but it does remove the scanning work, so a game that
+    // used it is recorded as such alongside hints.
+    let autoNotes = false;
+    let autoNotesUsed = false;
     let focusedIdx = -1;
     let lastTouchedIdx = -1; // Persists through blur — used by numpad on mobile
 
@@ -276,6 +284,8 @@ function loadBank() {
             // Check conflicts
             highlightConflicts(idx);
 
+            refreshAutoNotes();
+
             // Check for win
             checkWin();
 
@@ -319,13 +329,18 @@ function loadBank() {
             case 'Delete':
                 e.preventDefault();
                 if (mode === 'play' && gameActive) {
-                    if (cellNotes[idx].size > 0) {
+                    // While auto-notes is on the marks are computed, not the
+                    // player's, so Delete only ever clears the value; clearing
+                    // them would just have them reappear on the next recompute.
+                    if (cellNotes[idx].size > 0 && !autoNotes) {
                         pushUndo(idx, inputs[idx].value, '', new Set(cellNotes[idx]), new Set());
                         clearCellNotes(idx);
                     } else if (inputs[idx].value) {
                         pushUndo(idx, inputs[idx].value, '', new Set(cellNotes[idx]), new Set());
                         inputs[idx].value = '';
                         clearConflictStyle(idx);
+                        // Erasing frees the digit for its peers again.
+                        refreshAutoNotes();
                     }
                     debounceSave();
                 } else if (mode === 'solver') {
@@ -385,6 +400,13 @@ function loadBank() {
                 if (mode === 'play' && !e.ctrlKey && !e.metaKey) {
                     e.preventDefault();
                     toggleNotesMode();
+                }
+                break;
+
+            case 'a': case 'A':
+                if (mode === 'play' && !e.ctrlKey && !e.metaKey) {
+                    e.preventDefault();
+                    setAutoNotes(!autoNotes);
                 }
                 break;
 
@@ -476,6 +498,10 @@ function loadBank() {
     }
 
     function toggleNote(idx, digit) {
+        if (autoNotes) {
+            setStatus('Turn auto-notes off to edit notes by hand');
+            return;
+        }
         const prevNotes = new Set(cellNotes[idx]);
         if (inputs[idx].value) return; // don't add notes to filled cells
 
@@ -487,6 +513,71 @@ function loadBank() {
 
         pushUndo(idx, '', '', prevNotes, new Set(cellNotes[idx]));
         renderNotes(idx);
+        debounceSave();
+    }
+
+    /**
+     * Digits still legal in a cell, given only what is currently on the board.
+     * Deliberately ignores the solution: this is bookkeeping a player could do
+     * by hand, not a hint.
+     */
+    function candidatesFor(board, idx) {
+        const row = Math.floor(idx / 9);
+        const col = idx % 9;
+        const boxRow = Math.floor(row / 3) * 3;
+        const boxCol = Math.floor(col / 3) * 3;
+
+        const used = new Set();
+        for (let c = 0; c < 9; c++) used.add(board[row * 9 + c]);
+        for (let r = 0; r < 9; r++) used.add(board[r * 9 + col]);
+        for (let r = boxRow; r < boxRow + 3; r++) {
+            for (let c = boxCol; c < boxCol + 3; c++) used.add(board[r * 9 + c]);
+        }
+
+        const candidates = new Set();
+        for (let d = 1; d <= 9; d++) {
+            const digit = String(d);
+            if (!used.has(digit)) candidates.add(digit);
+        }
+        return candidates;
+    }
+
+    /** Recompute every empty cell's notes. No-op unless auto-notes is on. */
+    function refreshAutoNotes() {
+        if (!autoNotes || mode !== 'play') return;
+
+        const board = readGrid();
+        for (let i = 0; i < 81; i++) {
+            if (board[i] !== '0') {
+                if (cellNotes[i].size) {
+                    cellNotes[i].clear();
+                    renderNotes(i);
+                }
+                continue;
+            }
+            cellNotes[i] = candidatesFor(board, i);
+            renderNotes(i);
+        }
+    }
+
+    function setAutoNotes(on) {
+        autoNotes = on;
+        if (on) {
+            autoNotesUsed = true;
+            // Manual notes would be overwritten on the next recompute, so the
+            // two modes are mutually exclusive.
+            if (notesMode) toggleNotesMode();
+            refreshAutoNotes();
+            setStatus('Auto-notes on — candidates update as you play');
+        } else {
+            setStatus('Auto-notes off — notes are yours to edit again');
+        }
+
+        if (btnAutoNotes) {
+            btnAutoNotes.textContent = `Auto: ${on ? 'ON' : 'OFF'}`;
+            btnAutoNotes.classList.toggle('notes-active', on);
+            btnAutoNotes.setAttribute('aria-pressed', String(on));
+        }
         debounceSave();
     }
 
@@ -670,6 +761,7 @@ function loadBank() {
         wrappers[action.idx].classList.remove('user-error', 'correct-check');
         recheckAllConflicts();
         updateNumpadCompletion();
+        refreshAutoNotes();
 
         // Move selection to the undone cell
         if (isTouchDevice) {
@@ -693,6 +785,7 @@ function loadBank() {
         wrappers[action.idx].classList.remove('user-error', 'correct-check');
         recheckAllConflicts();
         updateNumpadCompletion();
+        refreshAutoNotes();
 
         // Move selection to the redone cell
         if (isTouchDevice) {
@@ -897,6 +990,7 @@ function loadBank() {
     function startGame(difficulty) {
         currentDifficulty = difficulty || currentDifficulty;
         hintsUsed = 0;
+        autoNotesUsed = autoNotes; // carrying the mode over counts as using it
         gameWon = false;
         undoStack.length = 0;
         redoStack.length = 0;
@@ -1001,6 +1095,7 @@ function loadBank() {
                 }
             }
 
+            refreshAutoNotes();
             store.deleteSavedGame();
             debounceSave();
             updateNumpadCompletion();
@@ -1029,6 +1124,7 @@ function loadBank() {
 
         startTimer();
         setStatus('Puzzle reset');
+        refreshAutoNotes();
         debounceSave();
         updateNumpadCompletion();
     }
@@ -1066,6 +1162,7 @@ function loadBank() {
         setStatus(`Hint revealed (${hintsUsed} hint${hintsUsed > 1 ? 's' : ''} used)`);
 
         recheckAllConflicts();
+        refreshAutoNotes();
         checkWin();
         debounceSave();
     }
@@ -1121,13 +1218,14 @@ function loadBank() {
 
             const timeStr = formatTime(timerSeconds);
             const hintStr = hintsUsed > 0 ? `${hintsUsed} hint${hintsUsed > 1 ? 's' : ''} used` : 'No hints used';
-            winDetails.textContent = `Time: ${timeStr} — ${hintStr}`;
+            const assistStr = autoNotesUsed ? ' — auto-notes used' : '';
+            winDetails.textContent = `Time: ${timeStr} — ${hintStr}${assistStr}`;
 
             setTimeout(() => dialogs.open(winOverlay), 600);
             setStatus('Puzzle complete!', 'success');
 
             // Update stats
-            store.recordWin(currentDifficulty, timerSeconds, hintsUsed);
+            store.recordWin(currentDifficulty, timerSeconds, hintsUsed, autoNotesUsed);
             store.deleteSavedGame();
         }
     }
@@ -1218,6 +1316,8 @@ function loadBank() {
             timerSeconds: elapsedSeconds(),
             hintsUsed,
             level: currentLevel,
+            autoNotes,
+            autoNotesUsed,
             lockedCells: Array.from({ length: 81 }, (_, i) => wrappers[i].classList.contains('locked')),
             hintCells: Array.from({ length: 81 }, (_, i) => wrappers[i].classList.contains('hint')),
             timestamp: Date.now(),
@@ -1231,6 +1331,7 @@ function loadBank() {
         currentSolution = state.solution;
         currentDifficulty = state.difficulty;
         currentLevel = state.level ?? null;
+        autoNotesUsed = state.autoNotesUsed || false;
         timerSeconds = state.timerSeconds || 0;
         hintsUsed = state.hintsUsed || 0;
         gameWon = false;
@@ -1271,6 +1372,12 @@ function loadBank() {
 
         recheckAllConflicts();
         updateNumpadCompletion();
+
+        if (state.autoNotes) {
+            setAutoNotes(true);
+        }
+        // setAutoNotes stamps the flag; the saved value is the truth.
+        autoNotesUsed = state.autoNotesUsed || false;
 
         const label = DIFFICULTY_LABELS[currentDifficulty];
         setStatus(`Resumed: ${label} — ${formatTime(timerSeconds)}`);
@@ -1485,6 +1592,15 @@ function loadBank() {
     });
     // Prevent mousedown from stealing focus from active cell
     btnNotesToggle.addEventListener('mousedown', (e) => e.preventDefault());
+    if (btnAutoNotes) {
+        btnAutoNotes.addEventListener('click', () => {
+            setAutoNotes(!autoNotes);
+            if (!isTouchDevice && focusedIdx >= 0) {
+                requestAnimationFrame(() => inputs[focusedIdx].focus());
+            }
+        });
+        btnAutoNotes.addEventListener('mousedown', (e) => e.preventDefault());
+    }
     if (btnPause) {
         btnPause.addEventListener('click', () => {
             togglePause();
@@ -1551,6 +1667,8 @@ function loadBank() {
                     inputs[idx].value = '';
                     clearConflictStyle(idx);
                     updateNumpadCompletion();
+                    // Erasing frees the digit up again for its peers.
+                    refreshAutoNotes();
                 }
                 debounceSave();
             } else if (mode === 'solver') {
@@ -1577,6 +1695,7 @@ function loadBank() {
             wrappers[idx].classList.remove('user-error', 'correct-check');
             pushUndo(idx, prevVal, digit, prevNotes, new Set());
             highlightConflicts(idx);
+            refreshAutoNotes();
             checkWin();
             debounceSave();
             updateNumpadCompletion();
@@ -1661,7 +1780,7 @@ function loadBank() {
             return;
         }
         let html = `<table class="lb-table">
-            <thead><tr><th>#</th><th>Name</th><th>Time</th><th>Hints</th><th>Date</th></tr></thead>
+            <thead><tr><th>#</th><th>Name</th><th>Time</th><th>Hints</th><th>Auto</th><th>Date</th></tr></thead>
             <tbody>`;
         entries.forEach((e, i) => {
             const date = new Date(e.date).toLocaleDateString();
@@ -1673,6 +1792,7 @@ function loadBank() {
                 <td>${escapeHtml(e.name)}</td>
                 <td>${escapeHtml(formatTime(Number(e.time) || 0))}</td>
                 <td>${escapeHtml(String(Number(e.hints) || 0))}</td>
+                <td>${e.autoNotes ? '✓' : ''}</td>
                 <td>${escapeHtml(date)}</td>
             </tr>`;
         });
@@ -1741,6 +1861,7 @@ function loadBank() {
                 time: timerSeconds,
                 hints: hintsUsed,
                 level: currentLevel,
+                autoNotes: autoNotesUsed,
             });
 
             if (result && result.rank) {

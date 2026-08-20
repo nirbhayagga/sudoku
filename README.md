@@ -17,6 +17,7 @@ Play sudoku puzzles with built-in hints, pencil marks, undo/redo, and more.
 - **Digit highlighting** — Focus a cell and all matching digits glow across the board (works on both desktop and mobile)
 - **Numpad completion** — Completed digits (placed 9 times) are greyed/crossed out on the mobile numpad
 - **Pencil marks / Notes** — Toggle with `N`, type digits to add/remove candidate marks
+- **Auto-notes** — Toggle with `A`: fills every empty cell with the digits its row, column and box still allow, and keeps them current as you play. Derived from the board, never from the solution — it reveals no answers, but it does remove the scanning, so games that used it are marked on the leaderboard and in stats
 - **Hints** — Reveals one correct cell in amber (press `H`)
 - **Error checking** — Click "Check" or press `Enter` to highlight incorrect entries
 - **Conflict detection** — Duplicates in the same row/column/box flash orange immediately
@@ -56,6 +57,7 @@ Switching from Play → Solver retains your current puzzle so you can have the s
 | `Enter` | Solve | Check for errors |
 | `Escape` | Clear grid | Reset puzzle |
 | `N` | — | Toggle notes mode |
+| `A` | — | Toggle auto-notes |
 | `H` | — | Reveal a hint |
 | `Ctrl+Z` | — | Undo |
 | `Ctrl+Y` / `Ctrl+Shift+Z` | — | Redo |
@@ -85,7 +87,7 @@ sudoku_solver/
   eslint.config.js    Lint rules
   vitest.config.js    Test config
   scripts/generate-bank.js  Regenerate or reorder a difficulty tier
-  tests/              Test suite (340 tests)
+  tests/              Test suite (367 tests)
 
   Dockerfile          Multi-stage build -> nginx-alpine
   nginx.conf.template Nginx config (envsubst at container start)
@@ -108,7 +110,7 @@ npm ci --prefix leaderboard-api # leaderboard deps, needed for its tests
 
 npm run dev      # Vite dev server at :8000 with hot reload, /api/ proxied to :3001
 npm run lint     # eslint
-npm test         # 340 tests
+npm test         # 367 tests
 npm run build    # produce dist/
 npm run check    # lint + test + build, what CI runs
 ```

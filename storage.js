@@ -47,11 +47,19 @@ export const getStats = () => readJson(STATS_KEY, {}) || {};
 export const saveStats = (stats) => writeJson(STATS_KEY, stats);
 export const resetStats = () => remove(STATS_KEY);
 
-/** Record a completed game and return the updated stats. */
-export function recordWin(difficulty, timeSeconds, hints) {
+/**
+ * Record a completed game and return the updated stats.
+ *
+ * `autoNotes` is tracked separately from hints rather than folded into them:
+ * both are assists, but a hint reveals an answer while auto-notes only does
+ * bookkeeping, so conflating them would misreport how a game was played.
+ */
+export function recordWin(difficulty, timeSeconds, hints, autoNotes = false) {
     const stats = getStats();
     if (!stats[difficulty]) {
-        stats[difficulty] = { played: 0, won: 0, bestTime: null, totalTime: 0, totalHints: 0 };
+        stats[difficulty] = {
+            played: 0, won: 0, bestTime: null, totalTime: 0, totalHints: 0, autoNotesGames: 0,
+        };
     }
 
     const entry = stats[difficulty];
@@ -59,6 +67,8 @@ export function recordWin(difficulty, timeSeconds, hints) {
     entry.won++;
     entry.totalTime += timeSeconds;
     entry.totalHints += hints;
+    // Older saved stats predate this field.
+    entry.autoNotesGames = (entry.autoNotesGames || 0) + (autoNotes ? 1 : 0);
     if (entry.bestTime === null || timeSeconds < entry.bestTime) {
         entry.bestTime = timeSeconds;
     }
