@@ -83,6 +83,21 @@ export async function bootApp({ localStorage: seed = {} } = {}) {
         },
         /** Let queued timers and microtasks run. */
         tick: (ms = 30) => new Promise((resolve) => setTimeout(resolve, ms)),
+        /**
+         * Take over the page's clock. The app derives elapsed time from
+         * Date.now(), so this lets time-based behaviour be tested exactly and
+         * instantly rather than by waiting on real seconds. jsdom gives each
+         * window its own Date, so this must patch window.Date, not the global.
+         */
+        useFakeClock() {
+            const real = window.Date.now.bind(window.Date);
+            let now = real();
+            window.Date.now = () => now;
+            return {
+                advance: (ms) => { now += ms; },
+                restore: () => { window.Date.now = real; },
+            };
+        },
         close: () => dom.window.close(),
     };
 }

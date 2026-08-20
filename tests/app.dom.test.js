@@ -140,11 +140,12 @@ describe('solver mode', () => {
             app.$('#import-text').value = '123';
             app.click('#btn-modal-import');
 
-            // Rejection is signalled only by flashing the textarea border; the
-            // modal stays open and the grid is left untouched.
+            // The modal stays open, the grid is untouched, and the reason is
+            // stated in text — a border flash alone conveyed nothing.
             expect(app.$('#import-text').style.borderColor).toBe('var(--danger)');
             expect(app.$('#modal-overlay').classList.contains('active')).toBe(true);
             expect(app.readGrid()).toBe('0'.repeat(81));
+            expect(app.$('#import-error').textContent).toMatch(/found 3/);
         });
     });
 });
@@ -655,5 +656,180 @@ describe('saving on the way out', () => {
 
         const saved = JSON.parse(app.window.localStorage.getItem('sudoku_saved_game'));
         expect(saved.userValues[empty]).toBe(EASY_SOLUTION[empty]);
+    });
+});
+
+describe('timer', () => {
+    let clock;
+
+    beforeEach(async () => {
+        await startGame(app);
+        clock = app.useFakeClock();
+    });
+    afterEach(() => clock.restore());
+
+    /** Elapsed time is computed on demand, so a save reports it exactly. */
+    async function savedSeconds() {
+        app.window.dispatchEvent(new app.window.Event('pagehide'));
+        return JSON.parse(app.window.localStorage.getItem('sudoku_saved_game')).timerSeconds;
+    }
+
+    it('starts at zero', () => {
+        expect(app.$('#game-timer').textContent).toBe('0:00');
+    });
+
+    // The old implementation counted interval ticks, so a throttled or
+    // backgrounded tab undercounted real elapsed time.
+    it('measures wall-clock time rather than counting ticks', async () => {
+        clock.advance(65_000);
+        expect(await savedSeconds()).toBe(65);
+    });
+
+    it('keeps counting across a long background gap', async () => {
+        clock.advance(10 * 60_000);
+        expect(await savedSeconds()).toBe(600);
+    });
+
+    it('excludes paused time', async () => {
+        clock.advance(20_000);
+        app.click('#btn-pause');
+        clock.advance(300_000); // five minutes paused
+        app.click('#btn-pause');
+        clock.advance(5_000);
+
+        expect(await savedSeconds()).toBe(25);
+    });
+
+    it('does not advance while paused', async () => {
+        clock.advance(30_000);
+        app.click('#btn-pause');
+        const atPause = await savedSeconds();
+        clock.advance(120_000);
+        expect(await savedSeconds()).toBe(atPause);
+    });
+
+    it('reports elapsed time in the win summary', () => {
+        clock.advance(125_000);
+        completePuzzle(app);
+        expect(app.$('#win-details').textContent).toMatch(/Time: 2:05/);
+    });
+
+    it('continues from the saved time when a game is resumed', async () => {
+        const resumed = await bootApp({
+            localStorage: {
+                sudoku_saved_game: JSON.stringify({
+                    puzzle: EASY_PUZZLE,
+                    solution: EASY_SOLUTION,
+                    difficulty: 'easy',
+                    level: 1,
+                    userValues: EASY_PUZZLE,
+                    notes: Array.from({ length: 81 }, () => []),
+                    timerSeconds: 100,
+                    hintsUsed: 0,
+                    lockedCells: [...EASY_PUZZLE].map((c) => c !== '0'),
+                    hintCells: Array(81).fill(false),
+                    timestamp: Date.now(),
+                }),
+            },
+        });
+        resumed.click('#btn-resume-yes');
+        await resumed.tick(30);
+
+        const resumedClock = resumed.useFakeClock();
+        resumedClock.advance(10_000);
+        resumed.window.dispatchEvent(new resumed.window.Event('pagehide'));
+
+        // Exactly 110: resuming used to start a second interval without
+        // clearing the first, which could advance the clock twice per second.
+        const saved = JSON.parse(resumed.window.localStorage.getItem('sudoku_saved_game'));
+        expect(saved.timerSeconds).toBe(110);
+
+        resumedClock.restore();
+        resumed.close();
+    });
+
+    it('restarts from zero for a new game', async () => {
+        clock.advance(50_000);
+        clock.restore();
+        await startGame(app, 'easy', 2);
+        clock = app.useFakeClock();
+        clock.advance(3_000);
+        expect(await savedSeconds()).toBe(3);
+    });
+});
+
+describe('accessibility', () => {
+    it('allows pinch zoom', () => {
+        // user-scalable=no / maximum-scale=1 fails WCAG 1.4.4. It is not needed
+        // here: cells are readOnly on touch devices, so iOS never auto-zooms.
+        const viewport = app.$('meta[name="viewport"]').getAttribute('content');
+        expect(viewport).not.toMatch(/user-scalable\s*=\s*no/);
+        expect(viewport).not.toMatch(/maximum-scale/);
+    });
+
+    it('announces status messages', () => {
+        const status = app.$('#status');
+        expect(status.getAttribute('role')).toBe('status');
+        expect(status.getAttribute('aria-live')).toBe('polite');
+    });
+
+    it('announces the win summary assertively', () => {
+        expect(app.$('#win-details').getAttribute('aria-live')).toBe('assertive');
+    });
+
+    it('exposes notes mode as a toggle state', async () => {
+        await startGame(app);
+        const toggle = app.$('#btn-notes-toggle');
+        expect(toggle.getAttribute('aria-pressed')).toBe('false');
+        app.click('#btn-notes-toggle');
+        expect(toggle.getAttribute('aria-pressed')).toBe('true');
+        expect(app.$('#numpad-notes').getAttribute('aria-pressed')).toBe('true');
+    });
+
+    it('labels every cell with its position', () => {
+        const labels = app.inputs().map((i) => i.getAttribute('aria-label'));
+        expect(labels.filter(Boolean)).toHaveLength(81);
+    });
+
+    describe('import errors', () => {
+        beforeEach(() => app.click('#tab-solver'));
+
+        it('states how many digits were found', () => {
+            app.click('#btn-paste');
+            app.$('#import-text').value = '12345';
+            app.click('#btn-modal-import');
+            expect(app.$('#import-error').textContent).toBe('Need 81 digits, found 5.');
+        });
+
+        it('explains the format when nothing was entered', () => {
+            app.click('#btn-paste');
+            app.$('#import-text').value = '';
+            app.click('#btn-modal-import');
+            expect(app.$('#import-error').textContent).toMatch(/81 digits/);
+        });
+
+        it('uses a role that is announced immediately', () => {
+            expect(app.$('#import-error').getAttribute('role')).toBe('alert');
+        });
+
+        it('clears the error on a successful import', () => {
+            app.click('#btn-paste');
+            app.$('#import-text').value = '123';
+            app.click('#btn-modal-import');
+            expect(app.$('#import-error').textContent).not.toBe('');
+
+            app.$('#import-text').value = EASY_PUZZLE;
+            app.click('#btn-modal-import');
+            expect(app.$('#import-error').textContent).toBe('');
+        });
+
+        it('clears the error when the modal is reopened', () => {
+            app.click('#btn-paste');
+            app.$('#import-text').value = '123';
+            app.click('#btn-modal-import');
+            app.click('#btn-modal-cancel');
+            app.click('#btn-paste');
+            expect(app.$('#import-error').textContent).toBe('');
+        });
     });
 });

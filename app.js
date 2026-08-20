@@ -49,6 +49,7 @@
 
     const modalOverlay = document.getElementById('modal-overlay');
     const importText = document.getElementById('import-text');
+    const importError = document.getElementById('import-error');
     const btnModalOk = document.getElementById('btn-modal-import');
     const btnModalNo = document.getElementById('btn-modal-cancel');
 
@@ -98,6 +99,11 @@
     let gameWon = false;
     let timerInterval = null;
     let timerSeconds = 0;
+    // Timer state is kept as wall-clock anchors rather than a tick count:
+    // timerBaseSeconds is everything accumulated before the current running
+    // segment, timerSegmentStart is when that segment began (0 = not running).
+    let timerBaseSeconds = 0;
+    let timerSegmentStart = 0;
     let hintsUsed = 0;
     let notesMode = false;
     let focusedIdx = -1;
@@ -442,6 +448,11 @@
         notesMode = !notesMode;
         btnNotesToggle.textContent = `Notes: ${notesMode ? 'ON' : 'OFF'}`;
         btnNotesToggle.classList.toggle('notes-active', notesMode);
+        btnNotesToggle.setAttribute('aria-pressed', String(notesMode));
+        if (numpadEl) {
+            const notesBtn = numpadEl.querySelector('#numpad-notes');
+            if (notesBtn) notesBtn.setAttribute('aria-pressed', String(notesMode));
+        }
     }
 
     function toggleNote(idx, digit) {
@@ -781,6 +792,7 @@
 
     // ── Import Modal ───────────────────────────────────────────────────
     function openModal() {
+        if (importError) importError.textContent = '';
         importText.value = '';
         modalOverlay.classList.add('active');
         setTimeout(() => importText.focus(), 100);
@@ -794,8 +806,16 @@
         if (digits.length !== 81) {
             importText.style.borderColor = 'var(--danger)';
             setTimeout(() => importText.style.borderColor = '', 1500);
+            // Say what is wrong. The border flash alone conveyed nothing to a
+            // screen reader, and nothing at all to anyone who missed it.
+            if (importError) {
+                importError.textContent = digits.length === 0
+                    ? 'Enter a puzzle: 81 digits, using 0 or . for empty cells.'
+                    : `Need 81 digits, found ${digits.length}.`;
+            }
             return;
         }
+        if (importError) importError.textContent = '';
         writeGrid(digits.replace(/\./g, '0'), true);
         solved = false;
         solveTimeEl.textContent = '';
@@ -1064,23 +1084,50 @@
     }
 
     // ── Timer ──────────────────────────────────────────────────────────
-    function startTimer() {
+    // Elapsed time is derived from the clock, not counted in ticks. Browsers
+    // throttle timers in background tabs and mobile browsers do so aggressively,
+    // so a counter incremented once per interval silently undercounts — which
+    // made recorded times inconsistent between devices and sessions.
+
+    /** Seconds played so far, from the clock. */
+    function elapsedSeconds() {
+        if (!timerSegmentStart) return timerBaseSeconds;
+        return timerBaseSeconds + Math.floor((Date.now() - timerSegmentStart) / 1000);
+    }
+
+    function renderTimer() {
+        timerSeconds = elapsedSeconds();
+        gameTimerEl.textContent = formatTime(timerSeconds);
+    }
+
+    /** Freeze the running segment into the accumulated total. */
+    function suspendTimer() {
+        timerBaseSeconds = elapsedSeconds();
+        timerSegmentStart = 0;
+        timerSeconds = timerBaseSeconds;
+    }
+
+    /** Start (or continue) timing from a given number of seconds. */
+    function runTimer(fromSeconds) {
         stopTimer();
-        timerSeconds = 0;
+        timerBaseSeconds = fromSeconds;
+        timerSegmentStart = Date.now();
         timerPaused = false;
-        gameTimerEl.textContent = '0:00';
         gameTimerEl.classList.remove('paused');
         gridEl.classList.remove('paused');
-        timerInterval = setInterval(() => {
-            if (!timerPaused) {
-                timerSeconds++;
-                gameTimerEl.textContent = formatTime(timerSeconds);
-            }
-        }, 1000);
+        renderTimer();
+        // Twice a second, so a tab returning from the background corrects its
+        // display promptly instead of showing a stale value for up to a second.
+        timerInterval = setInterval(renderTimer, 500);
+    }
+
+    function startTimer() {
+        runTimer(0);
     }
 
     function stopTimer() {
         if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+        suspendTimer();
     }
 
     function togglePause() {
@@ -1088,10 +1135,14 @@
         timerPaused = !timerPaused;
         gameTimerEl.classList.toggle('paused', timerPaused);
         if (timerPaused) {
+            // Time stops accruing; the interval keeps running but renders the
+            // frozen total.
+            suspendTimer();
             setStatus('Paused');
             // Optionally hide the grid to prevent cheating
             gridEl.classList.add('paused');
         } else {
+            timerSegmentStart = Date.now();
             setStatus('');
             gridEl.classList.remove('paused');
         }
@@ -1124,7 +1175,7 @@
             difficulty: currentDifficulty,
             userValues: readGrid(),
             notes: cellNotes.map(s => [...s]),
-            timerSeconds,
+            timerSeconds: elapsedSeconds(),
             hintsUsed,
             level: currentLevel,
             lockedCells: Array.from({ length: 81 }, (_, i) => wrappers[i].classList.contains('locked')),
@@ -1190,18 +1241,7 @@
         }
 
         gameActive = true;
-        gameTimerEl.textContent = formatTime(timerSeconds);
-
-        // Resume timer
-        timerPaused = false;
-        gameTimerEl.classList.remove('paused');
-        gridEl.classList.remove('paused');
-        timerInterval = setInterval(() => {
-            if (!timerPaused) {
-                timerSeconds++;
-                gameTimerEl.textContent = formatTime(timerSeconds);
-            }
-        }, 1000);
+        runTimer(state.timerSeconds || 0);
 
         recheckAllConflicts();
         updateNumpadCompletion();

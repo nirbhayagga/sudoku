@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport"
-    content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="description"
     content="Lightning-fast Sudoku solver and player with puzzle generation, pencil marks, hints, and more.">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -94,7 +94,7 @@
       <div class="play-buttons">
         <button class="btn btn-primary" id="btn-new-game">New Game</button>
         <button class="btn btn-hint" id="btn-hint" title="Reveal one cell (H)">Hint</button>
-        <button class="btn" id="btn-notes-toggle" title="Toggle notes mode (N)">Notes: OFF</button>
+        <button class="btn" id="btn-notes-toggle" title="Toggle notes mode (N)" aria-pressed="false">Notes: OFF</button>
         <button class="btn" id="btn-check" title="Check for errors (Enter)">Check</button>
         <button class="btn" id="btn-undo" title="Undo (Ctrl+Z)">Undo</button>
         <button class="btn" id="btn-redo" title="Redo (Ctrl+Y)">Redo</button>
@@ -105,7 +105,7 @@
 
     <!-- Status bar -->
     <div class="status-bar">
-      <span class="status-msg" id="status">Click a cell and type a digit</span>
+      <span class="status-msg" id="status" role="status" aria-live="polite">Click a cell and type a digit</span>
       <div class="status-right">
         <button class="stats-btn" id="btn-stats" title="View stats" style="display:none;">Stats</button>
         <button class="stats-btn" id="btn-leaderboard" title="View leaderboard" style="display:none;">🏆</button>
@@ -129,7 +129,7 @@
       </div>
       <div class="numpad-row numpad-actions">
         <button class="numpad-btn numpad-erase" data-digit="0">Erase</button>
-        <button class="numpad-btn numpad-notes" id="numpad-notes">Notes</button>
+        <button class="numpad-btn numpad-notes" id="numpad-notes" aria-pressed="false">Notes</button>
       </div>
     </div>
   </main>
@@ -143,6 +143,7 @@
       <textarea id="import-text"
         placeholder="530070000600195000098000060800060003400803001700020006060000280000419005000080079"
         spellcheck="false"></textarea>
+      <p class="modal-error" id="import-error" role="alert"></p>
       <div class="modal-actions">
         <button class="btn" id="btn-modal-cancel">Cancel</button>
         <button class="btn btn-primary" id="btn-modal-import">Import</button>
@@ -155,7 +156,7 @@
     <div class="win-card">
       <div class="win-icon">&#10003;</div>
       <h2>Puzzle Complete!</h2>
-      <p id="win-details"></p>
+      <p id="win-details" role="status" aria-live="assertive"></p>
       <div class="win-submit" id="win-submit" style="display:none;">
         <input type="text" id="win-name" placeholder="Your name" maxlength="20" autocomplete="off">
         <button class="btn btn-primary" id="btn-win-submit">Submit Score</button>
