@@ -29,7 +29,6 @@ Play sudoku puzzles with built-in hints, pencil marks, undo/redo, and more.
 - **Mobile optimized** — On-screen numpad, touch-friendly 44px targets, no virtual keyboard popup, safe-area-inset support for iPhone notch/Dynamic Island, landscape mode handling
 - **Pause** — Freezes the timer, blurs the grid, and blocks all input until resumed
 - **Installable / offline** — Add to home screen and play with no network
-- **Force Update** — Button in theme dropdown to reload with cache-busting
 
 ### Solver Mode
 
@@ -79,7 +78,7 @@ sudoku_solver/
   eslint.config.js    Lint rules
   vitest.config.js    Test config
   scripts/generate-bank.js  Regenerate or reorder a difficulty tier
-  tests/              Test suite (278 tests)
+  tests/              Test suite (280 tests)
 
   Dockerfile          Multi-stage build -> nginx-alpine
   nginx.conf.template Nginx config (envsubst at container start)
@@ -102,7 +101,7 @@ npm ci --prefix leaderboard-api # leaderboard deps, needed for its tests
 
 npm run dev      # Vite dev server at :8000 with hot reload, /api/ proxied to :3001
 npm run lint     # eslint
-npm test         # 278 tests
+npm test         # 280 tests
 npm run build    # produce dist/
 npm run check    # lint + test + build, what CI runs
 ```
@@ -165,8 +164,10 @@ minified JS bundle, one CSS file, and an `index.html` pointing at them.
 Filenames carry a content hash (`index.DpVtReIW.js`), which is the point — a
 file's name changes whenever its bytes do, so assets can be cached forever while
 `index.html` stays uncached. Stale CSS on a phone after a deploy becomes
-impossible, and the "Force Update" button becomes a fallback rather than a
-necessity.
+structurally impossible, which is why the app carries no manual "force refresh"
+control: `index.html` is served `no-cache`, the service worker fetches
+navigations network-first, and `sw.js` is itself uncached, so a reload always
+picks up a new deploy.
 
 Two deliberate choices in `vite.config.js`:
 

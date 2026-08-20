@@ -894,3 +894,23 @@ describe('progressive web app', () => {
         expect(app.cells()).toHaveLength(81);
     });
 });
+
+describe('theme dropdown', () => {
+    it('offers every theme', () => {
+        const themes = app.$$('.theme-option').map((b) => b.dataset.theme);
+        expect(themes).toEqual([
+            'midnight', 'sakura', 'ocean', 'forest', 'arctic', 'naruto', 'wicked',
+        ]);
+    });
+
+    // The dropdown used to carry a "Force Update" button that reloaded with a
+    // cache-busting query string. Content-hashed assets, a no-cache index.html
+    // and a network-first service worker make staleness structurally impossible,
+    // and with a service worker installed the query string would not have
+    // bypassed anything anyway.
+    it('contains only theme choices', () => {
+        for (const option of app.$$('.theme-option')) {
+            expect(option.dataset.theme).toBeTruthy();
+        }
+    });
+});
