@@ -2029,3 +2029,14 @@ kbd {
     color: var(--text-secondary);
     text-align: center;
 }
+
+/* ── Daily puzzle ─────────────────────────────────────────────────── */
+.btn-daily {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+.btn-daily.done::after {
+    content: " ✓";
+    color: var(--success);
+}

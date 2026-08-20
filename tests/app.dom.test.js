@@ -5,6 +5,8 @@ import { bootApp } from './helpers/boot-app.js';
 import { repoRoot } from './helpers/paths.js';
 import { SudokuSolver } from '../solver.js';
 import { PUZZLES } from '../puzzle-bank.js';
+import { dailyPuzzle } from '../daily.js';
+import { dayKey } from '../storage.js';
 
 // A fixed level keeps every run deterministic: startGame() reads #level-input
 // and takes bankList[level - 1] rather than picking at random.
@@ -1340,5 +1342,67 @@ describe('stats display', () => {
         app.click('#btn-stats-reset');
         expect(app.window.localStorage.getItem('sudoku_stats')).toBeNull();
         expect(app.window.localStorage.getItem('sudoku_streak')).toBeNull();
+    });
+});
+
+describe('daily puzzle', () => {
+    it('offers a daily button', () => {
+        expect(app.$('#btn-daily')).not.toBeNull();
+    });
+
+    it('loads the puzzle for today', async () => {
+        app.click('#btn-daily');
+        await app.tick(60);
+
+        const { difficulty, level } = dailyPuzzle(dayKey());
+        expect(app.$('.diff-btn.active').dataset.diff).toBe(difficulty);
+        expect(app.$('#level-input').value).toBe(String(level));
+
+        const expected = PUZZLES[difficulty][level - 1].puzzle;
+        for (let i = 0; i < 81; i++) {
+            if (expected[i] !== '0') expect(app.inputs()[i].value).toBe(expected[i]);
+        }
+    });
+
+    it('names the day in the status line', async () => {
+        app.click('#btn-daily');
+        await app.tick(60);
+        expect(app.$('#status').textContent).toMatch(/Daily puzzle/);
+    });
+
+    it('records the day in the saved game', async () => {
+        app.click('#btn-daily');
+        await app.tick(60);
+        app.window.dispatchEvent(new app.window.Event('pagehide'));
+
+        const saved = JSON.parse(app.window.localStorage.getItem('sudoku_saved_game'));
+        expect(saved.daily).toBe(dayKey());
+    });
+
+    it('marks the day done once solved', async () => {
+        const { difficulty, level } = dailyPuzzle(dayKey());
+        const puzzle = PUZZLES[difficulty][level - 1].puzzle;
+        const solution = SudokuSolver.solveSudoku(puzzle).solution;
+
+        app.click('#btn-daily');
+        await app.tick(60);
+        completePuzzle(app, puzzle, solution);
+
+        expect(JSON.parse(app.window.localStorage.getItem('sudoku_daily_done'))).toContain(dayKey());
+        expect(app.$('#btn-daily').classList.contains('done')).toBe(true);
+    });
+
+    it('shows the day as already done on a later load', async () => {
+        const done = await bootApp({
+            localStorage: { sudoku_daily_done: JSON.stringify([dayKey()]) },
+        });
+        expect(done.$('#btn-daily').classList.contains('done')).toBe(true);
+        done.close();
+    });
+
+    it('does not mark the day done for an ordinary game', async () => {
+        await startGame(app);
+        completePuzzle(app);
+        expect(app.window.localStorage.getItem('sudoku_daily_done')).toBeNull();
     });
 });
