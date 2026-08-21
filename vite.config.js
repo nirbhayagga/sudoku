@@ -139,8 +139,9 @@ const standalone = mode === 'standalone';
 return {
     // public/ is copied verbatim into dist/ — that is how _headers (cache rules
     // for Cloudflare Pages and Netlify) reaches the build.
-    // Relative asset URLs, so the build works from a subpath (GitHub Pages
-    // serves at /<repo>/) and from the filesystem.
+    // Relative asset URLs, so the build works from a subpath (a static host
+    // without a custom domain serves from a subdirectory) and from the
+    // filesystem.
     base: './',
 
     // The standalone build is for file://, where service workers do not exist,

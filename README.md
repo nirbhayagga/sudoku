@@ -246,8 +246,7 @@ inlined, which opens straight off a disk or a USB stick. No single build can do
 both.
 
 `base: './'` in both, so assets resolve relatively and the build works from a
-subpath — which is how GitHub Pages, and Cloudflare Pages without a custom
-domain, serve a project site.
+subpath, which is how a static host serves a project without a custom domain.
 
 ```bash
 npm run dev              # dev server with hot reload
@@ -351,9 +350,9 @@ Container environment:
 
 ### Static hosting
 
-Cloudflare Pages is the recommended host: it reads `_headers`, which GitHub
-Pages ignores entirely, and custom domains are a single step when DNS already
-lives at Cloudflare.
+Cloudflare Pages is the host this is set up for: it reads the generated
+`_headers`, so the cache rules actually apply, and custom domains are a single
+step when DNS already lives at Cloudflare.
 
 **Setup** — no separate repository, no config file, no changes to this repo:
 
@@ -377,11 +376,12 @@ npx wrangler pages deploy dist --project-name=sudoku
 
 with `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` in the environment.
 
-A project site on GitHub Pages is served from `/<repo>/`, not the domain root.
-The build uses relative asset paths so this works unchanged, and the Playwright
-`subpath` project serves the real build one directory down and drives it — asset
-paths, manifest, icons, service worker scope and share links all verified there,
-because an absolute path anywhere would work locally and 404 in production.
+Without a custom domain a static host serves the site from a subdirectory rather
+than the domain root. The build uses relative asset paths so this works
+unchanged, and the Playwright `subpath` project serves the real build one
+directory down and drives it — asset paths, manifest, icons, service worker
+scope and share links all verified there, because an absolute path anywhere
+would work locally and 404 in production.
 
 `npm run build` produces `dist/`, which any static host can serve. The generated
 `public/_headers` is copied into `dist/` and sets long-lived caching for hashed assets and no-cache for
@@ -391,7 +391,6 @@ because an absolute path anywhere would work locally and 404 in production.
 |---|---|
 | **Cloudflare Pages** | Connect the repo; build command `npm run build`, output directory `dist` |
 | **Netlify** | `netlify.toml` is committed — connect the repo |
-| **GitHub Pages** | Works, but ignores `_headers`; needs a workflow to publish `dist/` |
 | **S3 / any nginx** | Upload `dist/`; mirror the `public/_headers` rules in your config |
 
 A static deployment has no backend, so the leaderboard hides itself. To keep it,

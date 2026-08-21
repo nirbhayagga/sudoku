@@ -1,7 +1,8 @@
 import { test, expect } from '@playwright/test';
 
 /**
- * GitHub Pages serves a project site from /<repo>/, not the domain root. Every
+ * Without a custom domain, a static host serves the site from a subdirectory
+ * rather than the domain root. Every
  * asset URL, the manifest, the icons and the service worker scope have to work
  * from there — an absolute path anywhere would 404 in production while looking
  * perfect locally.

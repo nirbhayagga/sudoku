@@ -1,6 +1,6 @@
 /**
- * Serve dist/ one directory down, standing in for a GitHub Pages project site
- * at https://<user>.github.io/<repo>/.
+ * Serve dist/ one directory down, standing in for a static host serving the
+ * site from a subdirectory rather than the domain root.
  *
  * Used by the Playwright "subpath" project. An absolute asset path anywhere in
  * the build would 404 here while working perfectly at the domain root, which is
