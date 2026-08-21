@@ -23,9 +23,9 @@ export default defineConfig({
 
     projects: [
         {
-            // GitHub Pages serves a project site from /<repo>/. This project
-            // runs the same build behind a subpath to prove nothing depends on
-            // being at the domain root.
+            // A static host without a custom domain serves the site from a
+            // subdirectory. This project runs the same build behind a subpath to
+            // prove nothing depends on being at the domain root.
             name: 'subpath',
             testMatch: /subpath\.spec\.js/,
             use: { ...devices['Desktop Chrome'] },
@@ -57,7 +57,7 @@ export default defineConfig({
         },
         {
             // The same build, served one directory down, standing in for a
-            // GitHub Pages project site.
+            // subdirectory deployment.
             command: 'node scripts/serve-subpath.js',
             url: 'http://127.0.0.1:4322/sudoku/',
             reuseExistingServer: !process.env.CI,
