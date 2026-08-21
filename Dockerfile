@@ -1,6 +1,6 @@
 # ── Build stage ───────────────────────────────────────────────────────
 # Produces dist/ with minified, content-hashed assets.
-FROM node:20-alpine AS build
+FROM node:26-alpine AS build
 
 WORKDIR /app
 
