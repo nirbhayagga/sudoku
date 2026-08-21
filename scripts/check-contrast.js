@@ -19,15 +19,72 @@ const CSS_PATH = path.join(root, 'style.css');
 /** Normal-size text needs 4.5:1 under WCAG 2.1 AA. */
 export const AA_THRESHOLD = 4.5;
 
-/** Foreground tokens checked against --bg-primary. */
+/**
+ * --fix aims above the threshold on purpose.
+ *
+ * This script models the surface a control sits on by compositing the layers it
+ * knows about, which is an approximation — the browser has the real stack,
+ * including tints this file cannot see. Fixing to exactly 4.5 lands a hair
+ * under once rendered. The margin absorbs that; e2e/contrast.spec.js measures
+ * the real DOM and is the authority.
+ */
+const FIX_TARGET = 5.0;
+
+/**
+ * Foreground tokens, checked against every surface they are actually rendered
+ * on — not just --bg-primary.
+ *
+ * Checking one background was the original flaw here: --text-muted cleared AA
+ * against --bg-primary and failed on --bg-secondary, where the leaderboard tabs
+ * sit, and Lighthouse caught it in a real browser after this script had passed.
+ */
 const TEXT_TOKENS = [
     '--text-primary', '--text-secondary', '--text-muted', '--text-note',
     '--text-given', '--text-solved', '--text-error', '--text-conflict',
-    // --accent is the brand colour and is used for borders and glows, where a
+    // Used on the hint button and in win messaging respectively; both were
+    // missed on the first pass simply because they are not named --text-*.
+    '--text-hint', '--success',
+    // --accent is the brand colour used for borders and glows, where a
     // saturated tone is wanted; --accent-text is its readable counterpart and
     // is the one allowed as a text colour.
     '--accent-text',
 ];
+
+/** Surfaces text is drawn on directly. */
+const SURFACE_TOKENS = ['--bg-primary', '--bg-secondary'];
+
+/**
+ * The surface a control actually renders on, per theme, measured from the
+ * browser.
+ *
+ * Modelling this by compositing assumed layers does not work: the tints differ
+ * per theme, and on the light themes the card layer is a *dark* translucent, so
+ * the control surface comes out darker than the page rather than lighter. A
+ * model that assumes white tints silently overestimates contrast there, which
+ * is exactly how the difficulty buttons shipped below AA while this script
+ * reported everything clear.
+ *
+ * To re-measure after changing any surface colour, run the contrast e2e spec —
+ * it computes the same values from the real DOM and is the authority.
+ */
+/**
+ * Pairs where the foreground is fixed rather than a token — a button label on
+ * a coloured background, for instance.
+ */
+const SURFACE_PAIRS = [
+    { on: '--accent-on', over: '--accent-surface', label: 'accent button' },
+];
+
+const CONTROL_SURFACES = {
+    //            difficulty buttons     action buttons
+    midnight: ['rgb(25, 25, 37)', 'rgb(27, 27, 39)'],
+    sakura: ['rgb(242, 209, 196)', 'rgb(239, 202, 190)'],
+    ocean: ['rgb(21, 36, 57)', 'rgb(21, 36, 57)'],
+    forest: ['rgb(22, 35, 22)', 'rgb(22, 35, 22)'],
+    arctic: ['rgb(203, 214, 234)', 'rgb(197, 209, 233)'],
+    naruto: ['rgb(31, 20, 10)', 'rgb(33, 18, 2)'],
+    wicked: ['rgb(16, 30, 21)', 'rgb(9, 30, 17)'],
+};
 
 export function parseThemes(css) {
     const themes = {};
@@ -84,17 +141,37 @@ export function contrastRatio(a, b) {
 /** Every token/background pair that falls below the threshold. */
 export function audit(css, threshold = AA_THRESHOLD) {
     const failures = [];
-    for (const [theme, vars] of Object.entries(parseThemes(css))) {
-        const background = parseColor(vars['--bg-primary']);
-        if (!background) continue;
 
-        for (const token of TEXT_TOKENS) {
-            const foreground = parseColor(vars[token], background);
-            if (!foreground) continue;
+    for (const [theme, vars] of Object.entries(parseThemes(css))) {
+        const surfaces = [
+            ...SURFACE_TOKENS.map((token) => [token, parseColor(vars[token])]),
+            ...CONTROL_SURFACES[theme].map((surface, i) => [`control ${i + 1}`, parseColor(surface)]),
+        ];
+
+        for (const [surfaceToken, background] of surfaces) {
+            if (!background) continue;
+
+            for (const token of TEXT_TOKENS) {
+                const foreground = parseColor(vars[token], background);
+                if (!foreground) continue;
+
+                const ratio = contrastRatio(foreground, background);
+                if (ratio < threshold) {
+                    failures.push({ theme, token, surface: surfaceToken, ratio, color: vars[token] });
+                }
+            }
+        }
+
+        for (const pair of SURFACE_PAIRS) {
+            const background = parseColor(vars[pair.over]);
+            const foreground = parseColor(vars[pair.on], background);
+            if (!background || !foreground) continue;
 
             const ratio = contrastRatio(foreground, background);
             if (ratio < threshold) {
-                failures.push({ theme, token, ratio, color: vars[token] });
+                failures.push({
+                    theme, token: pair.on, surface: pair.over, ratio, color: vars[pair.on],
+                });
             }
         }
     }
@@ -171,13 +248,16 @@ function main() {
     const themes = parseThemes(css);
 
     for (const failure of failures) {
-        const background = parseColor(themes[failure.theme]['--bg-primary']);
+        const control = /^control (\d)$/.exec(failure.surface || '');
+        const background = control
+            ? parseColor(CONTROL_SURFACES[failure.theme][Number(control[1]) - 1])
+            : parseColor(themes[failure.theme][failure.surface || '--bg-primary']);
         const current = parseColor(failure.color, background);
-        const replacement = adjustForContrast(current, background);
+        const replacement = adjustForContrast(current, background, FIX_TARGET);
         const after = contrastRatio(parseColor(replacement), background);
 
         console.log(
-            `  ${failure.theme.padEnd(9)} ${failure.token.padEnd(17)} ` +
+            `  ${failure.theme.padEnd(9)} ${failure.token.padEnd(17)} on ${(failure.surface || '--bg-primary').padEnd(16)} ` +
             `${failure.ratio.toFixed(2)} -> ${after.toFixed(2)}  ${failure.color} -> ${replacement}`
         );
 
