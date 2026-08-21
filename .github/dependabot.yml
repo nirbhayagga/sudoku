@@ -12,11 +12,16 @@ updates:
       day: monday
     open-pull-requests-limit: 5
     groups:
-      # One PR for routine bumps instead of five; anything major stays separate
-      # so it gets read properly.
+      # One PR for routine bumps instead of five.
       dev-dependencies:
         patterns: ['*']
         update-types: [minor, patch]
+      # And one for majors, because the test toolchain is peer-locked: vite,
+      # vitest and @vitest/coverage-v8 must move together or npm refuses to
+      # install. Separate PRs for those can never pass CI individually.
+      toolchain-majors:
+        patterns: ['vite', 'vitest', '@vitest/*', 'jsdom']
+        update-types: [major]
     commit-message:
       prefix: 'deps'
 
@@ -34,7 +39,12 @@ updates:
     commit-message:
       prefix: 'deps(api)'
 
-  # Base images: node:20-alpine and nginx:alpine.
+  # Base images: node:24-alpine and nginx:alpine.
+  #
+  # Majors are ignored deliberately. Node's even majors become LTS months after
+  # release, so an automatic bump lands you on Current — and it would silently
+  # diverge from the node-version pinned in the workflows. Move both together,
+  # by hand, when a release reaches LTS.
   - package-ecosystem: docker
     directories:
       - /
@@ -42,13 +52,20 @@ updates:
     schedule:
       interval: weekly
       day: monday
+    ignore:
+      - dependency-name: 'node'
+        update-types: ['version-update:semver-major']
     commit-message:
       prefix: 'deps(docker)'
 
-  # actions/checkout, actions/setup-node and friends.
+  # actions/checkout, actions/setup-node and friends. Grouped: they are all
+  # first-party and bumping them one PR at a time is pure noise.
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: monthly
+    groups:
+      github-actions:
+        patterns: ['*']
     commit-message:
       prefix: 'deps(ci)'
