@@ -183,7 +183,7 @@ colour.
 | `tests/service-worker.test.js` | Precache manifest, cache lifecycle, and every fetch strategy |
 | `tests/format.test.js` | Time formatting and HTML escaping |
 | `tests/storage.test.js` | Persistence, including when storage throws |
-| `tests/contrast.test.js` | WCAG AA contrast for every theme |
+| `tests/contrast.test.js` | WCAG AA contrast for every theme, from the CSS variables |
 | `tests/daily.test.js` | Deterministic puzzle of the day |
 | `tests/share.test.js` | Link building and parsing |
 | `tests/techniques.test.js` | Solving techniques, and that they never remove a correct candidate |
@@ -453,8 +453,9 @@ PWA installability is deliberately not asserted there — Lighthouse 12 removed
 the PWA category, and `tests/service-worker.test.js` already checks the manifest,
 icons, precache list and every caching rule directly.
 
-The thresholds are a first estimate. Read the first run's report and move them to
-sit just under what the app actually scores.
+Thresholds are set from measured scores: performance 97-99, **accessibility
+100**, best practices 96. Accessibility is asserted at 100 because it is
+currently there and every drop has been a real defect.
 
 ### Test and build
 
