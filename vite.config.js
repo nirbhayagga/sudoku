@@ -101,26 +101,38 @@ function pwa() {
 }
 
 /**
- * Rewrite link-preview URLs to absolute ones.
+ * The site's own public URL, which has to appear absolutely in the markup:
+ * canonical, og:url and og:image are all read by scrapers that will not resolve
+ * a relative path.
  *
- * og:image in particular must be absolute — most crawlers will not resolve a
- * relative path, and a preview with no image is the difference between a card
- * and a bare line of text. The source keeps them relative so the file works
- * from any host, or from the filesystem, when SUDOKU_SITE_URL is not set.
+ * Source carries the production URL as a real default, so the HTML is correct
+ * as authored — no build, no configuration, nothing to forget. Any other
+ * deployment overrides it.
  */
-function absolutePreviewUrls() {
+const DEFAULT_SITE_URL = 'https://sudoku.nirbhay.dev';
+
+/** Trailing slashes stripped so joins cannot double up. */
+const SITE_URL = (process.env.SUDOKU_SITE_URL || DEFAULT_SITE_URL).replace(/\/+$/, '');
+
+/**
+ * Substitute the site URL when it differs from the default.
+ *
+ * The alternative — leaving relative URLs and rewriting only when a variable is
+ * set — fails silently: an unset variable ships a relative og:image and the
+ * shared link quietly stops rendering a card. A default cannot fail that way,
+ * and the resolved value is logged so a wrong one is visible instead.
+ */
+function siteUrl() {
     return {
-        name: 'absolute-preview-urls',
+        name: 'site-url',
         apply: 'build',
         transformIndexHtml(html) {
-            const site = process.env.SUDOKU_SITE_URL;
-            if (!site) return html;
-
-            const base = site.replace(/\/+$/, '') + '/';
-            return html
-                .replace(/(<meta property="og:image" content=")\.\/([^"]*)/, `$1${base}$2`)
-                .replace(/(<meta name="twitter:image" content=")\.\/([^"]*)/, `$1${base}$2`)
-                .replace(/(<meta property="og:url" content=")\.\/([^"]*)/, `$1${base}$2`);
+            if (SITE_URL === DEFAULT_SITE_URL) return html;
+            return html.split(DEFAULT_SITE_URL).join(SITE_URL);
+        },
+        closeBundle() {
+            const suffix = SITE_URL === DEFAULT_SITE_URL ? ' (default)' : ' (from SUDOKU_SITE_URL)';
+            console.log(`  site url: ${SITE_URL}${suffix}`);
         },
     };
 }
@@ -171,9 +183,11 @@ return {
 
     // The standalone build is for file://, where service workers do not exist,
     // so it ships none. Its script must stay a classic script.
+    // siteUrl applies to both targets: a self-hosted or standalone copy should
+    // not advertise the public site as its canonical URL either.
     plugins: standalone
-        ? [injectApiBase(), classicScriptOutput()]
-        : [injectApiBase(), absolutePreviewUrls(), sameOriginAssets(), pwa()],
+        ? [injectApiBase(), siteUrl(), classicScriptOutput()]
+        : [injectApiBase(), siteUrl(), sameOriginAssets(), pwa()],
 
     server: {
         port: 8000,

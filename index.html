@@ -11,25 +11,31 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="theme-color" content="#0a0a0f">
 
-  <!-- Link previews. The URLs are relative so the file is host-agnostic; the
-       build rewrites them to absolute when SUDOKU_SITE_URL is set, because most
-       crawlers require absolute URLs for og:image. -->
+  <!-- Link previews and canonical URL.
+       These must be absolute: crawlers do not resolve relative paths, so a
+       relative og:image degrades a shared link from a card to a line of text.
+       The production URL is the default so the markup is correct as authored —
+       dev server, direct open, no configuration needed. Any other deployment
+       (staging, self-hosted, a fork) sets SUDOKU_SITE_URL and the build
+       substitutes, echoing the resolved value so a wrong one is visible in the
+       log rather than silently shipped. -->
+  <link rel="canonical" href="https://sudoku.nirbhay.dev/">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Sudoku">
   <meta property="og:title" content="Sudoku">
   <meta property="og:description"
     content="5,500 puzzles graded by measured solving effort, not clue count. Installable, plays offline, no tracking.">
-  <meta property="og:image" content="./og-image.png">
+  <meta property="og:image" content="https://sudoku.nirbhay.dev/og-image.png">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
   <meta property="og:image:alt" content="A sudoku grid beside the word Sudoku">
-  <meta property="og:url" content="./">
+  <meta property="og:url" content="https://sudoku.nirbhay.dev/">
 
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Sudoku">
   <meta name="twitter:description"
     content="5,500 puzzles graded by measured solving effort, not clue count. Installable, plays offline, no tracking.">
-  <meta name="twitter:image" content="./og-image.png">
+  <meta name="twitter:image" content="https://sudoku.nirbhay.dev/og-image.png">
   <title>Sudoku</title>
   <link rel="stylesheet" href="/style.css">
   <link rel="manifest" href="./manifest.webmanifest">

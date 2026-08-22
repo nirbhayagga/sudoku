@@ -235,29 +235,57 @@ describe('link previews', () => {
         expect(read(modular, 'index.html')).toContain('property="og:image:alt"');
     });
 
-    it('leaves preview URLs relative when no site URL is given', () => {
+    // A default rather than a relative path, because an unset variable would
+    // otherwise ship a relative og:image and silently degrade every shared
+    // link from a card to a line of text.
+    it('uses the production URL by default, with no build configuration', () => {
         const html = read(modular, 'index.html');
-        expect(html).toContain('content="./og-image.png"');
+        expect(html).toContain('rel="canonical" href="https://sudoku.nirbhay.dev/"');
+        expect(html).toContain('content="https://sudoku.nirbhay.dev/og-image.png"');
+        expect(html).not.toContain('content="./og-image.png"');
     });
 
-    it('makes preview URLs absolute when SUDOKU_SITE_URL is set', () => {
-        const other = fs.mkdtempSync(path.join(os.tmpdir(), 'sudoku-og-'));
-        try {
-            runBuild(other, { env: { SUDOKU_SITE_URL: 'https://sudoku.example.com' } });
-            const html = read(other, 'index.html');
-            expect(html).toContain('content="https://sudoku.example.com/og-image.png"');
-            expect(html).toContain('content="https://sudoku.example.com/"');
-            expect(html).not.toContain('content="./og-image.png"');
-        } finally {
-            fs.rmSync(other, { recursive: true, force: true });
-        }
+    it('declares a canonical URL', () => {
+        expect(read(modular, 'index.html')).toMatch(/<link rel="canonical" href="https?:\/\/[^"]+"/);
     });
 
     it('tolerates a trailing slash on the site URL', () => {
         const other = fs.mkdtempSync(path.join(os.tmpdir(), 'sudoku-og2-'));
         try {
             runBuild(other, { env: { SUDOKU_SITE_URL: 'https://sudoku.example.com/' } });
-            expect(read(other, 'index.html')).toContain('content="https://sudoku.example.com/og-image.png"');
+            const html = read(other, 'index.html');
+            expect(html).toContain('content="https://sudoku.example.com/og-image.png"');
+            expect(html).not.toContain('//og-image.png');
+        } finally {
+            fs.rmSync(other, { recursive: true, force: true });
+        }
+    });
+
+    /**
+     * The likely bug in a substitution like this is a partial one — some tags
+     * updated, others left pointing at the default. It reads as correct at a
+     * glance, so it is asserted directly: after an override, the default must
+     * not survive anywhere in the document.
+     */
+    it('leaves no trace of the default after an override', () => {
+        const other = fs.mkdtempSync(path.join(os.tmpdir(), 'sudoku-og3-'));
+        try {
+            runBuild(other, { env: { SUDOKU_SITE_URL: 'https://elsewhere.example.com' } });
+            expect(read(other, 'index.html')).not.toContain('sudoku.nirbhay.dev');
+        } finally {
+            fs.rmSync(other, { recursive: true, force: true });
+        }
+    });
+
+    // A self-hosted copy advertising the public site as canonical would tell
+    // search engines the real version lives somewhere else.
+    it('overrides the standalone build too', () => {
+        const other = fs.mkdtempSync(path.join(os.tmpdir(), 'sudoku-og4-'));
+        try {
+            runBuild(other, { mode: 'standalone', env: { SUDOKU_SITE_URL: 'https://selfhosted.example.com' } });
+            const html = read(other, 'index.html');
+            expect(html).toContain('https://selfhosted.example.com/');
+            expect(html).not.toContain('sudoku.nirbhay.dev');
         } finally {
             fs.rmSync(other, { recursive: true, force: true });
         }
