@@ -101,6 +101,31 @@ function pwa() {
 }
 
 /**
+ * Rewrite link-preview URLs to absolute ones.
+ *
+ * og:image in particular must be absolute — most crawlers will not resolve a
+ * relative path, and a preview with no image is the difference between a card
+ * and a bare line of text. The source keeps them relative so the file works
+ * from any host, or from the filesystem, when SUDOKU_SITE_URL is not set.
+ */
+function absolutePreviewUrls() {
+    return {
+        name: 'absolute-preview-urls',
+        apply: 'build',
+        transformIndexHtml(html) {
+            const site = process.env.SUDOKU_SITE_URL;
+            if (!site) return html;
+
+            const base = site.replace(/\/+$/, '') + '/';
+            return html
+                .replace(/(<meta property="og:image" content=")\.\/([^"]*)/, `$1${base}$2`)
+                .replace(/(<meta name="twitter:image" content=")\.\/([^"]*)/, `$1${base}$2`)
+                .replace(/(<meta property="og:url" content=")\.\/([^"]*)/, `$1${base}$2`);
+        },
+    };
+}
+
+/**
  * Let a static deployment point at a leaderboard hosted elsewhere, the same way
  * the previous build script did.
  */
@@ -148,7 +173,7 @@ return {
     // so it ships none. Its script must stay a classic script.
     plugins: standalone
         ? [injectApiBase(), classicScriptOutput()]
-        : [injectApiBase(), sameOriginAssets(), pwa()],
+        : [injectApiBase(), absolutePreviewUrls(), sameOriginAssets(), pwa()],
 
     server: {
         port: 8000,

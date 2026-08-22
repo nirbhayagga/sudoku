@@ -203,3 +203,63 @@ describe('api base injection', () => {
         }
     });
 });
+
+describe('link previews', () => {
+    // A shared link with no og:image renders as a bare line of text rather than
+    // a card, and most crawlers will not resolve a relative image path.
+    it('declares Open Graph and Twitter cards', () => {
+        const html = read(modular, 'index.html');
+        for (const tag of [
+            'property="og:title"', 'property="og:description"', 'property="og:image"',
+            'property="og:type"', 'name="twitter:card"', 'name="twitter:image"',
+        ]) {
+            expect(html, tag).toContain(tag);
+        }
+    });
+
+    it('ships the preview image at the size crawlers expect', () => {
+        const file = path.join(modular, 'og-image.png');
+        expect(fs.existsSync(file)).toBe(true);
+
+        const html = read(modular, 'index.html');
+        expect(html).toContain('content="1200"');
+        expect(html).toContain('content="630"');
+
+        // PNG header carries the dimensions at a fixed offset.
+        const header = fs.readFileSync(file).subarray(16, 24);
+        expect(header.readUInt32BE(0)).toBe(1200);
+        expect(header.readUInt32BE(4)).toBe(630);
+    });
+
+    it('describes the image for screen readers', () => {
+        expect(read(modular, 'index.html')).toContain('property="og:image:alt"');
+    });
+
+    it('leaves preview URLs relative when no site URL is given', () => {
+        const html = read(modular, 'index.html');
+        expect(html).toContain('content="./og-image.png"');
+    });
+
+    it('makes preview URLs absolute when SUDOKU_SITE_URL is set', () => {
+        const other = fs.mkdtempSync(path.join(os.tmpdir(), 'sudoku-og-'));
+        try {
+            runBuild(other, { env: { SUDOKU_SITE_URL: 'https://sudoku.example.com' } });
+            const html = read(other, 'index.html');
+            expect(html).toContain('content="https://sudoku.example.com/og-image.png"');
+            expect(html).toContain('content="https://sudoku.example.com/"');
+            expect(html).not.toContain('content="./og-image.png"');
+        } finally {
+            fs.rmSync(other, { recursive: true, force: true });
+        }
+    });
+
+    it('tolerates a trailing slash on the site URL', () => {
+        const other = fs.mkdtempSync(path.join(os.tmpdir(), 'sudoku-og2-'));
+        try {
+            runBuild(other, { env: { SUDOKU_SITE_URL: 'https://sudoku.example.com/' } });
+            expect(read(other, 'index.html')).toContain('content="https://sudoku.example.com/og-image.png"');
+        } finally {
+            fs.rmSync(other, { recursive: true, force: true });
+        }
+    });
+});
