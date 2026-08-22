@@ -2126,6 +2126,67 @@ function loadBank() {
     });
     window.addEventListener('pagehide', flushSave);
 
+    // ── Fitting the board to the screen ────────────────────────────────
+    //
+    // The board used to be sized by media queries that subtracted a guessed
+    // constant for everything else on screen (`calc((100dvh - 11rem) / 9)`).
+    // The guess is wrong on any device whose chrome is not exactly that tall,
+    // and being wrong by a little means the bottom controls fall off.
+    //
+    // So measure instead: whatever height the rest of the page occupies, give
+    // the remainder to the grid. This adapts to any device, to rotation, and to
+    // iOS collapsing its toolbars mid-scroll.
+
+    /** Below this a cell is too small to tap, so the page scrolls instead. */
+    const MIN_CELL = 26;
+
+    /** Breathing room so the last row never sits flush against the edge. */
+    const FIT_MARGIN = 8;
+
+    function fitBoard() {
+        if (!wrappers.length) return;
+
+        // Clear the previous fit so the stylesheet's maximum applies, then read
+        // it off a real cell. Custom properties are not resolved until they are
+        // used, so several breakpoints hand back a literal `calc(...)` string —
+        // measuring the element is the only way to get a number.
+        document.documentElement.style.removeProperty('--cell-size');
+        const maxCell = wrappers[0].getBoundingClientRect().width;
+        if (!maxCell) return;
+
+        // Everything except the grid: header, tabs, controls, status, numpad,
+        // padding, margins. Derived rather than listed, so adding UI cannot
+        // silently break the calculation.
+        const gridHeight = gridEl.offsetHeight;
+        const chrome = document.body.scrollHeight - gridHeight;
+
+        const viewport = window.visualViewport?.height || window.innerHeight;
+        const available = viewport - chrome - FIT_MARGIN;
+
+        // 8 one-pixel gaps plus the 2px border either side.
+        const forCells = available - 8 - 4;
+        const fitted = Math.floor(forCells / 9);
+
+        const size = Math.max(MIN_CELL, Math.min(maxCell, fitted));
+        document.documentElement.style.setProperty('--cell-size', `${size}px`);
+    }
+
+    /** Coalesce bursts of resize events into one measurement per frame. */
+    let fitPending = false;
+    function scheduleFit() {
+        if (fitPending) return;
+        fitPending = true;
+        requestAnimationFrame(() => {
+            fitPending = false;
+            fitBoard();
+        });
+    }
+
+    window.addEventListener('resize', scheduleFit);
+    window.addEventListener('orientationchange', scheduleFit);
+    // iOS reports toolbar collapse here rather than through window resize.
+    window.visualViewport?.addEventListener('resize', scheduleFit);
+
     // ══════════════════════════════════════════════════════════════════
     //  INIT
     // ══════════════════════════════════════════════════════════════════
@@ -2141,6 +2202,9 @@ function loadBank() {
     switchMode('play');
     applySharedPuzzle(sharedPuzzle);
     revealLeaderboardUi();
+
+    // Once the real layout exists, size the board to whatever room is left.
+    fitBoard();
 
     // ── Offline support ────────────────────────────────────────────────
     // Registered only over http(s): service workers are unavailable on file://,

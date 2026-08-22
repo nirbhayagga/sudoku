@@ -49,7 +49,9 @@
     --radius-sm: 6px;
     --transition: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 
-    --cell-size: 56px;
+    --cell-size-max: 56px;
+    /* Overridden inline by fitBoard() once the real space is known. */
+    --cell-size: var(--cell-size-max);
 }
 
 body {
@@ -1597,7 +1599,7 @@ kbd {
 @media (max-width: 1100px) and (min-width: 581px) {
     :root {
         /* Scale to fit viewport width with comfortable padding */
-        --cell-size: min(50px, calc((100vw - 6rem) / 9));
+        --cell-size-max: min(50px, calc((100vw - 6rem) / 9));
     }
 
     body {
@@ -1630,7 +1632,7 @@ kbd {
 @media (min-width: 700px) and (max-height: 860px) {
     :root {
         /* Size cells to fit available height: viewport - header/mode-toggle/card-padding/status (~11rem) */
-        --cell-size: min(50px, calc((100dvh - 11rem) / 9));
+        --cell-size-max: 50px;
     }
 
     body {
@@ -1754,7 +1756,7 @@ kbd {
 /* ── Extra-wide landscape (full-size iPads, large tablets) ────────── */
 @media (min-width: 1024px) and (max-height: 860px) {
     :root {
-        --cell-size: min(56px, calc((100dvh - 10rem) / 9));
+        --cell-size-max: 56px;
     }
 
     .card {
@@ -1777,7 +1779,7 @@ kbd {
 /* ── Desktop landscape fallback (non-touch, short viewport) ──────── */
 @media (min-width: 900px) and (max-height: 750px) and (hover: hover) {
     :root {
-        --cell-size: min(50px, calc((100vh - 12rem) / 9));
+        --cell-size-max: 50px;
     }
 
     body {
@@ -1799,7 +1801,7 @@ kbd {
     :root {
         /* Scale cell size to fit width or height, preventing vertical overflow */
         /* 25rem accounts for: header + mode toggle + controls + numpad + status + padding */
-        --cell-size: min(calc((100vw - 3rem - 2px) / 9), calc((100dvh - 25rem) / 9));
+        --cell-size-max: calc((100vw - 3rem - 2px) / 9);
     }
 
     body {
@@ -1924,7 +1926,7 @@ kbd {
 /* Very short screens (iPhone SE, etc.) — extra-compact mode */
 @media (max-width: 580px) and (max-height: 700px) {
     :root {
-        --cell-size: min(calc((100vw - 3rem - 2px) / 9), calc((100dvh - 22rem) / 9));
+        --cell-size-max: calc((100vw - 3rem - 2px) / 9);
     }
 
     .header p {
@@ -1953,6 +1955,34 @@ kbd {
         font-size: 0.65rem;
     }
 
+    /* Tighten everything that is not the board. On a short phone the controls
+       and the grid are competing for the same pixels, and the grid is the part
+       people actually look at. */
+    .play-buttons {
+        gap: 0.3rem;
+    }
+
+    .status-bar {
+        padding: 0.15rem 0.4rem;
+        font-size: 0.65rem;
+    }
+
+    .level-selector {
+        font-size: 0.65rem;
+    }
+
+    .level-selector input {
+        padding: 0.15rem 0.3rem;
+    }
+
+    .numpad {
+        gap: 0.3rem;
+    }
+
+    .card {
+        padding: 0.5rem;
+    }
+
     .diff-btn {
         min-height: 28px;
         padding: 0.2rem 0.4rem;
@@ -1976,7 +2006,7 @@ kbd {
 /* Extra small phones (SE, Mini) */
 @media (max-width: 380px) {
     :root {
-        --cell-size: calc((100vw - 2.5rem - 2px) / 9);
+        --cell-size-max: calc((100vw - 2.5rem - 2px) / 9);
     }
 
     body {
