@@ -15,10 +15,20 @@ import { test, expect } from '@playwright/test';
  */
 const SCREENS = [
     { name: 'iPhone SE, toolbars showing', width: 375, height: 553 },
-    { name: 'iPhone 13, toolbars showing', width: 390, height: 664 },
-    { name: 'iPhone 13, installed', width: 390, height: 844 },
+    { name: 'iPhone 16, toolbars showing', width: 393, height: 664 },
+    { name: 'iPhone 16, installed', width: 393, height: 852 },
+    { name: 'iPhone 16 Pro, toolbars showing', width: 402, height: 686 },
+    { name: 'iPhone 16 Pro, installed', width: 402, height: 874 },
     { name: 'very short landscape', width: 740, height: 320 },
 ];
+
+/** Screens the board is expected to fit on entirely, with no scrolling. */
+const SHOULD_FIT = new Set([
+    'iPhone 16, toolbars showing',
+    'iPhone 16, installed',
+    'iPhone 16 Pro, toolbars showing',
+    'iPhone 16 Pro, installed',
+]);
 
 /** Drag a finger up the screen, the way a person scrolls. */
 async function touchDrag(context, page, width, height) {
@@ -91,6 +101,47 @@ for (const screen of SCREENS) {
 
             await touchDrag(context, page, screen.width, screen.height);
             expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
+            await context.close();
+        });
+
+        if (SHOULD_FIT.has(screen.name)) {
+            // The board is sized from measured free space, so on a phone of
+            // this height the whole app should sit on one screen. It used to be
+            // sized by a media query subtracting a guessed constant, which is
+            // how the bottom controls ended up off the bottom.
+            test('fits without scrolling at all', async ({ browser }) => {
+                const context = await browser.newContext({
+                    viewport: { width: screen.width, height: screen.height },
+                    hasTouch: true, isMobile: true, deviceScaleFactor: 3,
+                });
+                const page = await context.newPage();
+                await page.goto('/');
+                await page.waitForTimeout(250);
+
+                const overflow = await page.evaluate(
+                    () => document.documentElement.scrollHeight - window.innerHeight
+                );
+                expect(overflow).toBeLessThanOrEqual(1);
+                await context.close();
+            });
+        }
+
+        test('sizes the board to the space available', async ({ browser }) => {
+            const context = await browser.newContext({
+                viewport: { width: screen.width, height: screen.height },
+                hasTouch: true, isMobile: true, deviceScaleFactor: 3,
+            });
+            const page = await context.newPage();
+            await page.goto('/');
+            await page.waitForTimeout(250);
+
+            // A resolved pixel value, not the stylesheet's calc() expression:
+            // if fitBoard bailed out, this would still be unresolved.
+            const cell = await page.evaluate(
+                () => getComputedStyle(document.documentElement).getPropertyValue('--cell-size').trim()
+            );
+            expect(cell).toMatch(/^\d+px$/);
+            expect(parseInt(cell, 10)).toBeGreaterThanOrEqual(26);
             await context.close();
         });
 
