@@ -369,10 +369,22 @@ step when DNS already lives at Cloudflare.
 location is set in the repo rather than the dashboard. `.node-version` pins the
 build to Node 24, matching CI and the Docker images.
 
-Set `SUDOKU_SITE_URL` to the deployed origin (e.g.
-`https://sudoku.example.com`) so link previews carry absolute URLs — most
-crawlers will not resolve a relative `og:image`, and the difference is a preview
-card versus a bare line of text.
+The canonical URL, `og:url` and `og:image` have to be absolute — crawlers do not
+resolve relative paths, and a relative `og:image` turns a shared link from a
+preview card into a line of text. The production URL is the **default in the
+source**, so no configuration is needed for the common case and nothing breaks
+if a variable is forgotten.
+
+Any other deployment overrides it:
+
+```bash
+SUDOKU_SITE_URL=https://staging.example.com npm run build
+```
+
+The build prints the URL it resolved (`site url: … (default)` or
+`(from SUDOKU_SITE_URL)`), so a wrong value shows up in the log rather than
+shipping silently. Set it for a self-hosted instance too — otherwise that copy
+tells search engines the real version lives somewhere else.
 
 Every push to `main` deploys, and pull requests get their own preview URL.
 
