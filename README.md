@@ -111,7 +111,9 @@ sudoku/
   docker-compose.yml            Local build, Traefik (recommended)
   docker-compose.remote.yml     Builds from git repo
   docker-compose.standalone.yml No Traefik, localhost:8080
-  netlify.toml                  Static host build settings
+  netlify.toml                  Netlify build settings
+  wrangler.jsonc                Cloudflare deploy config (serves dist/)
+  .node-version                 Build Node version, matching CI and Docker
 
   leaderboard-api/    Self-hosted leaderboard backend
     server.js         Express.js API (scores stored in JSON file)
@@ -354,12 +356,17 @@ Cloudflare Pages is the host this is set up for: it reads the generated
 `_headers`, so the cache rules actually apply, and custom domains are a single
 step when DNS already lives at Cloudflare.
 
-**Setup** — no separate repository, no config file, no changes to this repo:
+**Setup** — no separate repository needed:
 
-1. Cloudflare dashboard → Workers & Pages → Create → Pages → Connect to Git
+1. Cloudflare dashboard → Workers & Pages → Create → Import a repository
 2. Pick this repository and the `main` branch
-3. Build command `npm run build`, output directory `dist`, `NODE_VERSION` `20`
-4. Custom Domains → add e.g. `sudoku.example.com`
+3. Build command: `npm run build`
+4. Deploy command: `npx wrangler deploy` (or leave the default)
+5. Custom Domains → add e.g. `sudoku.example.com`
+
+`wrangler.jsonc` declares `./dist` as the asset directory, so the output
+location is set in the repo rather than the dashboard. `.node-version` pins the
+build to Node 24, matching CI and the Docker images.
 
 Every push to `main` deploys, and pull requests get their own preview URL.
 
