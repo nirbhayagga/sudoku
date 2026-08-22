@@ -1575,10 +1575,12 @@ kbd {
         display: none;
     }
 
-    /* Fit viewport on touch devices — allow scrolling as fallback */
+    /* Fit the viewport where possible, but never clamp the document: a fixed
+       height means content taller than the screen simply has nowhere to go.
+       min-height lets the page grow and scroll instead. */
     html {
-        height: 100%;
-        height: 100dvh;
+        min-height: 100%;
+        min-height: 100dvh;
     }
 
     body {
@@ -1601,7 +1603,10 @@ kbd {
     body {
         padding: 1rem;
         padding-top: max(1rem, env(safe-area-inset-top));
-        padding-bottom: max(1rem, env(safe-area-inset-bottom));
+        /* Clear the home indicator, and leave room besides: this is the last
+           thing on screen and being flush to the bottom edge makes the final
+           row of controls feel cut off even when it is technically visible. */
+        padding-bottom: calc(1rem + env(safe-area-inset-bottom));
         padding-left: max(1rem, env(safe-area-inset-left));
         padding-right: max(1rem, env(safe-area-inset-right));
     }
