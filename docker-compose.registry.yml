@@ -1,11 +1,18 @@
-## Remote build (from Git repo) — deploy without cloning on the host.
-##   docker compose -f docker-compose.remote.yml up -d --build
-## NOTE: all changes must be committed and pushed before rebuilding.
+## Run the published images — no build, no toolchain on the host.
+##
+##   docker compose -f docker-compose.registry.yml pull
+##   docker compose -f docker-compose.registry.yml up -d
+##
+## Images are published to GHCR by CI on every push to main, tagged `latest`
+## and with the commit SHA. Pin to a SHA to roll back:
+##   SUDOKU_TAG=<sha> docker compose -f docker-compose.registry.yml up -d
+##
+## Replaces the old remote-build compose file: pulling a tested image beats
+## rebuilding from a git URL on every deploy.
 
 services:
   sudoku:
-    build:
-      context: ${SUDOKU_REPO:-https://github.com/nirb/sudoku.git}
+    image: ghcr.io/${SUDOKU_OWNER:-nirb}/sudoku:${SUDOKU_TAG:-latest}
     container_name: sudoku
     restart: unless-stopped
     depends_on:
@@ -13,6 +20,8 @@ services:
     environment:
       NGINX_RESOLVER: 127.0.0.11
       LEADERBOARD_UPSTREAM: http://leaderboard:3001
+    # ports:
+    #   - "8080:80"
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.sudoku.rule=Host(`${SUDOKU_HOST:-sudoku.example.com}`)"
@@ -24,10 +33,11 @@ services:
       - traefik
 
   leaderboard:
-    build:
-      context: ${SUDOKU_REPO:-https://github.com/nirb/sudoku.git}#:leaderboard-api
+    image: ghcr.io/${SUDOKU_OWNER:-nirb}/sudoku-leaderboard:${SUDOKU_TAG:-latest}
     container_name: sudoku-leaderboard
     restart: unless-stopped
+    environment:
+      CORS_ORIGIN: "*"
     volumes:
       - leaderboard-data:/app/data
     networks:
