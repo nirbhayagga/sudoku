@@ -109,7 +109,7 @@ sudoku/
   Dockerfile          Multi-stage build -> nginx-alpine
   nginx.conf.template Nginx config (envsubst at container start)
   docker-compose.yml            Local build, Traefik (recommended)
-  docker-compose.remote.yml     Builds from git repo
+  docker-compose.registry.yml   Runs the published GHCR images
   docker-compose.standalone.yml No Traefik, localhost:8080
   netlify.toml                  Netlify build settings
   wrangler.jsonc                Cloudflare deploy config (serves dist/)
@@ -315,7 +315,7 @@ Two shapes of deployment, and they can be combined:
 | File | Build source | Notes |
 |---|---|---|
 | `docker-compose.yml` | Local directory | Traefik labels, recommended |
-| `docker-compose.remote.yml` | Git repo URL | No clone needed on the host |
+| `docker-compose.registry.yml` | Published GHCR images | Nothing to build on the host |
 | `docker-compose.standalone.yml` | Local directory | No Traefik, `localhost:8080` |
 
 Host and repo come from the environment, so nothing site-specific lives in the
@@ -324,11 +324,27 @@ compose files. Copy `.env.example` to `.env` and set them:
 ```bash
 git clone https://github.com/nirb/sudoku.git
 cd sudoku
-cp .env.example .env      # set SUDOKU_HOST (and SUDOKU_REPO for remote builds)
+cp .env.example .env      # set SUDOKU_HOST
 docker compose up -d --build
 
 # Update:
 git pull && docker compose up -d --build
+```
+
+Or skip building entirely and run the images CI publishes:
+
+```bash
+docker compose -f docker-compose.registry.yml pull
+docker compose -f docker-compose.registry.yml up -d
+```
+
+Every push to `main` publishes `ghcr.io/<owner>/sudoku` and
+`ghcr.io/<owner>/sudoku-leaderboard`, tagged `latest` and with the commit SHA —
+but only after the tests, the end-to-end suite and the container check have all
+passed, so `latest` is never a build that failed CI. Pin a SHA to roll back:
+
+```bash
+SUDOKU_TAG=<commit-sha> docker compose -f docker-compose.registry.yml up -d
 ```
 
 The image is multi-stage: Node builds `dist/`, then nginx serves it. Nothing but
