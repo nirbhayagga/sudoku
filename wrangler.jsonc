@@ -1,0 +1,26 @@
+{
+  // Cloudflare Workers static-asset deployment.
+  //
+  // Kept in the repo rather than configured in the dashboard so the deploy is
+  // reviewable and reproducible: `npx wrangler deploy` from any machine or CI
+  // produces the same result as a push-triggered build.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "sudoku",
+  "compatibility_date": "2026-08-21",
+
+  "assets": {
+    "directory": "./dist",
+
+    // No client-side router here — shared puzzles travel as query strings
+    // (?d=evil&level=42), not paths — so an unknown path is a genuine 404 and
+    // should say so rather than silently serving the app.
+    "not_found_handling": "none"
+  },
+
+  // No Worker script: this is a static site. Cloudflare serves ./dist directly,
+  // including the generated _headers file that sets immutable caching for the
+  // hashed assets and no-cache for index.html and sw.js.
+  "observability": {
+    "enabled": true
+  }
+}
