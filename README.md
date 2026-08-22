@@ -113,6 +113,7 @@ sudoku/
   docker-compose.standalone.yml No Traefik, localhost:8080
   netlify.toml                  Netlify build settings
   wrangler.jsonc                Cloudflare deploy config (serves dist/)
+  public/og-image.png           Link preview card, 1200x630
   .node-version                 Build Node version, matching CI and Docker
 
   leaderboard-api/    Self-hosted leaderboard backend
@@ -367,6 +368,11 @@ step when DNS already lives at Cloudflare.
 `wrangler.jsonc` declares `./dist` as the asset directory, so the output
 location is set in the repo rather than the dashboard. `.node-version` pins the
 build to Node 24, matching CI and the Docker images.
+
+Set `SUDOKU_SITE_URL` to the deployed origin (e.g.
+`https://sudoku.example.com`) so link previews carry absolute URLs — most
+crawlers will not resolve a relative `og:image`, and the difference is a preview
+card versus a bare line of text.
 
 Every push to `main` deploys, and pull requests get their own preview URL.
 
