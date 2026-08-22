@@ -190,6 +190,7 @@ colour.
 | `tests/daily.test.js` | Deterministic puzzle of the day |
 | `tests/share.test.js` | Link building and parsing |
 | `tests/techniques.test.js` | Solving techniques, and that they never remove a correct candidate |
+| `e2e/small-screen.spec.js` | Short viewports: every control reachable, touch drag scrolls |
 
 ```bash
 npx vitest run tests/solver.test.js      # one file

@@ -28,17 +28,14 @@ function loadBank() {
 }
 
 (() => {
-    // ── Prevent iOS Safari elastic scroll / bounce ──────────────────
-    if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
-        document.addEventListener('touchmove', (e) => {
-            // Allow scrolling inside modal overlays and scrollable containers
-            if (e.target.closest('.modal, .leaderboard-modal, .stats-modal')) return;
-            // Allow scrolling on body/card when content overflows (e.g. landscape iPad)
-            const scrollable = e.target.closest('body, .card');
-            if (scrollable && scrollable.scrollHeight > scrollable.clientHeight) return;
-            e.preventDefault();
-        }, { passive: false });
-    }
+    // Rubber-band scrolling is suppressed in CSS with `overscroll-behavior`,
+    // not JavaScript.
+    //
+    // This used to preventDefault() on touchmove unless the nearest `body` or
+    // `.card` ancestor was itself scrollable. On a short screen that matched
+    // `.card`, which is not a scroll container, so every touch drag was
+    // cancelled — the page could not be scrolled at all and anything below the
+    // fold was unreachable. Cancelling touchmove is far too blunt for this.
 
     // ── Elements ───────────────────────────────────────────────────────
     const gridEl = document.getElementById('grid');
