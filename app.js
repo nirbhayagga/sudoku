@@ -69,6 +69,8 @@ function loadBank() {
     const levelMaxDisplay = document.getElementById('level-max');
     const btnStats = document.getElementById('btn-stats');
     const btnDaily = document.getElementById('btn-daily');
+    const setupControls = document.getElementById('setup-controls');
+    const btnSetupToggle = document.getElementById('btn-setup-toggle');
     const btnShare = document.getElementById('btn-share');
     const shareOverlay = document.getElementById('share-overlay');
     const shareText = document.getElementById('share-text');
@@ -158,6 +160,9 @@ function loadBank() {
     let currentDaily = null;
     // Set during init when the URL names a puzzle; suppresses the resume offer.
     let sharedPuzzleLoaded = false;
+    // Whether the setup panel is showing. It folds away during a game so the
+    // board can use the height, and the toggle brings it back.
+    let setupOpen = true;
 
     /**
      * While paused the timer is frozen and the grid is blurred, so accepting
@@ -1090,6 +1095,8 @@ function loadBank() {
             }
 
             store.recordStart(currentDifficulty);
+            setupOpen = false;
+            refreshLayout();
             refreshAutoNotes();
             store.deleteSavedGame();
             debounceSave();
@@ -1401,6 +1408,10 @@ function loadBank() {
                 wrappers[i].style.animationDelay = `${(i % 9) * 20 + Math.floor(i / 9) * 20}ms`;
             }
 
+            // The game is over; offering setup again is what the player wants.
+            setupOpen = true;
+            refreshLayout();
+
             const timeStr = formatTime(timerSeconds);
             const hintStr = hintsUsed > 0 ? `${hintsUsed} hint${hintsUsed > 1 ? 's' : ''} used` : 'No hints used';
             const assistStr = autoNotesUsed ? ' — auto-notes used' : '';
@@ -1559,6 +1570,7 @@ function loadBank() {
         }
 
         gameActive = true;
+        setupOpen = false;
         runTimer(state.timerSeconds || 0);
 
         recheckAllConflicts();
@@ -1569,6 +1581,8 @@ function loadBank() {
         }
         // setAutoNotes stamps the flag; the saved value is the truth.
         autoNotesUsed = state.autoNotesUsed || false;
+
+        refreshLayout();
 
         const label = DIFFICULTY_LABELS[currentDifficulty];
         setStatus(`Resumed: ${label} — ${formatTime(timerSeconds)}`);
@@ -1735,6 +1749,8 @@ function loadBank() {
                 if (saved) showResumeBanner(saved);
             }
         }
+
+        refreshLayout();
     }
 
     function selectDifficulty(diff) {
@@ -1791,6 +1807,13 @@ function loadBank() {
         shareOverlay.addEventListener('click', (e) => {
             if (e.target === shareOverlay) dialogs.close(shareOverlay);
         });
+    }
+    if (btnSetupToggle) {
+        btnSetupToggle.addEventListener('click', () => {
+            setupOpen = true;
+            refreshLayout();
+        });
+        btnSetupToggle.addEventListener('mousedown', (e) => e.preventDefault());
     }
     if (btnDaily) {
         btnDaily.addEventListener('click', () => startDaily());
@@ -2126,6 +2149,52 @@ function loadBank() {
     });
     window.addEventListener('pagehide', flushSave);
 
+    /**
+     * Show setup between games, fold it away during one.
+     *
+     * Difficulty, level and New Game are decided once and then take up room for
+     * the rest of the puzzle. Folding them recovers ~120px, which on a phone is
+     * the difference between a 26px cell and a 37px one.
+     */
+    function setSetupFolded(folded) {
+        if (!setupControls || !btnSetupToggle) return;
+        setupControls.style.display = folded ? 'none' : '';
+        btnSetupToggle.style.display = folded ? '' : 'none';
+        btnSetupToggle.setAttribute('aria-expanded', String(!folded));
+    }
+
+    /**
+     * Fold setup away, size the board, and unfold again if folding bought
+     * nothing.
+     *
+     * Folding only helps when height is what limits the board. On a desktop
+     * there is room to spare, so hiding the difficulty buttons mid-game would
+     * be a loss for no gain — the board is already at its maximum size.
+     */
+    function refreshLayout() {
+        const playing = mode === 'play' && gameActive && !gameWon && !setupOpen;
+
+        if (!playing) {
+            setSetupFolded(false);
+            fitBoardSettled();
+            return;
+        }
+
+        setSetupFolded(false);
+        const open = fitBoardSettled();
+        if (open.atMax) return; // already as large as the stylesheet allows
+
+        setSetupFolded(true);
+        const folded = fitBoardSettled();
+
+        // Only stay folded if it actually bought something. Hiding the
+        // difficulty buttons to gain a pixel is a straight loss.
+        if (folded.size - open.size < MEANINGFUL_GAIN) {
+            setSetupFolded(false);
+            fitBoardSettled();
+        }
+    }
+
     // ── Fitting the board to the screen ────────────────────────────────
     //
     // The board used to be sized by media queries that subtracted a guessed
@@ -2143,16 +2212,27 @@ function loadBank() {
     /** Breathing room so the last row never sits flush against the edge. */
     const FIT_MARGIN = 8;
 
+    /** Folding setup away has to earn its keep, in pixels per cell. */
+    const MEANINGFUL_GAIN = 4;
+
+    /**
+     * @returns {{size: number, atMax: boolean}} atMax true means the board is
+     *   as large as the stylesheet allows — or that nothing could be measured,
+     *   in which case rearranging the layout cannot help either.
+     */
     function fitBoard() {
-        if (!wrappers.length) return;
+        const unmeasurable = { size: 0, atMax: true };
+        if (!wrappers.length) return unmeasurable;
 
         // Clear the previous fit so the stylesheet's maximum applies, then read
         // it off a real cell. Custom properties are not resolved until they are
         // used, so several breakpoints hand back a literal `calc(...)` string —
         // measuring the element is the only way to get a number.
         document.documentElement.style.removeProperty('--cell-size');
+        // Zero means no layout engine — jsdom, or a hidden document. Nothing
+        // to fit, and nothing to gain by folding controls away.
         const maxCell = wrappers[0].getBoundingClientRect().width;
-        if (!maxCell) return;
+        if (!maxCell) return unmeasurable;
 
         // Everything except the grid: header, tabs, controls, status, numpad,
         // padding, margins. Derived rather than listed, so adding UI cannot
@@ -2169,6 +2249,20 @@ function loadBank() {
 
         const size = Math.max(MIN_CELL, Math.min(maxCell, fitted));
         document.documentElement.style.setProperty('--cell-size', `${size}px`);
+        return { size, atMax: fitted >= maxCell };
+    }
+
+    /**
+     * Fit twice.
+     *
+     * The card's max-width is derived from the cell size, so a larger board
+     * widens the card, which lets the buttons wrap into fewer rows, which frees
+     * height — the measurement feeds back into itself. One pass lands close; a
+     * second settles it.
+     */
+    function fitBoardSettled() {
+        fitBoard();
+        return fitBoard();
     }
 
     /** Coalesce bursts of resize events into one measurement per frame. */
@@ -2178,7 +2272,7 @@ function loadBank() {
         fitPending = true;
         requestAnimationFrame(() => {
             fitPending = false;
-            fitBoard();
+            refreshLayout();
         });
     }
 
@@ -2204,7 +2298,7 @@ function loadBank() {
     revealLeaderboardUi();
 
     // Once the real layout exists, size the board to whatever room is left.
-    fitBoard();
+    refreshLayout();
 
     // ── Offline support ────────────────────────────────────────────────
     // Registered only over http(s): service workers are unavailable on file://,

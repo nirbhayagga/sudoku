@@ -2150,3 +2150,20 @@ kbd {
     white-space: nowrap;
     border: 0;
 }
+
+/* ── Setup controls ───────────────────────────────────────────────── */
+/* Difficulty, level and New Game are chosen once and then irrelevant for the
+   rest of the game, so they fold away while playing and the board takes the
+   height instead. On a phone that is the difference between a 26px cell and a
+   37px one. */
+.setup-controls {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+}
+
+.btn-setup-toggle {
+    align-self: center;
+}

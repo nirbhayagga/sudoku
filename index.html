@@ -103,6 +103,9 @@
 
     <!-- Play Mode Controls -->
     <div class="controls" id="play-controls" style="display:none;">
+      <!-- Setup: shown between games, folded away while playing so the board
+           can use the height. #btn-setup-toggle brings it back. -->
+      <div class="setup-controls" id="setup-controls">
       <div class="difficulty-selector" id="difficulty-selector">
         <button class="diff-btn active" data-diff="easy">Easy</button>
         <button class="diff-btn" data-diff="medium">Medium</button>
@@ -118,8 +121,13 @@
           title="Enter 1-500, or leave blank for a random level">
         <span class="level-max" id="level-max">/ 500</span>
       </div>
-      <div class="play-buttons">
         <button class="btn btn-primary" id="btn-new-game">New Game</button>
+      </div>
+
+      <button class="btn btn-setup-toggle" id="btn-setup-toggle" aria-expanded="false"
+        aria-controls="setup-controls" style="display:none;">New Game…</button>
+
+      <div class="play-buttons">
         <button class="btn btn-hint" id="btn-hint" title="Reveal one cell (H)">Hint</button>
         <button class="btn" id="btn-notes-toggle" title="Toggle notes mode (N)" aria-pressed="false">Notes: OFF</button>
         <button class="btn" id="btn-auto-notes" title="Fill candidates automatically (A)" aria-pressed="false">Auto: OFF</button>

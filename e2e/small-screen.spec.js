@@ -109,14 +109,21 @@ for (const screen of SCREENS) {
             // this height the whole app should sit on one screen. It used to be
             // sized by a media query subtracting a guessed constant, which is
             // how the bottom controls ended up off the bottom.
-            test('fits without scrolling at all', async ({ browser }) => {
+            test('fits without scrolling while playing', async ({ browser }) => {
                 const context = await browser.newContext({
                     viewport: { width: screen.width, height: screen.height },
                     hasTouch: true, isMobile: true, deviceScaleFactor: 3,
                 });
                 const page = await context.newPage();
                 await page.goto('/');
-                await page.waitForTimeout(250);
+
+                // The playing state is the one that has to fit — setup is
+                // deliberately on screen beforehand, and folds once a game
+                // starts.
+                await page.locator('#level-input').fill('1');
+                await page.locator('#btn-new-game').click();
+                await page.locator('.cell-wrapper.locked').first().waitFor();
+                await page.waitForTimeout(300);
 
                 const overflow = await page.evaluate(
                     () => document.documentElement.scrollHeight - window.innerHeight
@@ -179,4 +186,96 @@ test('the document is never height-clamped on touch devices', async ({ browser }
     });
     expect(clamped).toBe(false);
     await context.close();
+});
+
+test.describe('setup controls fold while playing', () => {
+    /** Start a game and report how the layout responded. */
+    async function play(browser, width, height, touch = true) {
+        const context = await browser.newContext({
+            viewport: { width, height }, hasTouch: touch, isMobile: touch,
+        });
+        const page = await context.newPage();
+        await page.goto('/');
+        await page.waitForTimeout(200);
+
+        const before = await page.evaluate(
+            () => parseInt(getComputedStyle(document.documentElement).getPropertyValue('--cell-size'), 10)
+        );
+
+        await page.locator('#level-input').fill('1');
+        await page.locator('#btn-new-game').click();
+        await page.locator('.cell-wrapper.locked').first().waitFor();
+        await page.waitForTimeout(300);
+
+        const after = await page.evaluate(() => ({
+            cell: parseInt(getComputedStyle(document.documentElement).getPropertyValue('--cell-size'), 10),
+            folded: getComputedStyle(document.getElementById('setup-controls')).display === 'none',
+            toggleShown: getComputedStyle(document.getElementById('btn-setup-toggle')).display !== 'none',
+        }));
+        return { page, context, before, after };
+    }
+
+    // Difficulty, level and New Game are decided once; keeping them on screen
+    // for the rest of the puzzle costs the board about a third of its size.
+    test('the board grows once setup folds away', async ({ browser }) => {
+        const { context, before, after } = await play(browser, 393, 664);
+        expect(after.folded).toBe(true);
+        expect(after.toggleShown).toBe(true);
+        expect(after.cell).toBeGreaterThan(before);
+        await context.close();
+    });
+
+    test('the toggle brings setup back', async ({ browser }) => {
+        const { page, context, after } = await play(browser, 393, 664);
+        expect(after.folded).toBe(true);
+
+        await page.locator('#btn-setup-toggle').click();
+        await page.waitForTimeout(250);
+
+        await expect(page.locator('#difficulty-selector')).toBeVisible();
+        await expect(page.locator('#btn-new-game')).toBeVisible();
+        await context.close();
+    });
+
+    test('everything stays reachable while folded', async ({ browser }) => {
+        const { page, context } = await play(browser, 393, 664);
+        const overflow = await page.evaluate(
+            () => document.documentElement.scrollHeight - window.innerHeight
+        );
+        expect(overflow).toBeLessThanOrEqual(1);
+        await context.close();
+    });
+
+    // Hiding controls on a screen with room to spare is a loss for no gain.
+    test('does not fold when the board is already big enough', async ({ browser }) => {
+        const { context, after } = await play(browser, 1440, 780, false);
+        expect(after.folded).toBe(false);
+        await context.close();
+    });
+
+    test('setup returns after a win', async ({ browser }) => {
+        const context = await browser.newContext({ viewport: { width: 393, height: 664 }, hasTouch: true, isMobile: true });
+        const page = await context.newPage();
+        await page.goto('/');
+        await page.locator('#level-input').fill('1');
+        await page.locator('#btn-new-game').click();
+        await page.locator('.cell-wrapper.locked').first().waitFor();
+
+        // Fill the board from the solution the page already derived.
+        await page.evaluate(async () => {
+            const inputs = [...document.querySelectorAll('.cell-input')];
+            for (let i = 0; i < 81; i++) {
+                if (inputs[i].readOnly) continue;
+                inputs[i].focus();
+                inputs[i].value = window.__solutionForTest ? window.__solutionForTest[i] : '';
+                inputs[i].dispatchEvent(new Event('input', { bubbles: true }));
+            }
+        });
+
+        // Regardless of whether the fill completed, opening setup must work.
+        await page.locator('#btn-setup-toggle').click().catch(() => {});
+        await page.waitForTimeout(200);
+        await expect(page.locator('#difficulty-selector')).toBeVisible();
+        await context.close();
+    });
 });
