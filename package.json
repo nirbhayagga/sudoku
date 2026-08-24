@@ -24,7 +24,7 @@
     "@playwright/test": "^1.62.1",
     "@vitest/coverage-v8": "^4.1.11",
     "esbuild": "^0.28.2",
-    "eslint": "^9.18.0",
+    "eslint": "^10.9.0",
     "globals": "^17.11.0",
     "jsdom": "^30.0.1",
     "vite": "^8.2.2",
