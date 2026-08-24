@@ -2313,12 +2313,27 @@ function loadBank() {
 
         // Ask the browser not to evict us when storage runs short. This covers
         // the precached bank *and* localStorage — the saved game, stats and
-        // streak — so it is worth asking even where the worker fails.
+        // streak.
         //
-        // Purely advisory: Chrome grants it outright to installed apps and may
-        // refuse otherwise, and Safari does not implement it at all (it exempts
-        // home-screen apps from its seven-day eviction cap instead). Nothing
-        // here depends on the answer, so the result is ignored.
-        navigator.storage?.persist?.()?.catch(() => {});
+        // Only for an installed app, and that restraint is the point. Firefox
+        // turns persist() into a visible permission prompt, and asking someone
+        // who just opened the page to "allow persistent storage" before they
+        // have played a single puzzle reads as a dark pattern — it is exactly
+        // the kind of prompt that makes people leave. Installing the app is
+        // already the user saying they want it kept, so that is when to ask.
+        // Chrome, which decides silently, counts being installed towards
+        // granting it anyway; Safari does not implement it at all and exempts
+        // home-screen apps from its seven-day eviction cap instead.
+        //
+        // persisted() is checked first so an already-granted app never
+        // re-prompts. Advisory throughout: nothing depends on the answer.
+        if (window.matchMedia?.('(display-mode: standalone)')?.matches) {
+            const state = navigator.storage?.persisted?.();
+            if (state) {
+                state
+                    .then((already) => { if (!already) navigator.storage.persist(); })
+                    .catch(() => { /* advisory; the app is unaffected */ });
+            }
+        }
     }
 })();

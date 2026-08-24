@@ -476,9 +476,18 @@ entire app sitting in the cache. The losing request is not cancelled, so a slow
 answer still refreshes the cached document for the next launch.
 
 The app also asks for `navigator.storage.persist()`, which covers the precached
-bank and `localStorage` alike. It is advisory — Chrome grants it to installed
-apps, Safari does not implement it and exempts home-screen apps from its
-seven-day eviction cap instead — so nothing depends on the answer.
+bank and `localStorage` alike — but **only once it is installed**
+(`display-mode: standalone`), and only after `persisted()` says it is not
+already granted.
+
+That restraint is the whole design. Firefox turns `persist()` into a visible
+"allow persistent storage?" prompt, and firing that at someone who has just
+opened the page, before they have played a single puzzle, is the kind of thing
+that makes people close the tab. Installing the app already *is* the user asking
+for it to be kept, so that is when to ask. Chrome decides silently and counts
+being installed towards granting it anyway; Safari does not implement the API and
+exempts home-screen apps from its seven-day eviction cap instead. It is advisory
+in every case — nothing depends on the answer.
 
 `sw.js` itself is served `no-cache` (in both `nginx.conf.template` and
 `public/_headers`) — a cached service worker cannot be replaced.

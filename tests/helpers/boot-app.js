@@ -33,7 +33,7 @@ function appBundle() {
     return bundledApp;
 }
 
-export async function bootApp({ localStorage: seed = {}, serviceWorker = null, url = 'http://localhost/', touch = false } = {}) {
+export async function bootApp({ localStorage: seed = {}, serviceWorker = null, url = 'http://localhost/', touch = false, standalone = false, storage = null } = {}) {
     // Swallow the expected "fetch is not defined" noise, surface real errors.
     const virtualConsole = new VirtualConsole();
     virtualConsole.on('jsdomError', (err) => {
@@ -79,6 +79,25 @@ export async function bootApp({ localStorage: seed = {}, serviceWorker = null, u
     if (serviceWorker) {
         Object.defineProperty(dom.window.navigator, 'serviceWorker', {
             value: serviceWorker,
+            configurable: true,
+        });
+    }
+
+    // Storage persistence is only requested by an installed app, so a test has
+    // to be able to say which it is. jsdom has no display-mode, and its
+    // matchMedia reports `matches: false` for everything.
+    if (standalone) {
+        dom.window.matchMedia = (query) => ({
+            matches: query === '(display-mode: standalone)',
+            media: query,
+            addEventListener: () => {},
+            removeEventListener: () => {},
+        });
+    }
+
+    if (storage) {
+        Object.defineProperty(dom.window.navigator, 'storage', {
+            value: storage,
             configurable: true,
         });
     }

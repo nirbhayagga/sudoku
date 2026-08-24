@@ -899,6 +899,73 @@ describe('progressive web app', () => {
         withSW.close();
     });
 
+    /**
+     * Firefox turns persist() into a visible permission prompt. Asking a
+     * first-time visitor to allow persistent storage before they have played
+     * anything is the kind of prompt that makes people close the tab, so it is
+     * asked only of someone who installed the app.
+     */
+    it('does not ask for persistent storage in a browser tab', async () => {
+        const calls = [];
+        const tab = await bootApp({
+            serviceWorker: { register: () => Promise.resolve() },
+            storage: {
+                persisted: () => { calls.push('persisted'); return Promise.resolve(false); },
+                persist: () => { calls.push('persist'); return Promise.resolve(true); },
+            },
+        });
+        await tab.tick(20);
+
+        expect(calls).toEqual([]);
+        tab.close();
+    });
+
+    it('asks for persistent storage once installed', async () => {
+        const calls = [];
+        const installed = await bootApp({
+            standalone: true,
+            serviceWorker: { register: () => Promise.resolve() },
+            storage: {
+                persisted: () => { calls.push('persisted'); return Promise.resolve(false); },
+                persist: () => { calls.push('persist'); return Promise.resolve(true); },
+            },
+        });
+        await installed.tick(20);
+
+        expect(calls).toEqual(['persisted', 'persist']);
+        installed.close();
+    });
+
+    // A granted app that re-prompted on every launch would be worse than not
+    // asking at all.
+    it('does not re-ask when storage is already persisted', async () => {
+        const calls = [];
+        const installed = await bootApp({
+            standalone: true,
+            serviceWorker: { register: () => Promise.resolve() },
+            storage: {
+                persisted: () => { calls.push('persisted'); return Promise.resolve(true); },
+                persist: () => { calls.push('persist'); return Promise.resolve(true); },
+            },
+        });
+        await installed.tick(20);
+
+        expect(calls).toEqual(['persisted']);
+        installed.close();
+    });
+
+    it('does not break when the Storage API is missing', async () => {
+        // Safari private mode, and every browser that never shipped it.
+        const installed = await bootApp({
+            standalone: true,
+            serviceWorker: { register: () => Promise.resolve() },
+        });
+        await installed.tick(20);
+
+        expect(installed.cells()).toHaveLength(81);
+        installed.close();
+    });
+
     it('does not break when service workers are unavailable', () => {
         // Safari in private mode, older browsers, and file:// all land here.
         expect(app.window.navigator.serviceWorker).toBeUndefined();
