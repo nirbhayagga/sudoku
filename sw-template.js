@@ -9,7 +9,8 @@
  * Caching strategy, and why:
  *   - Navigations are NETWORK-FIRST, falling back to the cached page. Serving a
  *     stale document would pin clients to old asset hashes indefinitely, and a
- *     bad deploy could not be recovered by reloading.
+ *     bad deploy could not be recovered by reloading. The network gets a
+ *     deadline though — see NAV_TIMEOUT_MS.
  *   - Hashed assets are CACHE-FIRST. Their filename changes whenever their
  *     bytes do, so a cached copy can never be wrong.
  *   - /api/ is never cached. Leaderboard responses must not be replayed, and a
@@ -28,6 +29,52 @@ const PRECACHE = __PRECACHE_MANIFEST__;
  * while appearing to be correctly cached.
  */
 const MATCH_OPTIONS = { ignoreVary: true };
+
+/**
+ * How long a navigation waits for the network before the cache wins.
+ *
+ * Being *offline* was never the problem: fetch rejects at once and the fallback
+ * runs in milliseconds. A *hanging* connection is — one bar on a train, or a
+ * captive portal that completes the TCP handshake and then never answers. There
+ * the request can stall for tens of seconds, and until it does the user is
+ * looking at a blank screen with a fully cached app sitting right there.
+ */
+const NAV_TIMEOUT_MS = 2000;
+
+/**
+ * Network-first with a deadline.
+ *
+ * The network request is never cancelled — if it lands after losing the race it
+ * still refreshes the cached document, so the next launch is current.
+ */
+function navigationResponse(request) {
+    const network = fetch(request).then((response) => {
+        const copy = response.clone();
+        caches.open(CACHE).then((cache) => cache.put(request, copy));
+        return response;
+    });
+
+    // The losing branch is deliberately left running; swallow its rejection so
+    // it cannot surface as an unhandled one.
+    network.catch(() => {});
+
+    const cached = () => caches.match(request, MATCH_OPTIONS).then(
+        (hit) => hit || caches.match(PRECACHE[0], MATCH_OPTIONS)
+    );
+
+    const settled = network.then(() => 'network', () => 'failed');
+    const expired = new Promise((resolve) => {
+        setTimeout(() => resolve('timeout'), NAV_TIMEOUT_MS);
+    });
+
+    return Promise.race([settled, expired]).then((outcome) => {
+        if (outcome === 'network') return network;
+        // Failed or too slow. Serve the cached page if there is one; with
+        // nothing cached there is nothing better to wait for than the network,
+        // whose rejection is then the honest answer.
+        return cached().then((hit) => hit || network);
+    });
+}
 
 self.addEventListener('install', (event) => {
     event.waitUntil(
@@ -62,17 +109,7 @@ self.addEventListener('fetch', (event) => {
     if (url.pathname.includes('/api/')) return;
 
     if (request.mode === 'navigate') {
-        event.respondWith(
-            fetch(request)
-                .then((response) => {
-                    const copy = response.clone();
-                    caches.open(CACHE).then((cache) => cache.put(request, copy));
-                    return response;
-                })
-                .catch(() => caches.match(request, MATCH_OPTIONS).then(
-                    (cached) => cached || caches.match(PRECACHE[0], MATCH_OPTIONS)
-                ))
-        );
+        event.respondWith(navigationResponse(request));
         return;
     }
 

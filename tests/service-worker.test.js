@@ -14,6 +14,7 @@ import { repoRoot } from './helpers/paths.js';
  */
 let swSource;
 let precache;
+let cacheName;
 
 beforeAll(() => {
     const dist = fs.mkdtempSync(path.join(os.tmpdir(), 'sudoku-sw-'));
@@ -24,6 +25,7 @@ beforeAll(() => {
     );
     swSource = fs.readFileSync(path.join(dist, 'sw.js'), 'utf8');
     precache = JSON.parse(swSource.match(/const PRECACHE = (\[[\s\S]*?\]);/)[1]);
+    cacheName = swSource.match(/const CACHE = '(.*?)'/)[1];
     fs.rmSync(dist, { recursive: true, force: true });
 }, 120_000);
 
@@ -54,7 +56,7 @@ function makeCaches(store = new Map()) {
 }
 
 /** Load the worker into a stub global scope and capture its listeners. */
-function loadWorker({ fetchImpl, caches } = {}) {
+function loadWorker({ fetchImpl, caches, setTimeoutImpl } = {}) {
     const listeners = {};
     const scope = {
         location: { origin: 'https://sudoku.example.com' },
@@ -63,6 +65,10 @@ function loadWorker({ fetchImpl, caches } = {}) {
         skipWaiting: async () => {},
         addEventListener: (type, fn) => { listeners[type] = fn; },
         fetch: fetchImpl || (async () => ({ ok: true, type: 'basic', clone: () => ({}) })),
+        // Navigations race the network against a deadline. The real clock is
+        // the default so the existing tests still see the network win; a test
+        // that wants the deadline to fire passes a fast one.
+        setTimeout: setTimeoutImpl || setTimeout,
         URL,
         Promise,
         JSON,
@@ -228,6 +234,46 @@ describe('fetch strategy', () => {
         });
         const response = await handleFetch(worker.listeners, req('https://sudoku.example.com/', { mode: 'navigate' }));
         expect(response.body).toBe('offline page');
+    });
+
+    /**
+     * The case the deadline exists for. Being offline was never the problem —
+     * fetch rejects and the fallback runs at once. A connection that accepts
+     * the request and never answers (one bar, captive portal) would otherwise
+     * hold a blank screen with the whole app sitting in the cache.
+     */
+    it('serves the cached page when the network hangs', async () => {
+        const caches = makeCaches(new Map([[cacheName, new Map([
+            ['https://sudoku.example.com/', { body: 'cached page' }],
+        ])]]));
+        const worker = loadWorker({
+            caches,
+            fetchImpl: () => new Promise(() => { /* never settles */ }),
+            setTimeoutImpl: (fn) => setTimeout(fn, 0),
+        });
+        const response = await handleFetch(worker.listeners, req('https://sudoku.example.com/', { mode: 'navigate' }));
+        expect(response.body).toBe('cached page');
+    });
+
+    // Losing the race must not abandon the request: its answer is what makes
+    // the next launch current rather than one build behind for ever.
+    it('still refreshes the cache when a slow network finally answers', async () => {
+        const caches = makeCaches(new Map([[cacheName, new Map([
+            ['https://sudoku.example.com/', { body: 'cached page' }],
+        ])]]));
+        const worker = loadWorker({
+            caches,
+            fetchImpl: () => new Promise((resolve) => setTimeout(
+                () => resolve({ ok: true, type: 'basic', body: 'slow page', clone: () => ({ body: 'slow page' }) }),
+                20
+            )),
+            setTimeoutImpl: (fn) => setTimeout(fn, 0),
+        });
+        const response = await handleFetch(worker.listeners, req('https://sudoku.example.com/', { mode: 'navigate' }));
+        expect(response.body).toBe('cached page');
+
+        await new Promise((resolve) => setTimeout(resolve, 60));
+        expect(caches.store.get(cacheName).get('https://sudoku.example.com/').body).toBe('slow page');
     });
 
     it('does not cache failed or opaque responses', async () => {

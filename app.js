@@ -2310,5 +2310,15 @@ function loadBank() {
                 .register(new URL('sw.js', window.location.href), { scope: './' })
                 .catch(() => { /* offline support unavailable; the app still works */ });
         });
+
+        // Ask the browser not to evict us when storage runs short. This covers
+        // the precached bank *and* localStorage — the saved game, stats and
+        // streak — so it is worth asking even where the worker fails.
+        //
+        // Purely advisory: Chrome grants it outright to installed apps and may
+        // refuse otherwise, and Safari does not implement it at all (it exempts
+        // home-screen apps from its seven-day eviction cap instead). Nothing
+        // here depends on the answer, so the result is ignored.
+        navigator.storage?.persist?.()?.catch(() => {});
     }
 })();

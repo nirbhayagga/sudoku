@@ -463,9 +463,22 @@ The caching rules, and the reasoning:
 
 | Request | Strategy | Why |
 |---|---|---|
-| Navigations | Network first, cache fallback | A stale document would pin clients to old asset hashes, and a bad deploy could not be fixed by reloading |
+| Navigations | Network first, 2 s deadline, cache fallback | A stale document would pin clients to old asset hashes, and a bad deploy could not be fixed by reloading |
 | Hashed assets | Cache first | The filename changes whenever the bytes do, so a cached copy is never wrong |
 | `/api/` | Never cached | Cached scores would be replayed, and a cached health check would report a backend that is down as available |
+
+Network-first needs the deadline (`NAV_TIMEOUT_MS`) to be usable on a bad
+connection. Being *offline* was never the problem — `fetch` rejects and the
+fallback runs in milliseconds. A connection that accepts the request and never
+answers is: one bar on a train, or a captive portal. Without a deadline that
+holds a blank screen for as long as the request takes to give up, with the
+entire app sitting in the cache. The losing request is not cancelled, so a slow
+answer still refreshes the cached document for the next launch.
+
+The app also asks for `navigator.storage.persist()`, which covers the precached
+bank and `localStorage` alike. It is advisory — Chrome grants it to installed
+apps, Safari does not implement it and exempts home-screen apps from its
+seven-day eviction cap instead — so nothing depends on the answer.
 
 `sw.js` itself is served `no-cache` (in both `nginx.conf.template` and
 `public/_headers`) — a cached service worker cannot be replaced.
