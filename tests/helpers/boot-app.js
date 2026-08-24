@@ -33,7 +33,7 @@ function appBundle() {
     return bundledApp;
 }
 
-export async function bootApp({ localStorage: seed = {}, serviceWorker = null, url = 'http://localhost/', touch = false, standalone = false, storage = null } = {}) {
+export async function bootApp({ localStorage: seed = {}, serviceWorker = null, url = 'http://localhost/', touch = false, standalone = false, storage = null, coarsePointer = null } = {}) {
     // Swallow the expected "fetch is not defined" noise, surface real errors.
     const virtualConsole = new VirtualConsole();
     virtualConsole.on('jsdomError', (err) => {
@@ -83,12 +83,18 @@ export async function bootApp({ localStorage: seed = {}, serviceWorker = null, u
         });
     }
 
-    // Storage persistence is only requested by an installed app, so a test has
-    // to be able to say which it is. jsdom has no display-mode, and its
-    // matchMedia reports `matches: false` for everything.
-    if (standalone) {
+    // jsdom implements no matchMedia at all, which is what lets app.js fall
+    // back to its capability check and lets `touch` above pick the branch. A
+    // test that needs to describe the device more precisely than "can it be
+    // touched" stubs it: `standalone` for an installed app, `coarsePointer`
+    // for whether touch is the *only* pointer. A touchscreen laptop is
+    // touch-capable with a fine pointer, and those two disagreeing is a real
+    // bug source rather than a hypothetical.
+    if (standalone || coarsePointer !== null) {
         dom.window.matchMedia = (query) => ({
-            matches: query === '(display-mode: standalone)',
+            matches: /display-mode: standalone/.test(query)
+                ? standalone
+                : /pointer: coarse/.test(query) && coarsePointer === true,
             media: query,
             addEventListener: () => {},
             removeEventListener: () => {},

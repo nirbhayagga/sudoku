@@ -1820,6 +1820,65 @@ describe('hints', () => {
     });
 });
 
+describe('touch detection', () => {
+    // The JS branch and the CSS rule that reveals the numpad must ask the same
+    // question. When they disagreed, one platform got the touch input path
+    // without the on-screen keys it depends on.
+    it('uses the same media query as the stylesheet', () => {
+        const js = fs.readFileSync(path.join(repoRoot, 'app.js'), 'utf8');
+        const css = fs.readFileSync(path.join(repoRoot, 'style.css'), 'utf8');
+        const query = js.match(/TOUCH_ONLY_QUERY = '([^']+)'/)[1];
+
+        expect(query).toBe('(hover: none) and (pointer: coarse)');
+        expect(css).toContain(`@media ${query}`);
+    });
+});
+
+describe('touch-capable desktop', () => {
+    /**
+     * A laptop with a touchscreen. It reports touch capability, but its primary
+     * pointer is a trackpad, so CSS keeps the numpad hidden.
+     *
+     * The old detection was capability-based and took the touch branch here:
+     * every cell readOnly, click never focusing, and no numpad on screen to
+     * make up for it. The keyboard simply stopped working with no visible
+     * cause. Both halves are asserted because either one alone leaves a usable
+     * board.
+     */
+    let hybrid;
+
+    beforeEach(async () => {
+        hybrid = await bootApp({ touch: true, coarsePointer: false });
+        hybrid.click('.diff-btn[data-diff="easy"]');
+        hybrid.$('#level-input').value = '1';
+        hybrid.click('#btn-new-game');
+        await hybrid.tick(50);
+    });
+    afterEach(() => hybrid.close());
+
+    it('leaves empty cells editable', () => {
+        const empty = hybrid.inputs().filter((input, i) => !hybrid.cells()[i].classList.contains('locked'));
+        expect(empty.length).toBeGreaterThan(0);
+        expect(empty.every((input) => !input.readOnly)).toBe(true);
+    });
+
+    it('accepts a typed digit', () => {
+        const idx = hybrid.cells().findIndex((c) => !c.classList.contains('locked'));
+        hybrid.type(idx, '5');
+        expect(hybrid.inputs()[idx].value).toBe('5');
+    });
+
+    it('does not suppress the keyboard via inputMode', () => {
+        expect(hybrid.inputs()[0].getAttribute('inputmode')).toBe('numeric');
+    });
+
+    it('focuses a cell on click, so the keyboard has a target', () => {
+        const idx = hybrid.cells().findIndex((c) => !c.classList.contains('locked'));
+        hybrid.cells()[idx].dispatchEvent(new hybrid.window.MouseEvent('click', { bubbles: true }));
+        expect(hybrid.window.document.activeElement).toBe(hybrid.inputs()[idx]);
+    });
+});
+
 describe('touch platform', () => {
     // jsdom defines ontouchstart, so without an explicit choice every test above
     // would silently run the touch branch. These pin the branch itself.

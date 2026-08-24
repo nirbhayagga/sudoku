@@ -172,8 +172,29 @@ function loadBank() {
         return mode === 'play' && timerPaused;
     }
 
-    // Mobile detection
-    const isTouchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+    /**
+     * Touch-ONLY device: no mouse, coarse pointer.
+     *
+     * This must agree with the `(hover: none) and (pointer: coarse)` media
+     * query in style.css that reveals the numpad, and for a long time it did
+     * not. The old test was `('ontouchstart' in window) ||
+     * navigator.maxTouchPoints > 0`, which is equally true of a laptop with a
+     * touchscreen — and there the two disagreed in the worst possible
+     * direction. JS took the touch branch (inputs readOnly, inputMode none,
+     * click never focuses a cell) while CSS, seeing a mouse, kept the numpad
+     * hidden. That leaves no way to enter a digit at all: the keyboard is
+     * refused and the on-screen replacement is invisible.
+     *
+     * Capability ("can this device receive a touch?") is the wrong question.
+     * The right one is "is touch the only thing this person has?", which is
+     * what the media query asks. The old check survives only as a fallback for
+     * environments without matchMedia — which is how jsdom drives either
+     * branch in tests.
+     */
+    const TOUCH_ONLY_QUERY = '(hover: none) and (pointer: coarse)';
+    const isTouchDevice = window.matchMedia
+        ? window.matchMedia(TOUCH_ONLY_QUERY).matches
+        : ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
 
     // Numpad elements
     const numpadEl = document.getElementById('numpad');
