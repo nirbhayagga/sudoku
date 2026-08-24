@@ -1,6 +1,29 @@
-# Opens a PR when a dependency has a new version or a published advisory.
-# CI runs on those PRs like any other, so a green check means the suite passed
-# against the new version.
+# Version updates are OFF: every ecosystem below is pinned to
+# open-pull-requests-limit: 0.
+#
+# This repo lives on Forgejo and is push-mirrored to GitHub. A push mirror is a
+# `git push --mirror`, so it prunes any ref that does not exist upstream —
+# including `dependabot/*` branches, which only ever exist on GitHub. Deleting a
+# PR's head branch makes GitHub auto-close it, so every Dependabot PR was opened,
+# pruned on the next sync (push-triggered *or* on the mirror's own interval), and
+# reopened on the next run. Thirteen PRs died that way without anyone touching
+# them.
+#
+# Dependency updates still happen, by hand, in batches — which turned out to be
+# the better shape anyway: the peer-locked toolchain needs vite, vitest,
+# @vitest/coverage-v8 and jsdom to move in one commit, and Dependabot split them
+# into four PRs that could never install individually.
+#
+# Not controlled by this file, and worth knowing:
+#   - Dependabot *alerts* are a repo setting. They are not branches, so the
+#     mirror cannot touch them. Leave them on — that is the actual signal.
+#   - Dependabot *security updates* are also a repo setting, and their PRs are
+#     NOT bounded by open-pull-requests-limit. They are branches, so they get
+#     pruned like any other. Turn them off under Settings → Code security if you
+#     want zero branches ever; the alert still names the fixed version.
+#
+# The groups and ignores below are kept deliberately. Re-enabling any ecosystem
+# is one line, and the reasoning is worth not having to rediscover.
 version: 2
 
 updates:
@@ -10,7 +33,7 @@ updates:
     schedule:
       interval: weekly
       day: monday
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 0
     groups:
       # One PR for routine bumps instead of five.
       dev-dependencies:
@@ -25,13 +48,14 @@ updates:
     commit-message:
       prefix: 'deps'
 
-  # The leaderboard API. This one actually ships, so its advisories matter most.
+  # The leaderboard API. This one actually ships, so its advisories matter most —
+  # and express/cors are the only runtime dependencies in the whole project.
   - package-ecosystem: npm
     directory: /leaderboard-api
     schedule:
       interval: weekly
       day: monday
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 0
     groups:
       api-dependencies:
         patterns: ['*']
@@ -52,6 +76,7 @@ updates:
     schedule:
       interval: weekly
       day: monday
+    open-pull-requests-limit: 0
     ignore:
       - dependency-name: 'node'
         update-types: ['version-update:semver-major']
@@ -64,6 +89,7 @@ updates:
     directory: /
     schedule:
       interval: monthly
+    open-pull-requests-limit: 0
     groups:
       github-actions:
         patterns: ['*']

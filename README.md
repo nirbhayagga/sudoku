@@ -477,12 +477,21 @@ is nothing to unregister while iterating.
 
 ### Dependency updates
 
-`.github/dependabot.yml` watches four ecosystems weekly — frontend dev
-dependencies, the leaderboard API, both Dockerfiles' base images, and the
-GitHub Actions themselves — and opens PRs for new versions and published
-advisories. Routine minor/patch bumps are grouped into one PR; majors stay
-separate so they get read. CI runs on each, so a green check means the suite
-passed against the new version.
+`.github/dependabot.yml` describes four ecosystems — frontend dev dependencies,
+the leaderboard API, both Dockerfiles' base images, and the GitHub Actions
+themselves — with every one held at `open-pull-requests-limit: 0`. **Version
+updates are off; alerts stay on.**
+
+The repo is push-mirrored to GitHub from Forgejo, and a push mirror is a
+`git push --mirror`: it prunes refs that do not exist upstream. `dependabot/*`
+branches only ever exist on GitHub, so each one was deleted on the next sync and
+its PR auto-closed. Alerts are not branches, so they survive — and they are the
+part that carries the signal.
+
+Updates are applied by hand in batches, which suits the tree better regardless:
+vite, vitest, `@vitest/coverage-v8` and jsdom are peer-locked and must move in a
+single commit. The groups and ignores are kept in the file so re-enabling any
+ecosystem is one line.
 
 ### Lighthouse
 
