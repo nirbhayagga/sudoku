@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { BANK_SIZES } from '../difficulties.js';
 
 /**
  * Each suite gets a fresh module instance (so the in-memory rate limiter resets)
@@ -217,6 +218,70 @@ describe('GET /api/leaderboard', () => {
 
     it('returns an empty object when nothing has been submitted', async () => {
         expect(await (await fetch(`${server.base}/api/leaderboard`)).json()).toEqual({});
+    });
+});
+
+describe('mistakes', () => {
+    it('records a bounded mistake count', async () => {
+        expect((await (await post(server.base, { ...validScore, mistakes: 3 })).json()).entry.mistakes).toBe(3);
+        expect((await (await post(server.base, { ...validScore, mistakes: -4 })).json()).entry.mistakes).toBe(0);
+        expect((await (await post(server.base, { ...validScore, mistakes: 5000 })).json()).entry.mistakes).toBe(999);
+    });
+
+    // A client from before the field is an unknown, not a perfect game.
+    it('stores null when the client sends none', async () => {
+        expect((await (await post(server.base, validScore)).json()).entry.mistakes).toBeNull();
+    });
+
+    it('never stores markup sent as mistakes', async () => {
+        const entry = (await (await post(server.base, { ...validScore, mistakes: '<b>1</b>' })).json()).entry;
+        expect(entry.mistakes).toBeNull();
+    });
+});
+
+describe('level bounds', () => {
+    // A level is a position in the bank; the API must know how big that is.
+    it('caps levels at the size of each tier, matching the bank', async () => {
+        const { LEVEL_LIMITS } = await import('../leaderboard-api/server.js');
+        expect(LEVEL_LIMITS).toEqual(BANK_SIZES);
+    });
+
+    it('drops a level past the end of the bank rather than the score', async () => {
+        const resp = await post(server.base, { ...validScore, level: 99999 });
+        expect(resp.status).toBe(200);
+        expect((await resp.json()).entry.level).toBeNull();
+    });
+
+    it('keeps the last level in a tier', async () => {
+        const resp = await post(server.base, { ...validScore, difficulty: 'nightmare', level: 3000 });
+        expect((await resp.json()).entry.level).toBe(3000);
+    });
+});
+
+describe('data file', () => {
+    it('leaves no temporary file behind after a write', async () => {
+        await post(server.base, validScore);
+        expect(fs.existsSync(`${server.dataFile}.tmp`)).toBe(false);
+        expect(server.readData().easy).toHaveLength(1);
+    });
+
+    /**
+     * Returning an empty board is the only way to keep serving, but the next
+     * save would then overwrite whatever was salvageable. The original is
+     * moved aside first so the loss is recoverable rather than silent.
+     */
+    it('sets a corrupt file aside instead of overwriting it', async () => {
+        fs.writeFileSync(server.dataFile, '{"easy": [{"name": "half-writ');
+        const read = await fetch(`${server.base}/api/leaderboard/easy`);
+        expect(await read.json()).toEqual([]);
+
+        await post(server.base, validScore);
+        expect(server.readData().easy).toHaveLength(1);
+
+        const dir = path.dirname(server.dataFile);
+        const aside = fs.readdirSync(dir).filter((f) => f.includes('.corrupt-'));
+        expect(aside).toHaveLength(1);
+        expect(fs.readFileSync(path.join(dir, aside[0]), 'utf8')).toContain('half-writ');
     });
 });
 

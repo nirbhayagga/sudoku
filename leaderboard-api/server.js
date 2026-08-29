@@ -55,20 +55,43 @@ setInterval(() => {
 const dataDir = path.dirname(DATA_FILE);
 if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
 
-// Load or initialize leaderboard
+/**
+ * Load the leaderboard, or start empty.
+ *
+ * A file that exists but will not parse is moved aside rather than read over:
+ * returning {} is the only way to keep serving, but the next save would then
+ * overwrite whatever was salvageable with an empty board. Keeping the original
+ * under a timestamped name turns silent data loss into a recoverable one.
+ */
 function loadData() {
+    if (!fs.existsSync(DATA_FILE)) return {};
     try {
-        if (fs.existsSync(DATA_FILE)) {
-            return JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
-        }
-    } catch (e) { console.error('Error loading data:', e.message); }
-    return {};
+        return JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
+    } catch (e) {
+        console.error('Error loading data:', e.message);
+        try {
+            fs.renameSync(DATA_FILE, `${DATA_FILE}.corrupt-${Date.now()}`);
+        } catch (moveError) { console.error('Could not set aside corrupt data:', moveError.message); }
+        return {};
+    }
 }
 
+/**
+ * Write the whole file atomically: to a temporary name, then rename over the
+ * original. writeFileSync truncates before it writes, so a crash or a full
+ * disk mid-write used to leave a half-written file — and an empty board on
+ * the next start. rename() is atomic on the same filesystem, so readers only
+ * ever see the old file or the new one.
+ */
 function saveData(data) {
+    const tmp = `${DATA_FILE}.tmp`;
     try {
-        fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
-    } catch (e) { console.error('Error saving data:', e.message); }
+        fs.writeFileSync(tmp, JSON.stringify(data, null, 2));
+        fs.renameSync(tmp, DATA_FILE);
+    } catch (e) {
+        console.error('Error saving data:', e.message);
+        try { fs.rmSync(tmp, { force: true }); } catch (cleanupError) { /* nothing left to do */ }
+    }
 }
 
 // GET /api/leaderboard/:difficulty
@@ -96,9 +119,25 @@ app.get('/api/leaderboard', (req, res) => {
 const VALID_DIFFICULTIES = ['easy', 'medium', 'hard', 'expert', 'evil', 'nightmare'];
 const MAX_TIME_SECONDS = 24 * 60 * 60; // a day; anything beyond is bogus
 const MAX_HINTS = 81;
+const MAX_MISTAKES = 999;
+
+/**
+ * Puzzles per tier — a level is a 1-based position in that tier's bank, so
+ * anything past the end names no puzzle. Mirrors BANK_SIZES in difficulties.js,
+ * which this package cannot import (it ships in its own container); a test in
+ * the frontend suite asserts the two agree.
+ *
+ * Out of range is coerced to null rather than rejected: the client never sends
+ * one, so it is either forged, where dropping the claim is enough, or a bank
+ * that grew before this API was redeployed, where losing the score would be
+ * the wrong outcome.
+ */
+const LEVEL_LIMITS = {
+    easy: 500, medium: 500, hard: 500, expert: 500, evil: 500, nightmare: 3000,
+};
 
 app.post('/api/leaderboard', rateLimit, (req, res) => {
-    const { name, difficulty, time, hints, level, autoNotes } = req.body;
+    const { name, difficulty, time, hints, level, autoNotes, mistakes } = req.body;
 
     if (!name || !difficulty || time === undefined) {
         return res.status(400).json({ error: 'Missing required fields: name, difficulty, time' });
@@ -128,9 +167,16 @@ app.post('/api/leaderboard', rateLimit, (req, res) => {
         ? Math.min(MAX_HINTS, Math.max(0, Math.round(parsedHints)))
         : 0;
 
-    const parsedLevel = Number(level);
-    const cleanLevel = Number.isFinite(parsedLevel) && parsedLevel >= 1
-        ? Math.round(parsedLevel)
+    // Null, not zero, when absent: a client that predates the field made an
+    // unknown number of mistakes, not none.
+    const parsedMistakes = Number(mistakes);
+    const cleanMistakes = mistakes === undefined || !Number.isFinite(parsedMistakes)
+        ? null
+        : Math.min(MAX_MISTAKES, Math.max(0, Math.round(parsedMistakes)));
+
+    const parsedLevel = Math.round(Number(level));
+    const cleanLevel = Number.isFinite(parsedLevel) && parsedLevel >= 1 && parsedLevel <= LEVEL_LIMITS[difficulty]
+        ? parsedLevel
         : null;
 
     const entry = {
@@ -138,6 +184,7 @@ app.post('/api/leaderboard', rateLimit, (req, res) => {
         difficulty,
         time: Math.round(cleanTime),
         hints: cleanHints,
+        mistakes: cleanMistakes,
         level: cleanLevel,
         // Auto-notes fills candidates automatically. It reveals no answers, but
         // it removes the scanning work, so entries record whether it was on.
@@ -175,3 +222,4 @@ if (require.main === module) {
 }
 
 module.exports = app;
+module.exports.LEVEL_LIMITS = LEVEL_LIMITS;
