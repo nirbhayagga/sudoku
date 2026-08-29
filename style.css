@@ -114,8 +114,11 @@ body::before {
     z-index: 0;
 }
 
+/* Every theme block is scoped to :root on purpose. The picker's buttons carry
+   data-theme too, and an unscoped [data-theme="ocean"] matched them — each
+   option then restyled itself with its own theme's text colour. */
 /* ── Theme: Sakura (pink & cream) ─────────────────────────────────── */
-[data-theme="sakura"] {
+:root[data-theme="sakura"] {
     --bg-primary: #f5e1d8;
     --bg-secondary: #f0d4ca;
     --bg-card: rgba(240, 200, 185, 0.7);
@@ -149,14 +152,14 @@ body::before {
     --nightmare-color: #e11d48;
 }
 
-[data-theme="sakura"] body::before {
+:root[data-theme="sakura"] body::before {
     background:
         radial-gradient(ellipse 600px 400px at 20% 20%, rgba(236, 72, 153, 0.12), transparent),
         radial-gradient(ellipse 500px 350px at 80% 80%, rgba(251, 146, 60, 0.08), transparent);
 }
 
 /* ── Theme: Ocean (deep blue-teal) ────────────────────────────────── */
-[data-theme="ocean"] {
+:root[data-theme="ocean"] {
     --bg-primary: #0b1628;
     --bg-secondary: #0f1f36;
     --bg-card: rgba(15, 31, 54, 0.8);
@@ -190,14 +193,14 @@ body::before {
     --nightmare-color: #f43f5e;
 }
 
-[data-theme="ocean"] body::before {
+:root[data-theme="ocean"] body::before {
     background:
         radial-gradient(ellipse 600px 400px at 20% 20%, rgba(6, 182, 212, 0.1), transparent),
         radial-gradient(ellipse 500px 350px at 80% 80%, rgba(59, 130, 246, 0.08), transparent);
 }
 
 /* ── Theme: Forest (dark green) ───────────────────────────────────── */
-[data-theme="forest"] {
+:root[data-theme="forest"] {
     --bg-primary: #091209;
     --bg-secondary: #101f10;
     --bg-card: rgba(16, 31, 16, 0.8);
@@ -231,14 +234,14 @@ body::before {
     --nightmare-color: #ef4444;
 }
 
-[data-theme="forest"] body::before {
+:root[data-theme="forest"] body::before {
     background:
         radial-gradient(ellipse 600px 400px at 20% 20%, rgba(34, 197, 94, 0.08), transparent),
         radial-gradient(ellipse 500px 350px at 80% 80%, rgba(132, 204, 22, 0.06), transparent);
 }
 
 /* ── Theme: Arctic (clean light) ──────────────────────────────────── */
-[data-theme="arctic"] {
+:root[data-theme="arctic"] {
     --bg-primary: #dce4ef;
     --bg-secondary: #d0daea;
     --bg-card: rgba(190, 205, 230, 0.65);
@@ -272,7 +275,7 @@ body::before {
     --nightmare-color: #dc2626;
 }
 
-[data-theme="arctic"] body::before {
+:root[data-theme="arctic"] body::before {
     background:
         radial-gradient(ellipse 600px 400px at 20% 20%, rgba(99, 102, 241, 0.1), transparent),
         radial-gradient(ellipse 500px 350px at 80% 80%, rgba(16, 185, 129, 0.06), transparent);
@@ -283,7 +286,7 @@ body::before {
    Deliberately plain: opaque surfaces, one restrained accent, flat headings,
    no background glow. Everything that gives the other themes their
    atmosphere is switched off here through the variables alone. */
-[data-theme="light"] {
+:root[data-theme="light"] {
     --bg-primary: #f4f5f7;
     --bg-secondary: #ffffff;
     --bg-card: #ffffff;
@@ -321,12 +324,12 @@ body::before {
     --win-title-accent: var(--text-primary);
 }
 
-[data-theme="light"] body::before {
+:root[data-theme="light"] body::before {
     background: none;
 }
 
 /* ── Theme: Dark (clean, neutral) ──────────────────────────────────── */
-[data-theme="dark"] {
+:root[data-theme="dark"] {
     --bg-primary: #121316;
     --bg-secondary: #191b1f;
     --bg-card: #1c1e23;
@@ -362,7 +365,7 @@ body::before {
     --win-title-accent: var(--text-primary);
 }
 
-[data-theme="dark"] body::before {
+:root[data-theme="dark"] body::before {
     background: none;
 }
 
@@ -373,24 +376,21 @@ body::before {
 }
 
 .theme-btn {
-    background: linear-gradient(135deg,
-            var(--accent) 0%, var(--accent) 50%,
-            var(--success) 50%, var(--success) 100%);
-    border: 2px solid var(--border-subtle);
+    background: var(--accent-surface);
+    border: 2px solid var(--bg-secondary);
+    box-shadow: 0 0 0 1px var(--border-box);
     width: 32px;
     height: 32px;
     border-radius: 50%;
     cursor: pointer;
     transition: all var(--transition);
-    box-shadow: 0 2px 8px var(--accent-glow);
     padding: 0;
     font-size: 0;
 }
 
 .theme-btn:hover {
-    transform: scale(1.15);
-    border-color: var(--accent);
-    box-shadow: 0 4px 16px var(--accent-glow);
+    transform: scale(1.1);
+    box-shadow: 0 0 0 2px var(--accent);
 }
 
 .theme-dropdown {
@@ -449,6 +449,15 @@ body::before {
 .theme-option.active {
     background: var(--bg-cell-focus);
     font-weight: 600;
+}
+
+.theme-group {
+    font-size: 0.65rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    padding: 0.45rem 0.75rem 0.15rem;
 }
 
 .theme-swatch {
@@ -649,6 +658,39 @@ body::before {
 
 .game-timer.paused {
     animation: blink-pause 1.2s ease-in-out infinite;
+}
+
+/* Sits over the blurred grid; app.js sizes it to the grid's box, since the
+   card it is positioned against also holds the controls. */
+.pause-panel {
+    position: absolute;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 5;
+}
+
+/* display:flex above would otherwise beat the hidden attribute. */
+.pause-panel[hidden] {
+    display: none;
+}
+
+.pause-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 1.25rem 1.5rem;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-box);
+    border-radius: var(--radius);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+}
+
+.pause-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--text-primary);
 }
 
 @keyframes blink-pause {
@@ -941,9 +983,37 @@ body::before {
 
 .play-buttons {
     display: flex;
-    gap: 0.5rem;
+    /* Row gap, then column gap: the wider column gap separates the groups. */
+    gap: 0.5rem 1rem;
     flex-wrap: wrap;
     justify-content: center;
+}
+
+.btn-group {
+    display: flex;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+/* A mode that is on looks pressed, so the label never has to say ON/OFF. */
+.btn-toggle[aria-pressed="true"] {
+    background: var(--bg-cell-focus);
+    border-color: var(--accent);
+    color: var(--accent-text);
+}
+
+/* Level, Daily and New Game share a row: three decisions made together. */
+.setup-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+#subtitle:empty {
+    display: none;
 }
 
 /* ── Status Bar ───────────────────────────────────────────────────── */
@@ -1753,6 +1823,10 @@ kbd {
         justify-content: flex-start;
     }
 
+    .btn-group {
+        justify-content: flex-start;
+    }
+
     /* Status bar spans full width below the flex row */
     .status-bar {
         margin-top: 0.5rem;
@@ -1926,6 +2000,10 @@ kbd {
     }
 
     .play-buttons {
+        gap: 0.25rem 0.6rem;
+    }
+
+    .btn-group {
         gap: 0.25rem;
     }
 
@@ -2007,6 +2085,10 @@ kbd {
        and the grid are competing for the same pixels, and the grid is the part
        people actually look at. */
     .play-buttons {
+        gap: 0.3rem 0.6rem;
+    }
+
+    .btn-group {
         gap: 0.3rem;
     }
 

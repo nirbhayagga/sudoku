@@ -42,7 +42,8 @@ Play sudoku puzzles with built-in hints, pencil marks, undo/redo, and more.
 - **Leaderboard** — Submit scores to a self-hosted leaderboard (optional; app works fine without it)
 - **Accessible** — Live-announced status, labelled cells, dialogs with focus trapping and Escape to close, pinch zoom enabled
 - **Mobile optimized** — On-screen numpad, touch-friendly 44px targets, no virtual keyboard popup, safe-area-inset support for iPhone notch/Dynamic Island, landscape mode handling
-- **Pause** — Freezes the timer, blurs the grid, and blocks all input until resumed
+- **Pause** — Freezes the timer, blurs the grid behind a Paused panel, and blocks all input until resumed
+- **Continue on another device** — From the pause panel, copy a link that carries the whole game: board, notes, revealed hints, clock, hint and mistake counts. Open it anywhere and play on. No account, no server — the state rides in the URL. The device you left stops offering that game to resume, so you are never shown a puzzle you finished elsewhere; making a move there again brings it back
 - **Installable / offline** — Add to home screen and play with no network
 
 ### Solver Mode

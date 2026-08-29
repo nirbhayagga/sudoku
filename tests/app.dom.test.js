@@ -244,9 +244,9 @@ describe('notes', () => {
 
     it('toggles notes mode from the button', () => {
         app.click('#btn-notes-toggle');
-        expect(app.$('#btn-notes-toggle').textContent).toBe('Notes: ON');
+        expect(app.$('#btn-notes-toggle').getAttribute('aria-pressed')).toBe('true');
         app.click('#btn-notes-toggle');
-        expect(app.$('#btn-notes-toggle').textContent).toBe('Notes: OFF');
+        expect(app.$('#btn-notes-toggle').getAttribute('aria-pressed')).toBe('false');
     });
 
     it('records a pencil mark instead of a value', () => {
@@ -378,6 +378,141 @@ describe('error checking', () => {
 
         app.type(empties[1], EASY_SOLUTION[empties[1]]);
         expect(app.$('#btn-check').textContent).toBe('Check');
+    });
+});
+
+describe('pause panel', () => {
+    beforeEach(async () => {
+        await startGame(app);
+    });
+
+    it('appears over the grid while paused and offers to resume', () => {
+        expect(app.$('#pause-panel').hidden).toBe(true);
+        app.click('#btn-pause');
+        expect(app.$('#pause-panel').hidden).toBe(false);
+        expect(app.$('#btn-pause').textContent).toBe('Resume');
+
+        app.click('#btn-pause-resume');
+        expect(app.$('#pause-panel').hidden).toBe(true);
+        expect(app.$('#btn-pause').textContent).toBe('Pause');
+        expect(app.$('#status').textContent).toBe('');
+    });
+});
+
+/**
+ * A game moves to another device as a link holding its whole save state — no
+ * account, no server. The source pauses and stops saving, so the next launch
+ * there does not offer a game that was finished elsewhere.
+ */
+describe('continuing on another device', () => {
+    const empties = [...EASY_PUZZLE].map((c, i) => (c === '0' ? i : -1)).filter((i) => i >= 0);
+
+    /** Play a little of everything, then hand the game off; returns the link. */
+    async function handOff(harness) {
+        const [typed, wrongCell, noted, hinted] = empties;
+        const clock = harness.useFakeClock();
+
+        harness.type(typed, EASY_SOLUTION[typed]);
+        harness.type(wrongCell, EASY_SOLUTION[wrongCell] === '1' ? '2' : '1');
+
+        harness.click('#btn-notes-toggle');
+        harness.type(noted, '5');
+        harness.click('#btn-notes-toggle');
+
+        // A focused cell is revealed straight away.
+        harness.$$('.cell-input')[hinted].focus();
+        harness.click('#btn-hint');
+
+        clock.advance(65_000);
+        harness.click('#btn-pause');
+        harness.click('#btn-handoff');
+        await harness.tick();
+        clock.restore();
+
+        // No clipboard in jsdom, so the link lands in the dialog.
+        return { link: harness.$('#share-text').value, typed, wrongCell, noted, hinted };
+    }
+
+    beforeEach(async () => {
+        await startGame(app);
+    });
+
+    it('pauses, shows the link, and stops saving here', async () => {
+        app.window.dispatchEvent(new app.window.Event('pagehide'));
+        expect(app.window.localStorage.getItem('sudoku_saved_game')).not.toBeNull();
+
+        const { link } = await handOff(app);
+        expect(link).toContain('g=1');
+        expect(app.$('#share-overlay').classList.contains('active')).toBe(true);
+        expect(app.$('#share-title').textContent).toBe('Continue on another device');
+        expect(app.$('#btn-pause').textContent).toBe('Resume');
+
+        // Deleted at hand-off, and a flush afterwards must not bring it back.
+        expect(app.window.localStorage.getItem('sudoku_saved_game')).toBeNull();
+        app.window.dispatchEvent(new app.window.Event('pagehide'));
+        expect(app.window.localStorage.getItem('sudoku_saved_game')).toBeNull();
+    });
+
+    // Playing on here regardless is a choice; the first move resumes saving.
+    it('saves again once a move is made here', async () => {
+        await handOff(app);
+        app.click('#btn-pause-resume');
+        const next = empties[4];
+        app.type(next, EASY_SOLUTION[next]);
+        app.window.dispatchEvent(new app.window.Event('pagehide'));
+        expect(JSON.parse(app.window.localStorage.getItem('sudoku_saved_game')).userValues[next])
+            .toBe(EASY_SOLUTION[next]);
+    });
+
+    it('resumes everything on the other device — board, notes, hint, mistakes, clock', async () => {
+        const { link, typed, wrongCell, noted, hinted } = await handOff(app);
+
+        const other = await bootApp({ url: link });
+        const inputs = other.$$('.cell-input');
+        expect(inputs[typed].value).toBe(EASY_SOLUTION[typed]);
+        expect(inputs[hinted].value).toBe(EASY_SOLUTION[hinted]);
+        expect(other.cells()[hinted].classList.contains('hint')).toBe(true);
+        expect(other.cells()[hinted].classList.contains('locked')).toBe(true);
+        expect(other.$('#status').textContent).toMatch(/other device — 1:05/);
+        expect(other.$('.resume-banner')).toBeNull();
+
+        // The link is gone from the address bar: a reload continues the live
+        // game rather than restarting from the snapshot.
+        expect(other.window.location.search).toBe('');
+
+        other.window.dispatchEvent(new other.window.Event('pagehide'));
+        const saved = JSON.parse(other.window.localStorage.getItem('sudoku_saved_game'));
+        expect(saved.notes[noted]).toEqual(['5']);
+        expect(saved.hintsUsed).toBe(1);
+        expect(saved.mistakes).toBe(1);
+        expect(saved.timerSeconds).toBeGreaterThanOrEqual(65);
+        expect(saved.userValues[wrongCell]).not.toBe('0');
+        expect(saved.difficulty).toBe('easy');
+        expect(saved.level).toBe(1);
+        other.close();
+    });
+
+    it('wins over a local saved game', async () => {
+        const { link } = await handOff(app);
+        app.window.dispatchEvent(new app.window.Event('pagehide'));
+        const other = await bootApp({
+            url: link,
+            localStorage: { sudoku_saved_game: JSON.stringify({
+                puzzle: EASY_PUZZLE, solution: EASY_SOLUTION, difficulty: 'hard',
+                userValues: EASY_PUZZLE, notes: Array.from({ length: 81 }, () => []),
+                timerSeconds: 5, lockedCells: [...EASY_PUZZLE].map((c) => c !== '0'),
+            }) },
+        });
+        expect(other.$('.resume-banner')).toBeNull();
+        expect(other.$('.diff-btn.active').dataset.diff).toBe('easy');
+        other.close();
+    });
+
+    it('ignores a link that does not hold a valid game', async () => {
+        const other = await bootApp({ url: 'http://localhost/?g=1&b=notaboard&v=1&x=easy' });
+        expect(other.$('#status').textContent).toBe('Click "New Game" to start');
+        expect(other.cells().filter((c) => c.classList.contains('locked'))).toHaveLength(0);
+        other.close();
     });
 });
 
@@ -1193,7 +1328,7 @@ describe('theme dropdown', () => {
     it('offers every theme', () => {
         const themes = app.$$('.theme-option').map((b) => b.dataset.theme);
         expect(themes).toEqual([
-            'light', 'dark', 'midnight', 'sakura', 'ocean', 'forest', 'arctic',
+            'light', 'sakura', 'arctic', 'dark', 'midnight', 'ocean', 'forest',
         ]);
     });
 
@@ -1396,7 +1531,6 @@ describe('auto-notes', () => {
     });
 
     it('is off by default', () => {
-        expect(app.$('#btn-auto-notes').textContent).toBe('Auto: OFF');
         expect(app.$('#btn-auto-notes').getAttribute('aria-pressed')).toBe('false');
     });
 
@@ -1486,9 +1620,9 @@ describe('auto-notes', () => {
     describe('interaction with manual notes', () => {
         it('turns notes mode off when switched on', () => {
             app.click('#btn-notes-toggle');
-            expect(app.$('#btn-notes-toggle').textContent).toBe('Notes: ON');
+            expect(app.$('#btn-notes-toggle').getAttribute('aria-pressed')).toBe('true');
             app.click('#btn-auto-notes');
-            expect(app.$('#btn-notes-toggle').textContent).toBe('Notes: OFF');
+            expect(app.$('#btn-notes-toggle').getAttribute('aria-pressed')).toBe('false');
         });
 
         it('refuses hand-edited notes while on, and says why', () => {
@@ -1508,7 +1642,7 @@ describe('auto-notes', () => {
             const empty = EASY_PUZZLE.indexOf('0');
             const computed = notesOf(app, empty);
             app.click('#btn-auto-notes');
-            expect(app.$('#btn-auto-notes').textContent).toBe('Auto: OFF');
+            expect(app.$('#btn-auto-notes').getAttribute('aria-pressed')).toBe('false');
 
             // The computed marks stay put and become editable again, so
             // toggling one of them removes it and it does not come back.
@@ -1569,7 +1703,7 @@ describe('auto-notes', () => {
 
     it('is reachable from the keyboard', () => {
         app.press(EASY_PUZZLE.indexOf('0'), 'a');
-        expect(app.$('#btn-auto-notes').textContent).toBe('Auto: ON');
+        expect(app.$('#btn-auto-notes').getAttribute('aria-pressed')).toBe('true');
     });
 });
 

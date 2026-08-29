@@ -66,31 +66,33 @@
       <div class="header-spacer"></div>
       <div class="header-title">
         <h1>Sudoku</h1>
-        <p id="subtitle">Select a difficulty and start playing</p>
+        <p id="subtitle"></p>
       </div>
       <div class="theme-picker" id="theme-picker">
         <button class="theme-btn" id="theme-toggle" title="Change theme" aria-label="Change theme"></button>
         <div class="theme-dropdown" id="theme-dropdown">
+          <div class="theme-group">Light</div>
           <button class="theme-option" data-theme="light">
             <span class="theme-swatch" style="background:#f4f5f7;border-color:#2563eb"></span>Light
           </button>
+          <button class="theme-option" data-theme="sakura">
+            <span class="theme-swatch" style="background:#f5e1d8;border-color:#ec4899"></span>Sakura
+          </button>
+          <button class="theme-option" data-theme="arctic">
+            <span class="theme-swatch" style="background:#dce4ef;border-color:#6366f1"></span>Arctic
+          </button>
+          <div class="theme-group">Dark</div>
           <button class="theme-option" data-theme="dark">
             <span class="theme-swatch" style="background:#121316;border-color:#3b82f6"></span>Dark
           </button>
           <button class="theme-option" data-theme="midnight">
             <span class="theme-swatch" style="background:#0a0a0f;border-color:#6366f1"></span>Midnight
           </button>
-          <button class="theme-option" data-theme="sakura">
-            <span class="theme-swatch" style="background:#f5e1d8;border-color:#ec4899"></span>Sakura
-          </button>
           <button class="theme-option" data-theme="ocean">
             <span class="theme-swatch" style="background:#0b1628;border-color:#06b6d4"></span>Ocean
           </button>
           <button class="theme-option" data-theme="forest">
             <span class="theme-swatch" style="background:#091209;border-color:#22c55e"></span>Forest
-          </button>
-          <button class="theme-option" data-theme="arctic">
-            <span class="theme-swatch" style="background:#dce4ef;border-color:#6366f1"></span>Arctic
           </button>
         </div>
       </div>
@@ -107,6 +109,18 @@
   <main class="card" id="app">
     <!-- 9x9 Grid -->
     <div class="grid-container" id="grid"></div>
+
+    <!-- Shown over the blurred grid while paused. Positioned by JS to the
+         grid's box, since the card also holds the controls. -->
+    <div class="pause-panel" id="pause-panel" hidden>
+      <div class="pause-card">
+        <p class="pause-title">Paused</p>
+        <button class="btn btn-primary" id="btn-pause-resume">Resume</button>
+        <button class="btn" id="btn-handoff" title="Copy a link that resumes this game, clock and all, on another device">
+          Continue on another device
+        </button>
+      </div>
+    </div>
 
     <!-- Solver Mode Controls -->
     <div class="controls" id="solver-controls">
@@ -129,29 +143,40 @@
         <button class="diff-btn" data-diff="evil">Evil</button>
         <button class="diff-btn diff-nightmare" data-diff="nightmare">Nightmare</button>
       </div>
-      <button class="btn btn-daily" id="btn-daily" title="Today's puzzle — everyone gets the same one">Daily</button>
-      <div class="level-selector" id="level-container">
-        <label for="level-input">Level:</label>
-        <input type="number" id="level-input" min="1" max="500" placeholder="RND"
-          title="Enter 1-500, or leave blank for a random level">
-        <span class="level-max" id="level-max">/ 500</span>
-      </div>
+      <div class="setup-row">
+        <div class="level-selector" id="level-container">
+          <label for="level-input">Level:</label>
+          <input type="number" id="level-input" min="1" max="500" placeholder="RND"
+            title="Enter 1-500, or leave blank for a random level">
+          <span class="level-max" id="level-max">/ 500</span>
+        </div>
+        <button class="btn btn-daily" id="btn-daily" title="Today's puzzle — everyone gets the same one">Daily</button>
         <button class="btn btn-primary" id="btn-new-game">New Game</button>
+      </div>
       </div>
 
       <button class="btn btn-setup-toggle" id="btn-setup-toggle" aria-expanded="false"
         aria-controls="setup-controls" style="display:none;">New Game…</button>
 
+      <!-- Three groups: things that act on the board, modes that stay on,
+           and things that act on the game. The gaps between groups are where
+           the row wraps on a phone, so the wrap points mean something. -->
       <div class="play-buttons">
-        <button class="btn btn-hint" id="btn-hint" title="Reveal one cell (H)">Hint</button>
-        <button class="btn" id="btn-notes-toggle" title="Toggle notes mode (N)" aria-pressed="false">Notes: OFF</button>
-        <button class="btn" id="btn-auto-notes" title="Fill candidates automatically (A)" aria-pressed="false">Auto: OFF</button>
-        <button class="btn" id="btn-check" title="Check for errors (Enter)">Check</button>
-        <button class="btn" id="btn-undo" title="Undo (Ctrl+Z)">Undo</button>
-        <button class="btn" id="btn-redo" title="Redo (Ctrl+Y)">Redo</button>
-        <button class="btn btn-pause" id="btn-pause" title="Pause timer">Pause</button>
-        <button class="btn" id="btn-share" title="Copy a link to this puzzle">Share</button>
-        <button class="btn btn-danger" id="btn-reset" title="Reset to start (Esc)">Reset</button>
+        <div class="btn-group" role="group" aria-label="Board">
+          <button class="btn btn-hint" id="btn-hint" title="Reveal one cell (H)">Hint</button>
+          <button class="btn" id="btn-check" title="Check for errors (Enter)">Check</button>
+          <button class="btn" id="btn-undo" title="Undo (Ctrl+Z)">Undo</button>
+          <button class="btn" id="btn-redo" title="Redo (Ctrl+Y)">Redo</button>
+        </div>
+        <div class="btn-group" role="group" aria-label="Modes">
+          <button class="btn btn-toggle" id="btn-notes-toggle" title="Toggle notes mode (N)" aria-pressed="false">Notes</button>
+          <button class="btn btn-toggle" id="btn-auto-notes" title="Fill candidates automatically (A)" aria-pressed="false">Auto-notes</button>
+        </div>
+        <div class="btn-group" role="group" aria-label="Game">
+          <button class="btn btn-pause" id="btn-pause" title="Pause timer">Pause</button>
+          <button class="btn" id="btn-share" title="Copy a link to this puzzle">Share</button>
+          <button class="btn btn-danger" id="btn-reset" title="Reset to start (Esc)">Reset</button>
+        </div>
       </div>
     </div>
 
@@ -223,7 +248,7 @@
   <div class="modal-overlay" id="share-overlay">
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="share-title">
       <h2 id="share-title">Share this puzzle</h2>
-      <p>Copy the link below.</p>
+      <p id="share-hint">Copy the link below.</p>
       <label class="visually-hidden" for="share-text">Link to this puzzle</label>
       <textarea id="share-text" readonly spellcheck="false"></textarea>
       <div class="modal-actions">

@@ -7,7 +7,7 @@ import { SudokuSolver } from './solver.js';
 import { SudokuGenerator } from './generator.js';
 import { DIFFICULTY_LABELS, BANK_SIZES } from './difficulties.js';
 import { dailyPuzzle, formatDay } from './daily.js';
-import { parseShareLink, bankLink, puzzleLink, copyToClipboard } from './share.js';
+import { parseShareLink, bankLink, puzzleLink, gameLink, parseGameLink, copyToClipboard } from './share.js';
 import { candidatesFor, candidateGrid, peersOf, cellName, nextStep } from './techniques.js';
 import { formatTime, escapeHtml } from './format.js';
 import { createDialogs } from './dialogs.js';
@@ -64,6 +64,9 @@ function loadBank() {
     const btnNotesToggle = document.getElementById('btn-notes-toggle');
     const btnAutoNotes = document.getElementById('btn-auto-notes');
     const btnPause = document.getElementById('btn-pause');
+    const pausePanel = document.getElementById('pause-panel');
+    const btnPauseResume = document.getElementById('btn-pause-resume');
+    const btnHandoff = document.getElementById('btn-handoff');
     const diffSelector = document.getElementById('difficulty-selector');
     const levelInput = document.getElementById('level-input');
     const levelMaxDisplay = document.getElementById('level-max');
@@ -75,6 +78,8 @@ function loadBank() {
     const shareOverlay = document.getElementById('share-overlay');
     const shareText = document.getElementById('share-text');
     const btnShareClose = document.getElementById('btn-share-close');
+    const shareTitle = document.getElementById('share-title');
+    const shareHint = document.getElementById('share-hint');
 
     const modalOverlay = document.getElementById('modal-overlay');
     const importText = document.getElementById('import-text');
@@ -139,6 +144,10 @@ function loadBank() {
     // Check has marked errors that are still on the board; the button then
     // offers to clear them until the next board change.
     let errorsMarked = false;
+    // This game was handed to another device. Saving stops so the next launch
+    // here does not offer a game that was finished elsewhere; the first move
+    // made here afterwards is a decision to keep playing, and saving resumes.
+    let handedOff = false;
     let notesMode = false;
     // Auto-notes fills every empty cell with the digits its row, column and box
     // still allow, and keeps them current as the board changes. It reveals no
@@ -532,7 +541,7 @@ function loadBank() {
 
     function toggleNotesMode() {
         notesMode = !notesMode;
-        btnNotesToggle.textContent = `Notes: ${notesMode ? 'ON' : 'OFF'}`;
+        btnNotesToggle.setAttribute('aria-pressed', String(notesMode));
         btnNotesToggle.classList.toggle('notes-active', notesMode);
         btnNotesToggle.setAttribute('aria-pressed', String(notesMode));
         if (numpadEl) {
@@ -592,7 +601,7 @@ function loadBank() {
         }
 
         if (btnAutoNotes) {
-            btnAutoNotes.textContent = `Auto: ${on ? 'ON' : 'OFF'}`;
+            btnAutoNotes.setAttribute('aria-pressed', String(on));
             btnAutoNotes.classList.toggle('notes-active', on);
             btnAutoNotes.setAttribute('aria-pressed', String(on));
         }
@@ -1016,12 +1025,13 @@ function loadBank() {
         currentDifficulty = difficulty || currentDifficulty;
         hintsUsed = 0;
         mistakes = 0;
+        handedOff = false;
         autoNotesUsed = autoNotes; // carrying the mode over counts as using it
         gameWon = false;
         undoStack.length = 0;
         redoStack.length = 0;
         notesMode = false;
-        btnNotesToggle.textContent = 'Notes: OFF';
+        btnNotesToggle.setAttribute('aria-pressed', 'false');
         btnNotesToggle.classList.remove('notes-active');
 
         clearHintNudge();
@@ -1187,11 +1197,33 @@ function loadBank() {
         }
 
         // No clipboard on file:// or an insecure origin, so show the link.
-        if (shareText && shareOverlay) {
-            shareText.value = link;
-            dialogs.open(shareOverlay, { initialFocus: shareText });
-            shareText.select();
+        showLinkDialog(link, { title: 'Share this puzzle', hint: 'Copy the link below.' });
+    }
+
+    function showLinkDialog(link, { title, hint }) {
+        if (!shareText || !shareOverlay) return;
+        if (shareTitle) shareTitle.textContent = title;
+        if (shareHint) shareHint.textContent = hint;
+        shareText.value = link;
+        dialogs.open(shareOverlay, { initialFocus: shareText });
+        shareText.select();
+    }
+
+    /**
+     * Pick up a game handed over from another device. The solution is derived
+     * here rather than trusted from the link, and the link is then cleared from
+     * the address bar so a reload continues the live game, not the snapshot.
+     */
+    function applyGameLink(state) {
+        const { solution } = SudokuSolver.solveSudoku(state.puzzle);
+        if (!solution) {
+            setStatus('That link does not hold a valid puzzle', 'error');
+            return;
         }
+        resumeGame({ ...state, solution });
+        saveGame();
+        setStatus(`Continued from your other device — ${formatTime(timerSeconds)}`);
+        window.history.replaceState(null, '', window.location.pathname);
     }
 
     /**
@@ -1222,6 +1254,7 @@ function loadBank() {
         gameWon = false;
         hintsUsed = 0;
         mistakes = 0;
+        handedOff = false;
         undoStack.length = 0;
         redoStack.length = 0;
 
@@ -1560,22 +1593,70 @@ function loadBank() {
         suspendTimer();
     }
 
-    function togglePause() {
-        if (!gameActive || gameWon) return;
-        timerPaused = !timerPaused;
-        gameTimerEl.classList.toggle('paused', timerPaused);
-        if (timerPaused) {
+    /** Lay the pause panel over the grid's box; the card also holds controls. */
+    function positionPausePanel() {
+        if (!pausePanel || pausePanel.hidden) return;
+        pausePanel.style.top = `${gridEl.offsetTop}px`;
+        pausePanel.style.left = `${gridEl.offsetLeft}px`;
+        pausePanel.style.width = `${gridEl.offsetWidth}px`;
+        pausePanel.style.height = `${gridEl.offsetHeight}px`;
+    }
+
+    function setPaused(paused) {
+        if (!gameActive || gameWon || paused === timerPaused) return;
+        timerPaused = paused;
+        gameTimerEl.classList.toggle('paused', paused);
+        gridEl.classList.toggle('paused', paused);
+        if (btnPause) btnPause.textContent = paused ? 'Resume' : 'Pause';
+        if (pausePanel) {
+            pausePanel.hidden = !paused;
+            positionPausePanel();
+        }
+        if (paused) {
             // Time stops accruing; the interval keeps running but renders the
             // frozen total.
             suspendTimer();
             setStatus('Paused');
-            // Optionally hide the grid to prevent cheating
-            gridEl.classList.add('paused');
         } else {
             timerSegmentStart = Date.now();
             setStatus('');
-            gridEl.classList.remove('paused');
         }
+    }
+
+    function togglePause() {
+        setPaused(!timerPaused);
+    }
+
+    /**
+     * Move this game to another device.
+     *
+     * The link carries the entire save state, so nothing needs an account or a
+     * server. The game pauses here first — the clock should not run on while
+     * the player walks to the other device — and stops saving, so the next
+     * launch here does not offer a game that was finished somewhere else. The
+     * board stays on screen: playing on regardless is allowed, and the first
+     * move made here resumes saving.
+     */
+    async function handOffGame() {
+        if (!gameActive || gameWon) return;
+        setPaused(true);
+
+        const link = gameLink(window.location.href, buildSaveState());
+        handedOff = true;
+        if (saveTimeout) {
+            clearTimeout(saveTimeout);
+            saveTimeout = null;
+        }
+        store.deleteSavedGame();
+
+        if (await copyToClipboard(link)) {
+            setStatus('Link copied — open it on the other device to continue', 'success');
+            return;
+        }
+        showLinkDialog(link, {
+            title: 'Continue on another device',
+            hint: 'Open this link on the other device to pick up where you left off.',
+        });
     }
 
     // ══════════════════════════════════════════════════════════════════
@@ -1583,14 +1664,15 @@ function loadBank() {
     // ══════════════════════════════════════════════════════════════════
 
     function debounceSave() {
+        // A move made here after a hand-off means the player kept this copy.
+        handedOff = false;
         if (saveTimeout) clearTimeout(saveTimeout);
         saveTimeout = setTimeout(saveGame, 2000);
     }
 
-    function saveGame() {
-        if (!gameActive || !currentPuzzle || gameWon) return;
-
-        const state = {
+    /** Everything needed to pick this game up again, here or elsewhere. */
+    function buildSaveState() {
+        return {
             puzzle: currentPuzzle,
             solution: currentSolution,
             difficulty: currentDifficulty,
@@ -1607,6 +1689,11 @@ function loadBank() {
             hintCells: Array.from({ length: 81 }, (_, i) => wrappers[i].classList.contains('hint')),
             timestamp: Date.now(),
         };
+    }
+
+    function saveGame() {
+        if (!gameActive || !currentPuzzle || gameWon || handedOff) return;
+        const state = buildSaveState();
 
         store.saveGameState(state);
     }
@@ -1797,7 +1884,7 @@ function loadBank() {
         currentPuzzle = null;
         currentSolution = null;
         notesMode = false;
-        btnNotesToggle.textContent = 'Notes: OFF';
+        btnNotesToggle.setAttribute('aria-pressed', 'false');
         btnNotesToggle.classList.remove('notes-active');
 
         tabSolver.classList.toggle('active', mode === 'solver');
@@ -1823,7 +1910,7 @@ function loadBank() {
                 setStatus('Click a cell and type a digit');
             }
         } else {
-            subtitleEl.textContent = 'Select a difficulty and start playing';
+            subtitleEl.textContent = '';
             solveTimeEl.textContent = '';
             solveTimeEl.classList.remove('visible');
             setStatus('Click "New Game" to start');
@@ -1928,10 +2015,11 @@ function loadBank() {
         });
         btnAutoNotes.addEventListener('mousedown', (e) => e.preventDefault());
     }
+    if (btnPauseResume) btnPauseResume.addEventListener('click', () => setPaused(false));
+    if (btnHandoff) btnHandoff.addEventListener('click', handOffGame);
     if (btnPause) {
         btnPause.addEventListener('click', () => {
             togglePause();
-            btnPause.textContent = timerPaused ? 'Resume' : 'Pause';
         });
         btnPause.addEventListener('mousedown', (e) => e.preventDefault());
     }
@@ -1939,7 +2027,6 @@ function loadBank() {
     gameTimerEl.addEventListener('click', () => {
         if (btnPause) {
             togglePause();
-            btnPause.textContent = timerPaused ? 'Resume' : 'Pause';
         }
     });
     gameTimerEl.style.cursor = 'pointer';
@@ -2284,6 +2371,7 @@ function loadBank() {
             setSetupFolded(false);
             fitBoardSettled();
         }
+        positionPausePanel();
     }
 
     // ── Fitting the board to the screen ────────────────────────────────
@@ -2381,11 +2469,13 @@ function loadBank() {
 
     // Parsed before the first switchMode so the resume offer can be suppressed,
     // applied after so a raw-board link can stay in solver mode.
-    const sharedPuzzle = parseShareLink(window.location.search);
-    sharedPuzzleLoaded = sharedPuzzle !== null;
+    const gameState = parseGameLink(window.location.search);
+    const sharedPuzzle = gameState ? null : parseShareLink(window.location.search);
+    sharedPuzzleLoaded = gameState !== null || sharedPuzzle !== null;
 
     switchMode('play');
-    applySharedPuzzle(sharedPuzzle);
+    if (gameState) applyGameLink(gameState);
+    else applySharedPuzzle(sharedPuzzle);
     revealLeaderboardUi();
 
     // Once the real layout exists, size the board to whatever room is left.
