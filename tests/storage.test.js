@@ -60,6 +60,20 @@ describe('stats', () => {
         expect(stats.evil.bestTime).toBe(900);
     });
 
+    it('accumulates mistakes', () => {
+        store.recordWin('easy', 120, 0, false, new Date(), 2);
+        const stats = store.recordWin('easy', 120, 0, false, new Date(), 3);
+        expect(stats.easy.totalMistakes).toBe(5);
+    });
+
+    // Stats saved before the field existed have no totalMistakes.
+    it('tolerates stats saved without a mistake count', () => {
+        localStorage.setItem('sudoku_stats', JSON.stringify({
+            easy: { started: 1, played: 1, won: 1, bestTime: 50, totalTime: 50, totalHints: 0, autoNotesGames: 0 },
+        }));
+        expect(store.recordWin('easy', 60, 0, false, new Date(), 1).easy.totalMistakes).toBe(1);
+    });
+
     it('persists across reads', () => {
         store.recordWin('hard', 250, 1);
         expect(store.getStats().hard.played).toBe(1);

@@ -133,6 +133,12 @@ function loadBank() {
     let timerBaseSeconds = 0;
     let timerSegmentStart = 0;
     let hintsUsed = 0;
+    // Wrong digits placed this game. Counted at placement, against the solution,
+    // and never shown until the win — it is a record, not a live check.
+    let mistakes = 0;
+    // Check has marked errors that are still on the board; the button then
+    // offers to clear them until the next board change.
+    let errorsMarked = false;
     let notesMode = false;
     // Auto-notes fills every empty cell with the digits its row, column and box
     // still allow, and keeps them current as the board changes. It reveals no
@@ -306,6 +312,7 @@ function loadBank() {
             // Record for undo
             const prevValue = '';  // input just changed, prev was empty or we handle in keydown
             pushUndo(idx, prevValue, val, new Set(cellNotes[idx]), new Set());
+            noteMistake(idx, val);
 
             // Clear notes on this cell
             clearCellNotes(idx);
@@ -321,6 +328,7 @@ function loadBank() {
 
             refreshAutoNotes();
             clearHintNudge();
+            resetCheckButton();
 
             // Check for win
             checkWin();
@@ -423,7 +431,7 @@ function loadBank() {
             case 'Enter':
                 e.preventDefault();
                 if (mode === 'solver') solve();
-                else checkErrors();
+                else onCheckPressed();
                 break;
 
             case 'Escape':
@@ -773,6 +781,7 @@ function loadBank() {
         updateNumpadCompletion();
         refreshAutoNotes();
         clearHintNudge();
+        resetCheckButton();
 
         // Move selection to the undone cell
         if (isTouchDevice) {
@@ -798,6 +807,7 @@ function loadBank() {
         updateNumpadCompletion();
         refreshAutoNotes();
         clearHintNudge();
+        resetCheckButton();
 
         // Move selection to the redone cell
         if (isTouchDevice) {
@@ -1005,6 +1015,7 @@ function loadBank() {
         currentDaily = daily;
         currentDifficulty = difficulty || currentDifficulty;
         hintsUsed = 0;
+        mistakes = 0;
         autoNotesUsed = autoNotes; // carrying the mode over counts as using it
         gameWon = false;
         undoStack.length = 0;
@@ -1014,6 +1025,8 @@ function loadBank() {
         btnNotesToggle.classList.remove('notes-active');
 
         clearHintNudge();
+
+        resetCheckButton();
         setStatus('Loading puzzle...');
 
         // Awaiting the bank also yields to the event loop, so the status above
@@ -1208,6 +1221,7 @@ function loadBank() {
         if (!currentPuzzle) return;
         gameWon = false;
         hintsUsed = 0;
+        mistakes = 0;
         undoStack.length = 0;
         redoStack.length = 0;
 
@@ -1224,6 +1238,7 @@ function loadBank() {
 
         startTimer();
         clearHintNudge();
+        resetCheckButton();
         setStatus('Puzzle reset');
         refreshAutoNotes();
         debounceSave();
@@ -1289,6 +1304,7 @@ function loadBank() {
     /** Show the reasoning without filling anything in. Costs nothing. */
     function showHintNudge(candidate) {
         clearHintNudge();
+        resetCheckButton();
         pendingHint = candidate;
 
         gridEl.classList.add('hint-explaining');
@@ -1319,10 +1335,12 @@ function loadBank() {
         if (pendingHint && fixable.includes(pendingHint.idx)) {
             const { idx, reason } = pendingHint;
             clearHintNudge();
+            resetCheckButton();
             revealHint(idx, reason);
             return;
         }
         clearHintNudge();
+        resetCheckButton();
 
         // lastTouchedIdx is the touch fallback — selection there is visual and
         // survives blur. On desktop a blurred cell means nothing is selected,
@@ -1373,6 +1391,55 @@ function loadBank() {
     }
 
     // ── Error Checking ─────────────────────────────────────────────────
+
+    /** A placed digit that disagrees with the solution. Erasing is never one. */
+    function noteMistake(idx, val) {
+        if (val && currentSolution && val !== currentSolution[idx]) mistakes++;
+    }
+
+    /** Back to a plain Check; runs on every board change. */
+    function resetCheckButton() {
+        if (!errorsMarked) return;
+        errorsMarked = false;
+        btnCheck.textContent = 'Check';
+    }
+
+    /**
+     * Check reveals which entries are wrong; pressing it again erases exactly
+     * those, leaving every correct entry and note in place. It tells the
+     * player nothing Check did not already show, so it is free — and each
+     * cell is its own undo step, so nothing is lost.
+     */
+    function clearErrors() {
+        if (isPlayBlocked()) return;
+        if (!gameActive || gameWon) return;
+
+        let cleared = 0;
+        for (let i = 0; i < 81; i++) {
+            if (!wrappers[i].classList.contains('user-error')) continue;
+            pushUndo(i, inputs[i].value, '', new Set(cellNotes[i]), new Set(cellNotes[i]));
+            inputs[i].value = '';
+            clearConflictStyle(i);
+            wrappers[i].classList.remove('user-error');
+            cleared++;
+        }
+        for (let i = 0; i < 81; i++) wrappers[i].classList.remove('correct-check');
+
+        recheckAllConflicts();
+        updateNumpadCompletion();
+        refreshAutoNotes();
+        clearHintNudge();
+        resetCheckButton();
+        updateDigitHighlight();
+        debounceSave();
+        setStatus(`Cleared ${cleared} wrong ${cleared === 1 ? 'entry' : 'entries'}`, 'success');
+    }
+
+    function onCheckPressed() {
+        if (errorsMarked) clearErrors();
+        else checkErrors();
+    }
+
     function checkErrors() {
         if (isPlayBlocked()) return;
         if (!gameActive || !currentSolution || gameWon) return;
@@ -1396,7 +1463,9 @@ function loadBank() {
         }
 
         if (errorCount > 0) {
-            setStatus(`${errorCount} error${errorCount > 1 ? 's' : ''} found`, 'error');
+            setStatus(`${errorCount} error${errorCount > 1 ? 's' : ''} found — press Check again to clear ${errorCount > 1 ? 'them' : 'it'}`, 'error');
+            errorsMarked = true;
+            btnCheck.textContent = 'Clear errors';
             gridEl.classList.add('shake');
             setTimeout(() => gridEl.classList.remove('shake'), 300);
         } else if (filledCount > 0) {
@@ -1427,14 +1496,15 @@ function loadBank() {
 
             const timeStr = formatTime(timerSeconds);
             const hintStr = hintsUsed > 0 ? `${hintsUsed} hint${hintsUsed > 1 ? 's' : ''} used` : 'No hints used';
+            const mistakeStr = mistakes > 0 ? `${mistakes} mistake${mistakes > 1 ? 's' : ''}` : 'no mistakes';
             const assistStr = autoNotesUsed ? ' — auto-notes used' : '';
-            winDetails.textContent = `Time: ${timeStr} — ${hintStr}${assistStr}`;
+            winDetails.textContent = `Time: ${timeStr} — ${hintStr} — ${mistakeStr}${assistStr}`;
 
             setTimeout(() => dialogs.open(winOverlay), 600);
             setStatus('Puzzle complete!', 'success');
 
             // Update stats
-            store.recordWin(currentDifficulty, timerSeconds, hintsUsed, autoNotesUsed);
+            store.recordWin(currentDifficulty, timerSeconds, hintsUsed, autoNotesUsed, new Date(), mistakes);
             if (currentDaily) {
                 store.markDailyDone(currentDaily);
                 updateDailyButton();
@@ -1528,6 +1598,7 @@ function loadBank() {
             notes: cellNotes.map(s => [...s]),
             timerSeconds: elapsedSeconds(),
             hintsUsed,
+            mistakes,
             level: currentLevel,
             daily: currentDaily,
             autoNotes,
@@ -1549,6 +1620,7 @@ function loadBank() {
         autoNotesUsed = state.autoNotesUsed || false;
         timerSeconds = state.timerSeconds || 0;
         hintsUsed = state.hintsUsed || 0;
+        mistakes = state.mistakes || 0;
         gameWon = false;
         undoStack.length = 0;
         redoStack.length = 0;
@@ -1663,8 +1735,8 @@ function loadBank() {
       <div class="stat-tile"><span class="stat-value">${formatTime(summary.totalTime)}</span><span class="stat-label">Time played</span></div>
     </div>`;
 
-        html += `<table class="stats-table">
-      <thead><tr><th>Difficulty</th><th>Solved</th><th>Win rate</th><th>Best</th><th>Average</th><th>Hints</th><th>Auto</th></tr></thead>
+        html += `<div class="table-scroll"><table class="stats-table">
+      <thead><tr><th>Difficulty</th><th>Solved</th><th>Win rate</th><th>Best</th><th>Average</th><th>Hints</th><th>Mistakes</th><th>Auto</th></tr></thead>
       <tbody>`;
 
         for (const d of diffs) {
@@ -1680,11 +1752,12 @@ function loadBank() {
         <td>${s.won ? formatTime(s.bestTime) : '—'}</td>
         <td>${s.won ? formatTime(avg) : '—'}</td>
         <td>${s.totalHints}</td>
+        <td>${s.totalMistakes || 0}</td>
         <td>${s.autoNotesGames || 0}</td>
       </tr>`;
         }
 
-        html += '</tbody></table>';
+        html += '</tbody></table></div>';
         statsContent.innerHTML = html;
     }
 
@@ -1833,7 +1906,7 @@ function loadBank() {
         btnDaily.addEventListener('mousedown', (e) => e.preventDefault());
     }
     btnHint.addEventListener('click', giveHint);
-    btnCheck.addEventListener('click', checkErrors);
+    btnCheck.addEventListener('click', onCheckPressed);
     btnReset.addEventListener('click', resetGame);
     btnUndo.addEventListener('click', doUndo);
     btnRedo.addEventListener('click', doRedo);
@@ -1948,9 +2021,11 @@ function loadBank() {
             clearPeerNotes(idx, digit);
             wrappers[idx].classList.remove('user-error', 'correct-check');
             pushUndo(idx, prevVal, digit, prevNotes, new Set());
+            noteMistake(idx, digit);
             highlightConflicts(idx);
             refreshAutoNotes();
             clearHintNudge();
+            resetCheckButton();
             checkWin();
             debounceSave();
             updateNumpadCompletion();
@@ -2035,8 +2110,8 @@ function loadBank() {
             lbContent.innerHTML = '<p class="lb-empty">No scores yet. Be the first!</p>';
             return;
         }
-        let html = `<table class="lb-table">
-            <thead><tr><th>#</th><th>Name</th><th>Time</th><th>Hints</th><th>Auto</th><th>Date</th></tr></thead>
+        let html = `<div class="table-scroll"><table class="lb-table">
+            <thead><tr><th>#</th><th>Name</th><th>Time</th><th>Hints</th><th>Mistakes</th><th>Auto</th><th>Date</th></tr></thead>
             <tbody>`;
         entries.forEach((e, i) => {
             const date = new Date(e.date).toLocaleDateString();
@@ -2048,11 +2123,12 @@ function loadBank() {
                 <td>${escapeHtml(e.name)}</td>
                 <td>${escapeHtml(formatTime(Number(e.time) || 0))}</td>
                 <td>${escapeHtml(String(Number(e.hints) || 0))}</td>
+                <td>${e.mistakes == null ? '—' : escapeHtml(String(Number(e.mistakes) || 0))}</td>
                 <td>${e.autoNotes ? '✓' : ''}</td>
                 <td>${escapeHtml(date)}</td>
             </tr>`;
         });
-        html += '</tbody></table>';
+        html += '</tbody></table></div>';
         lbContent.innerHTML = html;
     }
 
@@ -2116,6 +2192,7 @@ function loadBank() {
                 difficulty: currentDifficulty,
                 time: timerSeconds,
                 hints: hintsUsed,
+                mistakes,
                 level: currentLevel,
                 autoNotes: autoNotesUsed,
             });

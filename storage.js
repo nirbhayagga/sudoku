@@ -102,7 +102,7 @@ export function recordStart(difficulty) {
 function blankEntry() {
     return {
         started: 0, played: 0, won: 0, bestTime: null,
-        totalTime: 0, totalHints: 0, autoNotesGames: 0,
+        totalTime: 0, totalHints: 0, autoNotesGames: 0, totalMistakes: 0,
     };
 }
 
@@ -113,7 +113,8 @@ function blankEntry() {
  * both are assists, but a hint reveals an answer while auto-notes only does
  * bookkeeping, so conflating them would misreport how a game was played.
  */
-export function recordWin(difficulty, timeSeconds, hints, autoNotes = false, date = new Date()) {
+// `mistakes` comes last so existing callers passing a date keep working.
+export function recordWin(difficulty, timeSeconds, hints, autoNotes = false, date = new Date(), mistakes = 0) {
     const stats = getStats();
     if (!stats[difficulty]) stats[difficulty] = blankEntry();
 
@@ -127,6 +128,7 @@ export function recordWin(difficulty, timeSeconds, hints, autoNotes = false, dat
     entry.totalHints += hints;
     // Older saved stats predate this field.
     entry.autoNotesGames = (entry.autoNotesGames || 0) + (autoNotes ? 1 : 0);
+    entry.totalMistakes = (entry.totalMistakes || 0) + mistakes;
     if (entry.bestTime === null || timeSeconds < entry.bestTime) {
         entry.bestTime = timeSeconds;
     }

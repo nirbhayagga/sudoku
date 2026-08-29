@@ -334,6 +334,90 @@ describe('error checking', () => {
         app.click('#btn-check');
         expect(app.cells()[empty].classList.contains('user-error')).toBe(false);
     });
+
+    /**
+     * A second press erases exactly the marked cells. It reveals nothing the
+     * first press did not, so it costs nothing; correct entries stay put.
+     */
+    it('offers to clear the marked errors and leaves correct entries alone', () => {
+        const empties = [...EASY_PUZZLE].map((c, i) => (c === '0' ? i : -1)).filter((i) => i >= 0);
+        const [wrongCell, rightCell] = empties;
+        const wrong = EASY_SOLUTION[wrongCell] === '1' ? '2' : '1';
+        app.type(wrongCell, wrong);
+        app.type(rightCell, EASY_SOLUTION[rightCell]);
+
+        app.click('#btn-check');
+        expect(app.$('#btn-check').textContent).toBe('Clear errors');
+
+        app.click('#btn-check');
+        expect(app.$$('.cell-input')[wrongCell].value).toBe('');
+        expect(app.$$('.cell-input')[rightCell].value).toBe(EASY_SOLUTION[rightCell]);
+        expect(app.cells()[wrongCell].classList.contains('user-error')).toBe(false);
+        expect(app.$('#btn-check').textContent).toBe('Check');
+    });
+
+    it('makes clearing an undoable step', () => {
+        const empty = EASY_PUZZLE.indexOf('0');
+        const wrong = EASY_SOLUTION[empty] === '1' ? '2' : '1';
+        app.type(empty, wrong);
+        app.click('#btn-check');
+        app.click('#btn-check');
+        expect(app.$$('.cell-input')[empty].value).toBe('');
+
+        app.click('#btn-undo');
+        expect(app.$$('.cell-input')[empty].value).toBe(wrong);
+    });
+
+    // A standing offer to clear must not outlive the board it was made on.
+    it('goes back to a plain Check once the board changes', () => {
+        const empties = [...EASY_PUZZLE].map((c, i) => (c === '0' ? i : -1)).filter((i) => i >= 0);
+        const wrong = EASY_SOLUTION[empties[0]] === '1' ? '2' : '1';
+        app.type(empties[0], wrong);
+        app.click('#btn-check');
+        expect(app.$('#btn-check').textContent).toBe('Clear errors');
+
+        app.type(empties[1], EASY_SOLUTION[empties[1]]);
+        expect(app.$('#btn-check').textContent).toBe('Check');
+    });
+});
+
+describe('mistakes', () => {
+    beforeEach(async () => {
+        await startGame(app);
+    });
+
+    // Counted when placed, reported only at the end: a record, not a live
+    // check that would give the answer away as you type.
+    it('counts a wrong placement and reports it on the win card', () => {
+        const empty = EASY_PUZZLE.indexOf('0');
+        const wrong = EASY_SOLUTION[empty] === '1' ? '2' : '1';
+        app.type(empty, wrong);
+        expect(app.cells()[empty].classList.contains('user-error')).toBe(false);
+
+        completePuzzle(app);
+        expect(app.$('#win-details').textContent).toMatch(/1 mistake\b/);
+    });
+
+    it('reports a clean game as no mistakes', () => {
+        completePuzzle(app);
+        expect(app.$('#win-details').textContent).toMatch(/no mistakes/);
+    });
+
+    it('does not count a correct placement', () => {
+        const empty = EASY_PUZZLE.indexOf('0');
+        app.type(empty, EASY_SOLUTION[empty]);
+        completePuzzle(app);
+        expect(app.$('#win-details').textContent).toMatch(/no mistakes/);
+    });
+
+    it('survives a save and resume', async () => {
+        const empty = EASY_PUZZLE.indexOf('0');
+        const wrong = EASY_SOLUTION[empty] === '1' ? '2' : '1';
+        app.type(empty, wrong);
+        app.window.dispatchEvent(new app.window.Event('pagehide'));
+        const saved = JSON.parse(app.window.localStorage.getItem('sudoku_saved_game'));
+        expect(saved.mistakes).toBe(1);
+    });
 });
 
 describe('undo and redo', () => {
@@ -1109,7 +1193,7 @@ describe('theme dropdown', () => {
     it('offers every theme', () => {
         const themes = app.$$('.theme-option').map((b) => b.dataset.theme);
         expect(themes).toEqual([
-            'light', 'dark', 'midnight', 'sakura', 'ocean', 'forest', 'arctic', 'naruto', 'wicked',
+            'light', 'dark', 'midnight', 'sakura', 'ocean', 'forest', 'arctic',
         ]);
     });
 
