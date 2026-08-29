@@ -463,7 +463,7 @@ The caching rules, and the reasoning:
 
 | Request | Strategy | Why |
 |---|---|---|
-| Navigations | Network first, 2 s deadline, cache fallback | A stale document would pin clients to old asset hashes, and a bad deploy could not be fixed by reloading |
+| Navigations | Network first, 2 s deadline, cache fallback, `ok` responses only | A stale document would pin clients to old asset hashes, and a bad deploy could not be fixed by reloading |
 | Hashed assets | Cache first | The filename changes whenever the bytes do, so a cached copy is never wrong |
 | `/api/` | Never cached | Cached scores would be replayed, and a cached health check would report a backend that is down as available |
 
@@ -474,6 +474,16 @@ answers is: one bar on a train, or a captive portal. Without a deadline that
 holds a blank screen for as long as the request takes to give up, with the
 entire app sitting in the cache. The losing request is not cancelled, so a slow
 answer still refreshes the cached document for the next launch.
+
+A deadline only covers a network that says nothing. The nastier case is one that
+*answers* — a captive portal, a filtering DNS resolver, a CDN edge error. Those
+resolve `fetch` in well under the deadline, so only the status distinguishes
+them from a real page. A navigation response is therefore served and cached only
+when `response.ok && response.type === 'basic'`; anything else counts as a loss
+and the cached app wins. Skipping that check broke the app twice per bad
+network: a blank screen at the time, and the portal's reply written over the
+cached document, so every later launch stayed broken until a good network
+happened to overwrite it back.
 
 The app also asks for `navigator.storage.persist()`, which covers the precached
 bank and `localStorage` alike — but **only once it is installed**

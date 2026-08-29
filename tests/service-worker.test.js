@@ -276,6 +276,74 @@ describe('fetch strategy', () => {
         expect(caches.store.get(cacheName).get('https://sudoku.example.com/').body).toBe('slow page');
     });
 
+    /**
+     * The failure this exists for is not a silent network but a lying one.
+     * A captive portal, a filtering DNS resolver or a CDN edge error all answer
+     * fast, so the deadline never fires and the race records a win. Treating
+     * that as success showed a blank page and — far worse — overwrote the
+     * cached document with it, breaking every later launch until some good
+     * network happened to overwrite it back.
+     */
+    it('prefers the cached page to an error page the network answers with', async () => {
+        const caches = makeCaches(new Map([[cacheName, new Map([
+            ['https://sudoku.example.com/', { body: 'cached page' }],
+        ])]]));
+        const worker = loadWorker({
+            caches,
+            fetchImpl: async () => ({
+                ok: false, type: 'basic', status: 502, body: 'edge error',
+                clone: () => ({ body: 'edge error' }),
+            }),
+        });
+        const response = await handleFetch(worker.listeners, req('https://sudoku.example.com/', { mode: 'navigate' }));
+        expect(response.body).toBe('cached page');
+    });
+
+    it('prefers the cached page to a captive portal redirect', async () => {
+        const caches = makeCaches(new Map([[cacheName, new Map([
+            ['https://sudoku.example.com/', { body: 'cached page' }],
+        ])]]));
+        const worker = loadWorker({
+            caches,
+            fetchImpl: async () => ({
+                ok: false, type: 'opaqueredirect', status: 0, body: 'portal login',
+                clone: () => ({ body: 'portal login' }),
+            }),
+        });
+        const response = await handleFetch(worker.listeners, req('https://sudoku.example.com/', { mode: 'navigate' }));
+        expect(response.body).toBe('cached page');
+    });
+
+    // Poisoning the cache is the part that outlives the bad network.
+    it('never writes an error page over the cached document', async () => {
+        const caches = makeCaches(new Map([[cacheName, new Map([
+            ['https://sudoku.example.com/', { body: 'cached page' }],
+        ])]]));
+        const worker = loadWorker({
+            caches,
+            fetchImpl: async () => ({
+                ok: false, type: 'basic', status: 502, body: 'edge error',
+                clone: () => ({ body: 'edge error' }),
+            }),
+        });
+        await handleFetch(worker.listeners, req('https://sudoku.example.com/', { mode: 'navigate' }));
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        expect(caches.store.get(cacheName).get('https://sudoku.example.com/').body).toBe('cached page');
+    });
+
+    // With nothing to fall back to, the server's own answer is the honest one.
+    it('returns the network error when no page is cached', async () => {
+        const worker = loadWorker({
+            caches: makeCaches(),
+            fetchImpl: async () => ({
+                ok: false, type: 'basic', status: 502, body: 'edge error',
+                clone: () => ({ body: 'edge error' }),
+            }),
+        });
+        const response = await handleFetch(worker.listeners, req('https://sudoku.example.com/', { mode: 'navigate' }));
+        expect(response.body).toBe('edge error');
+    });
+
     it('does not cache failed or opaque responses', async () => {
         const caches = makeCaches();
         const worker = loadWorker({

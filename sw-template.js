@@ -42,6 +42,28 @@ const MATCH_OPTIONS = { ignoreVary: true };
 const NAV_TIMEOUT_MS = 2000;
 
 /**
+ * Whether a response is really ours and really the thing that was asked for.
+ *
+ * A hostile network does not only stall — it *answers*. Captive portals,
+ * corporate DNS filters and CDN edge errors all resolve fetch() promptly with a
+ * redirect, a 5xx or someone else's HTML. Without this check the race below
+ * reads that as success twice over: the user is shown a blank page, and the
+ * reply is written over the cached document, so every later launch is broken
+ * too until some good network happens to overwrite it again.
+ */
+function isUsable(response) {
+    return response.ok && response.type === 'basic';
+}
+
+/** Store a response, ignoring a cache that refuses it (opaque, over quota). */
+function cacheResponse(request, response) {
+    const copy = response.clone();
+    caches.open(CACHE)
+        .then((cache) => cache.put(request, copy))
+        .catch(() => { /* the response is still served; only the copy is lost */ });
+}
+
+/**
  * Network-first with a deadline.
  *
  * The network request is never cancelled — if it lands after losing the race it
@@ -49,8 +71,7 @@ const NAV_TIMEOUT_MS = 2000;
  */
 function navigationResponse(request) {
     const network = fetch(request).then((response) => {
-        const copy = response.clone();
-        caches.open(CACHE).then((cache) => cache.put(request, copy));
+        if (isUsable(response)) cacheResponse(request, response);
         return response;
     });
 
@@ -62,16 +83,21 @@ function navigationResponse(request) {
         (hit) => hit || caches.match(PRECACHE[0], MATCH_OPTIONS)
     );
 
-    const settled = network.then(() => 'network', () => 'failed');
+    // An unusable answer counts as a loss, not a win: a cached app beats a
+    // portal login page or an error document every time.
+    const settled = network.then(
+        (response) => (isUsable(response) ? 'network' : 'failed'),
+        () => 'failed'
+    );
     const expired = new Promise((resolve) => {
         setTimeout(() => resolve('timeout'), NAV_TIMEOUT_MS);
     });
 
     return Promise.race([settled, expired]).then((outcome) => {
         if (outcome === 'network') return network;
-        // Failed or too slow. Serve the cached page if there is one; with
-        // nothing cached there is nothing better to wait for than the network,
-        // whose rejection is then the honest answer.
+        // Failed, rejected or too slow. Serve the cached page if there is one;
+        // with nothing cached there is nothing better to offer than whatever
+        // the network eventually says, which is then the honest answer.
         return cached().then((hit) => hit || network);
     });
 }
@@ -118,10 +144,7 @@ self.addEventListener('fetch', (event) => {
             if (cached) return cached;
             return fetch(request).then((response) => {
                 // Only store complete, same-origin successes.
-                if (response.ok && response.type === 'basic') {
-                    const copy = response.clone();
-                    caches.open(CACHE).then((cache) => cache.put(request, copy));
-                }
+                if (isUsable(response)) cacheResponse(request, response);
                 return response;
             });
         })
