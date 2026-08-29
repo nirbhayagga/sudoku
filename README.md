@@ -347,6 +347,16 @@ passed, so `latest` is never a build that failed CI. Pin a SHA to roll back:
 SUDOKU_TAG=<commit-sha> docker compose -f docker-compose.registry.yml up -d
 ```
 
+A version tag publishes too. Pushing `v1.2.3` adds `1.2.3`, `1.2` and `1`, so a
+server can track `:1` and pick up fixes without surprises; a pre-release like
+`v1.2.3-rc.1` gets only its own tag, and neither `latest` nor a major ever moves
+to it. To cut a release:
+
+```bash
+npm version minor          # bumps package.json, commits, tags v1.1.0
+git push --follow-tags     # the tag is what triggers the publish
+```
+
 The image is multi-stage: Node builds `dist/`, then nginx serves it. Nothing but
 the build output ships, and adding a frontend file needs no Dockerfile change.
 
