@@ -70,7 +70,7 @@ describe.each([
 
     it('content-hashes every asset filename', () => {
         for (const asset of assetsOf(dist())) {
-            expect(asset).toMatch(/\.[A-Za-z0-9_-]{8,}\.(js|css)$/);
+            expect(asset).toMatch(/\.[A-Za-z0-9_-]{8,}\.(js|css|woff2)$/);
         }
     });
 
@@ -151,10 +151,14 @@ describe('modular build', () => {
         expect(read(modular, 'sw.js')).toContain(bank);
     });
 
+    // The budget covers everything the worker precaches. The two self-hosted
+    // fonts are ~80 kB of it and do not compress (woff2 already is); before
+    // they moved in-repo the same bytes came from Google Fonts and were simply
+    // not counted here.
     it('stays within the gzipped payload budget', () => {
         const total = [...assetsOf(modular).map((f) => `assets/${f}`), 'sw.js']
             .reduce((n, f) => n + gzipKb(modular, f), 0);
-        expect(total).toBeLessThan(150);
+        expect(total).toBeLessThan(240);
     });
 });
 

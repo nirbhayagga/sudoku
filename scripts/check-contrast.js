@@ -84,8 +84,6 @@ const CONTROL_SURFACES = {
     ocean: ['rgb(21, 36, 57)', 'rgb(21, 36, 57)'],
     forest: ['rgb(22, 35, 22)', 'rgb(22, 35, 22)'],
     arctic: ['rgb(203, 214, 234)', 'rgb(197, 209, 233)'],
-    naruto: ['rgb(31, 20, 10)', 'rgb(33, 18, 2)'],
-    wicked: ['rgb(16, 30, 21)', 'rgb(9, 30, 17)'],
 };
 
 export function parseThemes(css) {

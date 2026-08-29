@@ -25,19 +25,20 @@ Play sudoku puzzles with built-in hints, pencil marks, undo/redo, and more.
 - **Level selector** — Enter a specific level number or leave blank for a random puzzle
 - **Share a puzzle** — Copy a link to the board you are on: `?d=evil&level=42` for a bank puzzle, `?p=<81 digits>` for any grid, `?daily=YYYY-MM-DD` for a day. Opening one loads it straight away
 - **Daily puzzle** — One board a day, derived from the date so everyone gets the same one; difficulty ramps across the week and the leaderboard for that level compares like with like
-- **9 color themes** — Light and Dark follow the system scheme by default; Midnight, Sakura, Ocean, Forest, Arctic, Naruto and Wicked for atmosphere — a choice is saved in localStorage, and all meet WCAG AA contrast
+- **7 color themes** — Light and Dark follow the system scheme by default; Midnight, Sakura, Ocean, Forest and Arctic for atmosphere — a choice is saved in localStorage, and all meet WCAG AA contrast
 - **Digit highlighting** — Focus a cell and all matching digits glow across the board (works on both desktop and mobile)
 - **Numpad completion** — Completed digits (placed 9 times) are greyed/crossed out on the mobile numpad
 - **Pencil marks / Notes** — Toggle with `N`, type digits to add/remove candidate marks
 - **Auto-notes** — Toggle with `A`: fills every empty cell with the digits its row, column and box still allow, and keeps them current as you play. Derived from the board, never from the solution — it reveals no answers, but it does remove the scanning, so games that used it are marked on the leaderboard and in stats
 - **Hints** — Press `H` with nothing selected and the first press only *explains*: it dims the board, lights up the cells that justify the deduction, and tells you what to look for. Press again to fill it in. **The nudge is free; only the reveal counts against you.** Selecting a cell first skips straight to revealing that one
-- **Error checking** — Click "Check" or press `Enter` to highlight incorrect entries
+- **Error checking** — Click "Check" or press `Enter` to highlight incorrect entries; press it again to erase exactly those, leaving every correct entry in place (each one is its own undo step)
+- **Mistake counter** — Wrong placements are counted as you make them but never shown until the win card, so nothing gives the answer away as you type; the count is kept in stats and on the leaderboard
 - **Conflict detection** — Duplicates in the same row/column/box flash orange immediately
 - **Undo / Redo** — `Ctrl+Z` / `Ctrl+Y` with full history
 - **Timer** — Counts up during gameplay
-- **Win detection** — Celebration overlay with your time and hint count
+- **Win detection** — Celebration overlay with your time, hint count and mistakes
 - **Save / Resume** — Game auto-saves to localStorage; offers to resume on reload
-- **Stats** — Games solved, win rate, daily streak, best and average time, hints and auto-notes used, per difficulty and overall
+- **Stats** — Games solved, win rate, daily streak, best and average time, hints, mistakes and auto-notes used, per difficulty and overall
 - **Leaderboard** — Submit scores to a self-hosted leaderboard (optional; app works fine without it)
 - **Accessible** — Live-announced status, labelled cells, dialogs with focus trapping and Escape to close, pinch zoom enabled
 - **Mobile optimized** — On-screen numpad, touch-friendly 44px targets, no virtual keyboard popup, safe-area-inset support for iPhone notch/Dynamic Island, landscape mode handling

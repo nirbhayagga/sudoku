@@ -1,4 +1,33 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+/*
+ * Fonts are self-hosted. Loading them from Google Fonts was a render-blocking
+ * cross-origin request on every visit, a request Google logs for every EU
+ * visitor, and the one asset the service worker could not cache — which is a
+ * poor fit for an app advertising "no tracking" and "plays offline".
+ *
+ * These are the latin subsets of the variable fonts, fetched from Google's own
+ * CSS (one file per family instead of one per weight) and referenced with a
+ * relative url() so Vite hashes them into assets/ alongside everything else:
+ * immutable caching, precached by the worker, and served from file:// by the
+ * standalone build. Text outside the latin range falls through to the system
+ * stack, which every font-family declaration below already lists.
+ */
+@font-face {
+    font-family: 'Inter';
+    font-style: normal;
+    font-weight: 300 700;
+    font-display: swap;
+    src: url('./fonts/inter-latin.woff2') format('woff2');
+    unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+    font-family: 'JetBrains Mono';
+    font-style: normal;
+    font-weight: 400 500;
+    font-display: swap;
+    src: url('./fonts/jetbrains-mono-latin.woff2') format('woff2');
+    unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
 
 /* ── Reset & Base ─────────────────────────────────────────────────── */
 *,
@@ -247,88 +276,6 @@ body::before {
     background:
         radial-gradient(ellipse 600px 400px at 20% 20%, rgba(99, 102, 241, 0.1), transparent),
         radial-gradient(ellipse 500px 350px at 80% 80%, rgba(16, 185, 129, 0.06), transparent);
-}
-
-/* ── Theme: Naruto (orange & black) ───────────────────────────────── */
-[data-theme="naruto"] {
-    --bg-primary: #0f0800;
-    --bg-secondary: #1a0e02;
-    --bg-card: rgba(26, 14, 2, 0.8);
-    --bg-cell: rgba(255, 140, 0, 0.04);
-    --bg-cell-hover: rgba(255, 140, 0, 0.12);
-    --bg-cell-focus: rgba(255, 140, 0, 0.18);
-    --bg-cell-given: rgba(255, 140, 0, 0.1);
-    --bg-cell-solved: rgba(250, 204, 21, 0.1);
-    --border-subtle: rgba(255, 140, 0, 0.08);
-    --border-box: rgba(255, 140, 0, 0.2);
-    --border-focus: rgba(255, 140, 0, 0.6);
-    --text-primary: #fde4c8;
-    --text-secondary: #d4a06a;
-    --text-muted: #be7b39;
-    --text-given: #ff8c00;
-    --text-solved: #facc15;
-    --text-error: #f05252;
-    --text-hint: #fbbf24;
-    --text-note: #d4a06a;
-    --text-conflict: #f87171;
-    --accent: #ff6b00;
-    --accent-text: #ff6b00;
-    --accent-surface: #ff6b00;
-    --accent-on: #0a0a0f;
-    --accent-glow: rgba(255, 107, 0, 0.35);
-    --success: #facc15;
-    --success-glow: rgba(250, 204, 21, 0.3);
-    --danger: #ef4444;
-    --hint-color: #fbbf24;
-    --hint-glow: rgba(251, 191, 36, 0.3);
-    --nightmare-color: #ef4444;
-}
-
-[data-theme="naruto"] body::before {
-    background:
-        radial-gradient(ellipse 600px 400px at 30% 30%, rgba(255, 107, 0, 0.12), transparent),
-        radial-gradient(ellipse 500px 350px at 70% 70%, rgba(220, 38, 38, 0.06), transparent);
-}
-
-/* ── Theme: Wicked (emerald & black) ──────────────────────────────── */
-[data-theme="wicked"] {
-    --bg-primary: #050d08;
-    --bg-secondary: #0a1a10;
-    --bg-card: rgba(10, 26, 16, 0.8);
-    --bg-cell: rgba(0, 255, 100, 0.03);
-    --bg-cell-hover: rgba(0, 255, 100, 0.1);
-    --bg-cell-focus: rgba(0, 255, 100, 0.15);
-    --bg-cell-given: rgba(0, 255, 100, 0.08);
-    --bg-cell-solved: rgba(168, 85, 247, 0.1);
-    --border-subtle: rgba(0, 255, 100, 0.06);
-    --border-box: rgba(0, 255, 100, 0.18);
-    --border-focus: rgba(0, 255, 100, 0.5);
-    --text-primary: #c8ffd8;
-    --text-secondary: #5ae880;
-    --text-muted: #35a161;
-    --text-given: #00ff64;
-    --text-solved: #c084fc;
-    --text-error: #fb7185;
-    --text-hint: #fbbf24;
-    --text-note: #5ae880;
-    --text-conflict: #fb923c;
-    --accent: #00e85a;
-    --accent-text: #00e85a;
-    --accent-surface: #00e85a;
-    --accent-on: #0a0a0f;
-    --accent-glow: rgba(0, 232, 90, 0.3);
-    --success: #b46df8;
-    --success-glow: rgba(168, 85, 247, 0.3);
-    --danger: #f43f5e;
-    --hint-color: #f59e0b;
-    --hint-glow: rgba(245, 158, 11, 0.3);
-    --nightmare-color: #f43f5e;
-}
-
-[data-theme="wicked"] body::before {
-    background:
-        radial-gradient(ellipse 600px 400px at 25% 25%, rgba(0, 232, 90, 0.1), transparent),
-        radial-gradient(ellipse 500px 350px at 75% 75%, rgba(168, 85, 247, 0.08), transparent);
 }
 
 /* ── Theme: Light (clean, neutral) ─────────────────────────────────
@@ -1156,6 +1103,14 @@ body::before {
 /* ── Stats Modal Content ──────────────────────────────────────────── */
 .stats-modal {
     width: min(480px, 90vw);
+}
+
+/* Both dialog tables are wider than a phone. They scroll inside their own
+   box rather than clipping at the dialog edge or widening the page. */
+.table-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    margin-bottom: 0.5rem;
 }
 
 .stats-table {
@@ -2160,7 +2115,7 @@ kbd {
 /* ── Stats summary tiles ──────────────────────────────────────────── */
 .stats-summary {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(84px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(74px, 1fr));
     gap: 0.5rem;
     margin-bottom: 1rem;
 }
@@ -2170,15 +2125,18 @@ kbd {
     flex-direction: column;
     align-items: center;
     gap: 0.15rem;
-    padding: 0.6rem 0.4rem;
+    padding: 0.6rem 0.25rem;
     background: var(--bg-cell);
     border: 1px solid var(--border-subtle);
     border-radius: var(--radius-sm);
+    min-width: 0;
 }
 
 .stat-value {
-    font-size: 1.25rem;
+    /* Sized so "1:40:00" fits a tile when five share the dialog's width. */
+    font-size: 1.1rem;
     font-weight: 700;
+    font-variant-numeric: tabular-nums;
     color: var(--accent-text);
     line-height: 1.1;
 }
@@ -2187,6 +2145,7 @@ kbd {
     font-size: 0.7rem;
     color: var(--text-secondary);
     text-align: center;
+    white-space: nowrap;
 }
 
 /* ── Daily puzzle ─────────────────────────────────────────────────── */
