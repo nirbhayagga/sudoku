@@ -7,7 +7,7 @@
   publish = "dist"
 
 [build.environment]
-  NODE_VERSION = "20"
+  NODE_VERSION = "24"
 
 # Set SUDOKU_API_BASE in the site's environment variables to point the
 # leaderboard at a self-hosted API. Without it the app ships leaderboard-free

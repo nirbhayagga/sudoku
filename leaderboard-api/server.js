@@ -13,13 +13,22 @@ app.use(cors({
 }));
 app.use(express.json());
 
+// How many proxies sit in front of this process. Rate limiting is per client
+// address, and behind nginx every request arrives from nginx's own address —
+// so without this the entire site shared one bucket of five submissions a
+// minute. Set to the number of hops (nginx alone is 1; Traefik then nginx is
+// 2) so Express reads the client from X-Forwarded-For at that depth and no
+// deeper. Zero, the default, trusts nothing: a process reachable directly
+// must not let a client name its own address and walk past the limit.
+app.set('trust proxy', Number(process.env.TRUST_PROXY) || 0);
+
 // Simple in-memory rate limiting for POST submissions
 const rateLimitMap = new Map();
 const RATE_LIMIT_WINDOW = Number(process.env.RATE_LIMIT_WINDOW_MS) || 60 * 1000;
 const RATE_LIMIT_MAX = Number(process.env.RATE_LIMIT_MAX) || 5; // submissions per window
 
 function rateLimit(req, res, next) {
-    const ip = req.ip || req.connection.remoteAddress;
+    const ip = req.ip || req.socket.remoteAddress;
     const now = Date.now();
     const entry = rateLimitMap.get(ip);
     if (entry && now - entry.start < RATE_LIMIT_WINDOW) {

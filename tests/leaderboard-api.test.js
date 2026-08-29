@@ -235,6 +235,43 @@ describe('rate limiting', () => {
         }
     });
 
+    /**
+     * Behind nginx every request arrives from nginx's own address. Without
+     * trusting that hop the whole site shared one bucket, and the sixth player
+     * to finish in a minute was told to try again later.
+     */
+    it('limits per client, not per proxy, when TRUST_PROXY is set', async () => {
+        const proxied = await startServer({ TRUST_PROXY: '1', RATE_LIMIT_MAX: '1' });
+        try {
+            const from = (ip) => fetch(`${proxied.base}/api/leaderboard`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-Forwarded-For': ip },
+                body: JSON.stringify(validScore),
+            });
+            expect((await from('203.0.113.1')).status).toBe(200);
+            expect((await from('203.0.113.2')).status).toBe(200);
+            expect((await from('203.0.113.1')).status).toBe(429);
+        } finally {
+            await proxied.close();
+        }
+    });
+
+    // A process reachable directly must not let a client name its own address.
+    it('ignores X-Forwarded-For unless told to trust a proxy', async () => {
+        const direct = await startServer({ RATE_LIMIT_MAX: '1' });
+        try {
+            const from = (ip) => fetch(`${direct.base}/api/leaderboard`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-Forwarded-For': ip },
+                body: JSON.stringify(validScore),
+            });
+            expect((await from('203.0.113.1')).status).toBe(200);
+            expect((await from('203.0.113.2')).status).toBe(429);
+        } finally {
+            await direct.close();
+        }
+    });
+
     it('does not rate limit reads', async () => {
         const limited = await startServer({ RATE_LIMIT_MAX: '1' });
         try {

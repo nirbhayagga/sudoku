@@ -23,6 +23,9 @@ services:
     restart: unless-stopped
     environment:
       CORS_ORIGIN: "*"
+      # Proxy hops in front of the API (nginx only), so rate limiting
+      # sees the real client address rather than the proxy's.
+      TRUST_PROXY: "1"
     volumes:
       - leaderboard-data:/app/data
 

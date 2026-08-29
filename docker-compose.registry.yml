@@ -38,6 +38,9 @@ services:
     restart: unless-stopped
     environment:
       CORS_ORIGIN: "*"
+      # Proxy hops in front of the API (Traefik, then nginx), so rate limiting
+      # sees the real client address rather than the proxy's.
+      TRUST_PROXY: "2"
     volumes:
       - leaderboard-data:/app/data
     networks:

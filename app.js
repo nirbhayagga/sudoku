@@ -1244,14 +1244,6 @@ function loadBank() {
      *
      * @returns {{idx: number, reason: string}|null}
      */
-    /**
-     * The most useful cell to reveal: one the player could actually work out
-     * from the board right now, with the reasoning to show for it.
-     *
-     * Delegates to techniques.js, then checks the answer against the solution.
-     * Candidate arithmetic is meaningless once a wrong digit is on the board,
-     * and a hint that is wrong is worse than no hint at all.
-     */
     function findHintCell(board) {
         const trustworthy = (idx, digit) => digit === currentSolution[idx];
 
@@ -1263,7 +1255,7 @@ function loadBank() {
         const grid = candidateGrid(board);
         let best = null;
         for (let idx = 0; idx < 81; idx++) {
-            if (!grid[idx] || !trustworthy(idx, currentSolution[idx])) continue;
+            if (!grid[idx]) continue;
             if (!best || grid[idx].size < best.size) best = { idx, size: grid[idx].size, set: grid[idx] };
         }
         if (!best) return null;

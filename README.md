@@ -104,7 +104,7 @@ sudoku/
   scripts/generate-bank.js  Regenerate or reorder a difficulty tier
   scripts/check-contrast.js Audit (and fix) theme contrast
   scripts/serve-subpath.js  Serve dist/ one level down, as Pages does
-  tests/              Test suite (510 tests + 60 end-to-end)
+  tests/              Test suite (541 tests + 145 end-to-end)
 
   Dockerfile          Multi-stage build -> nginx-alpine
   nginx.conf.template Nginx config (envsubst at container start)
@@ -130,7 +130,7 @@ npm ci --prefix leaderboard-api # leaderboard deps, needed for its tests
 
 npm run dev      # Vite dev server at :8000 with hot reload, /api/ proxied to :3001
 npm run lint     # eslint
-npm test         # 510 tests
+npm test         # 541 tests
 npm run build    # produce dist/
 npm run check    # lint + test + build, what CI runs
 ```
