@@ -9,7 +9,7 @@ import { test, expect } from '@playwright/test';
  * --bg-secondary and the script only compared against --bg-primary. This runs
  * the same rule the browser does, over the real DOM, and needs no such list.
  */
-const THEMES = ['midnight', 'sakura', 'ocean', 'forest', 'arctic', 'naruto', 'wicked'];
+const THEMES = ['light', 'dark', 'midnight', 'sakura', 'ocean', 'forest', 'arctic', 'naruto', 'wicked'];
 
 /** Every visible text node whose contrast falls under the WCAG AA threshold. */
 async function contrastFailures(page) {

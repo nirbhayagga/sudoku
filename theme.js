@@ -6,15 +6,27 @@
  * keeps the dropdown's active state in step, and updates the theme-color meta
  * tag so mobile browser chrome matches the page.
  *
- * Adding a theme therefore means three things: a variable block in style.css,
- * a button in index.html, and an entry in THEME_COLORS below.
+ * Adding a theme therefore means: a variable block in style.css, a button with
+ * a swatch in index.html, an entry in THEME_COLORS below, and a measured row in
+ * CONTROL_SURFACES in scripts/check-contrast.js.
+ *
+ * With nothing saved, the theme follows the system colour scheme — light or
+ * dark — which is what people expect of an app that has both. A saved choice
+ * always wins. The same rule runs inline in index.html before first paint so
+ * neither a saved nor a system theme flashes the :root defaults; that script
+ * and this module must agree.
  */
 import { setTheme } from './storage.js';
 
-export const DEFAULT_THEME = 'midnight';
+/** The theme the system asks for, when nothing has been chosen. */
+export function systemTheme() {
+    return window.matchMedia?.('(prefers-color-scheme: dark)')?.matches ? 'dark' : 'light';
+}
 
 /** Background colour per theme, mirrored into <meta name="theme-color">. */
 export const THEME_COLORS = {
+    light: '#f4f5f7',
+    dark: '#121316',
     midnight: '#0a0a0f',
     sakura: '#f5e1d8',
     ocean: '#0b1628',
@@ -31,15 +43,11 @@ export const THEME_COLORS = {
  * @param {{dropdown?: Element, persist?: boolean}} [options]
  */
 export function applyTheme(theme, { dropdown, persist = true } = {}) {
-    const name = THEME_COLORS[theme] ? theme : DEFAULT_THEME;
+    const name = THEME_COLORS[theme] ? theme : systemTheme();
 
-    // Midnight is the :root default, so it is expressed by the absence of the
-    // attribute rather than by a block of its own.
-    if (name !== DEFAULT_THEME) {
-        document.documentElement.setAttribute('data-theme', name);
-    } else {
-        document.documentElement.removeAttribute('data-theme');
-    }
+    // Always set, even for midnight, whose values live on :root and would apply
+    // without it — an unknown name is what must never be left standing.
+    document.documentElement.setAttribute('data-theme', name);
 
     const meta = document.querySelector('meta[name="theme-color"]');
     if (meta) meta.setAttribute('content', THEME_COLORS[name]);

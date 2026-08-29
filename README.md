@@ -25,7 +25,7 @@ Play sudoku puzzles with built-in hints, pencil marks, undo/redo, and more.
 - **Level selector** — Enter a specific level number or leave blank for a random puzzle
 - **Share a puzzle** — Copy a link to the board you are on: `?d=evil&level=42` for a bank puzzle, `?p=<81 digits>` for any grid, `?daily=YYYY-MM-DD` for a day. Opening one loads it straight away
 - **Daily puzzle** — One board a day, derived from the date so everyone gets the same one; difficulty ramps across the week and the leaderboard for that level compares like with like
-- **7 color themes** — Midnight, Sakura, Ocean, Forest, Arctic, Naruto, Wicked — saved in localStorage, all meeting WCAG AA contrast
+- **9 color themes** — Light and Dark follow the system scheme by default; Midnight, Sakura, Ocean, Forest, Arctic, Naruto and Wicked for atmosphere — a choice is saved in localStorage, and all meet WCAG AA contrast
 - **Digit highlighting** — Focus a cell and all matching digits glow across the board (works on both desktop and mobile)
 - **Numpad completion** — Completed digits (placed 9 times) are greyed/crossed out on the mobile numpad
 - **Pencil marks / Notes** — Toggle with `N`, type digits to add/remove candidate marks

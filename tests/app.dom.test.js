@@ -498,8 +498,48 @@ describe('save and resume', () => {
 });
 
 describe('themes', () => {
-    it('defaults to midnight', () => {
-        expect(app.document.documentElement.dataset.theme || 'midnight').toBe('midnight');
+    // jsdom has no matchMedia, which is the no-preference case: light.
+    it('defaults to light with no saved theme and no system preference', () => {
+        expect(app.document.documentElement.dataset.theme).toBe('light');
+    });
+
+    it('follows the system scheme when nothing is saved', async () => {
+        const dark = await bootApp({ prefersDark: true });
+        expect(dark.document.documentElement.dataset.theme).toBe('dark');
+        dark.close();
+
+        const light = await bootApp({ prefersDark: false });
+        expect(light.document.documentElement.dataset.theme).toBe('light');
+        light.close();
+    });
+
+    it('lets a saved theme beat the system scheme', async () => {
+        const themed = await bootApp({ prefersDark: true, localStorage: { 'sudoku-theme': 'sakura' } });
+        expect(themed.document.documentElement.dataset.theme).toBe('sakura');
+        themed.close();
+    });
+
+    it('does not persist the system default as a choice', () => {
+        expect(app.window.localStorage.getItem('sudoku-theme')).toBeNull();
+    });
+
+    it('falls back from a theme that no longer exists', async () => {
+        const stale = await bootApp({ prefersDark: true, localStorage: { 'sudoku-theme': 'retired' } });
+        expect(stale.document.documentElement.dataset.theme).toBe('dark');
+        stale.close();
+    });
+
+    /**
+     * The inline script in index.html applies the theme before first paint,
+     * and theme.js applies it again at boot. Both read the same key and the
+     * same media query, or one of them flashes the wrong theme.
+     */
+    it('applies the same rule inline before first paint', () => {
+        const html = fs.readFileSync(path.join(repoRoot, 'index.html'), 'utf8');
+        const inline = html.match(/<script>([\s\S]*?)<\/script>/)[1];
+        expect(inline).toContain("localStorage.getItem('sudoku-theme')");
+        expect(inline).toContain('(prefers-color-scheme: dark)');
+        expect(inline).toContain("setAttribute('data-theme'");
     });
 
     it('applies and persists a chosen theme', () => {
@@ -1069,7 +1109,7 @@ describe('theme dropdown', () => {
     it('offers every theme', () => {
         const themes = app.$$('.theme-option').map((b) => b.dataset.theme);
         expect(themes).toEqual([
-            'midnight', 'sakura', 'ocean', 'forest', 'arctic', 'naruto', 'wicked',
+            'light', 'dark', 'midnight', 'sakura', 'ocean', 'forest', 'arctic', 'naruto', 'wicked',
         ]);
     });
 

@@ -33,7 +33,7 @@ function appBundle() {
     return bundledApp;
 }
 
-export async function bootApp({ localStorage: seed = {}, serviceWorker = null, url = 'http://localhost/', touch = false, standalone = false, storage = null, coarsePointer = null } = {}) {
+export async function bootApp({ localStorage: seed = {}, serviceWorker = null, url = 'http://localhost/', touch = false, standalone = false, storage = null, coarsePointer = null, prefersDark = null } = {}) {
     // Swallow the expected "fetch is not defined" noise, surface real errors.
     const virtualConsole = new VirtualConsole();
     virtualConsole.on('jsdomError', (err) => {
@@ -90,11 +90,13 @@ export async function bootApp({ localStorage: seed = {}, serviceWorker = null, u
     // for whether touch is the *only* pointer. A touchscreen laptop is
     // touch-capable with a fine pointer, and those two disagreeing is a real
     // bug source rather than a hypothetical.
-    if (standalone || coarsePointer !== null) {
+    if (standalone || coarsePointer !== null || prefersDark !== null) {
         dom.window.matchMedia = (query) => ({
             matches: /display-mode: standalone/.test(query)
                 ? standalone
-                : /pointer: coarse/.test(query) && coarsePointer === true,
+                : /prefers-color-scheme: dark/.test(query)
+                    ? prefersDark === true
+                    : /pointer: coarse/.test(query) && coarsePointer === true,
             media: query,
             addEventListener: () => {},
             removeEventListener: () => {},

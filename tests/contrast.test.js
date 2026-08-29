@@ -21,7 +21,7 @@ describe('theme contrast', () => {
 
     it('covers all seven themes', () => {
         expect(Object.keys(themes).sort()).toEqual(
-            ['arctic', 'forest', 'midnight', 'naruto', 'ocean', 'sakura', 'wicked']
+            ['arctic', 'dark', 'forest', 'light', 'midnight', 'naruto', 'ocean', 'sakura', 'wicked']
         );
     });
 

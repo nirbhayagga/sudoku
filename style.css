@@ -45,6 +45,11 @@
     --hint-glow: rgba(245, 158, 11, 0.3);
     --nightmare-color: #dc2626;
 
+    /* Second stop of the title gradients. A theme that wants flat headings
+       points these at --text-primary rather than restyling the headings. */
+    --title-accent: var(--accent);
+    --win-title-accent: var(--success);
+
     --radius: 12px;
     --radius-sm: 6px;
     --transition: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
@@ -326,6 +331,94 @@ body::before {
         radial-gradient(ellipse 500px 350px at 75% 75%, rgba(168, 85, 247, 0.08), transparent);
 }
 
+/* ── Theme: Light (clean, neutral) ─────────────────────────────────
+   Light and Dark are the defaults, picked by the system colour scheme.
+   Deliberately plain: opaque surfaces, one restrained accent, flat headings,
+   no background glow. Everything that gives the other themes their
+   atmosphere is switched off here through the variables alone. */
+[data-theme="light"] {
+    --bg-primary: #f4f5f7;
+    --bg-secondary: #ffffff;
+    --bg-card: #ffffff;
+    /* Cells are opaque here: the grid's 1px lines are its background showing
+       through the gaps, and a translucent cell would take on their colour. */
+    --bg-cell: #ffffff;
+    --bg-cell-hover: #eef0f3;
+    --bg-cell-focus: #dbe7fb;
+    --bg-cell-given: #f1f3f5;
+    --bg-cell-solved: #e4f5ea;
+    --border-subtle: rgba(15, 23, 42, 0.12);
+    --border-box: rgba(15, 23, 42, 0.5);
+    --border-focus: rgba(37, 99, 235, 0.7);
+    --text-primary: #1f2328;
+    --text-secondary: #4b5563;
+    --text-muted: #5b6470;
+    --text-given: #0f172a;
+    --text-solved: #166534;
+    --text-error: #b91c1c;
+    --text-hint: #92400e;
+    --text-note: #4b5563;
+    --text-conflict: #9a3412;
+    --accent: #2563eb;
+    --accent-text: #1d4ed8;
+    --accent-surface: #2563eb;
+    --accent-on: #ffffff;
+    --accent-glow: rgba(37, 99, 235, 0.15);
+    --success: #166534;
+    --success-glow: rgba(22, 101, 52, 0.15);
+    --danger: #dc2626;
+    --hint-color: #d97706;
+    --hint-glow: rgba(217, 119, 6, 0.2);
+    --nightmare-color: #b91c1c;
+    --title-accent: var(--text-primary);
+    --win-title-accent: var(--text-primary);
+}
+
+[data-theme="light"] body::before {
+    background: none;
+}
+
+/* ── Theme: Dark (clean, neutral) ──────────────────────────────────── */
+[data-theme="dark"] {
+    --bg-primary: #121316;
+    --bg-secondary: #191b1f;
+    --bg-card: #1c1e23;
+    --bg-cell: #202227;
+    --bg-cell-hover: #2b2d33;
+    --bg-cell-focus: #243a5e;
+    --bg-cell-given: #26282e;
+    --bg-cell-solved: #1f3328;
+    --border-subtle: rgba(255, 255, 255, 0.09);
+    --border-box: rgba(255, 255, 255, 0.35);
+    --border-focus: rgba(96, 165, 250, 0.7);
+    --text-primary: #e8eaed;
+    --text-secondary: #a3a8b0;
+    --text-muted: #8e949c;
+    --text-given: #f5f6f7;
+    --text-solved: #4ade80;
+    --text-error: #f87171;
+    --text-hint: #fbbf24;
+    --text-note: #a3a8b0;
+    --text-conflict: #fb923c;
+    --accent: #3b82f6;
+    --accent-text: #7cb0ff;
+    --accent-surface: #2563eb;
+    --accent-on: #ffffff;
+    --accent-glow: rgba(59, 130, 246, 0.2);
+    --success: #22c55e;
+    --success-glow: rgba(34, 197, 94, 0.2);
+    --danger: #ef4444;
+    --hint-color: #f59e0b;
+    --hint-glow: rgba(245, 158, 11, 0.25);
+    --nightmare-color: #f87171;
+    --title-accent: var(--text-primary);
+    --win-title-accent: var(--text-primary);
+}
+
+[data-theme="dark"] body::before {
+    background: none;
+}
+
 /* ── Theme Picker ─────────────────────────────────────────────────── */
 .theme-picker {
     position: relative;
@@ -447,7 +540,7 @@ body::before {
     font-size: 2rem;
     font-weight: 700;
     letter-spacing: -0.03em;
-    background: linear-gradient(135deg, var(--text-primary), var(--accent));
+    background: linear-gradient(135deg, var(--text-primary), var(--title-accent));
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
@@ -1147,7 +1240,7 @@ body::before {
     font-size: 1.5rem;
     font-weight: 700;
     margin-bottom: 0.5rem;
-    background: linear-gradient(135deg, var(--text-primary), var(--success));
+    background: linear-gradient(135deg, var(--text-primary), var(--win-title-accent));
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;

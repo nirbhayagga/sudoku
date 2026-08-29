@@ -77,6 +77,8 @@ const SURFACE_PAIRS = [
 
 const CONTROL_SURFACES = {
     //            difficulty buttons     action buttons
+    light: ['rgb(255, 255, 255)', 'rgb(255, 255, 255)'],
+    dark: ['rgb(35, 37, 42)', 'rgb(32, 34, 39)'],
     midnight: ['rgb(25, 25, 37)', 'rgb(27, 27, 39)'],
     sakura: ['rgb(242, 209, 196)', 'rgb(239, 202, 190)'],
     ocean: ['rgb(21, 36, 57)', 'rgb(21, 36, 57)'],

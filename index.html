@@ -9,7 +9,22 @@
     content="Lightning-fast Sudoku solver and player with puzzle generation, pencil marks, hints, and more.">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="theme-color" content="#0a0a0f">
+  <meta name="theme-color" content="#121316">
+
+  <!-- Theme before first paint. A saved theme, else the system scheme, is set
+       here so the page never flashes the :root defaults on the way in. This
+       mirrors theme.js, which takes over once the app boots. -->
+  <script>
+    (function () {
+      var theme = null;
+      try { theme = localStorage.getItem('sudoku-theme'); } catch (e) { /* unavailable */ }
+      if (!theme) {
+        theme = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
+          ? 'dark' : 'light';
+      }
+      document.documentElement.setAttribute('data-theme', theme);
+    })();
+  </script>
 
   <!-- Link previews and canonical URL.
        These must be absolute: crawlers do not resolve relative paths, so a
@@ -56,7 +71,13 @@
       <div class="theme-picker" id="theme-picker">
         <button class="theme-btn" id="theme-toggle" title="Change theme" aria-label="Change theme"></button>
         <div class="theme-dropdown" id="theme-dropdown">
-          <button class="theme-option active" data-theme="midnight">
+          <button class="theme-option" data-theme="light">
+            <span class="theme-swatch" style="background:#f4f5f7;border-color:#2563eb"></span>Light
+          </button>
+          <button class="theme-option" data-theme="dark">
+            <span class="theme-swatch" style="background:#121316;border-color:#3b82f6"></span>Dark
+          </button>
+          <button class="theme-option" data-theme="midnight">
             <span class="theme-swatch" style="background:#0a0a0f;border-color:#6366f1"></span>Midnight
           </button>
           <button class="theme-option" data-theme="sakura">

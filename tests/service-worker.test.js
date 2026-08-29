@@ -481,8 +481,10 @@ describe('web app manifest', () => {
         }
     });
 
-    it('matches the theme colour the app applies for midnight', () => {
-        expect(manifest.theme_color).toBe('#0a0a0f');
-        expect(manifest.background_color).toBe('#0a0a0f');
+    // The manifest cannot follow the system scheme, so it carries the dark
+    // default: a dark splash on a light phone is less jarring than the reverse.
+    it('matches the theme colour the app applies for dark', () => {
+        expect(manifest.theme_color).toBe('#121316');
+        expect(manifest.background_color).toBe('#121316');
     });
 });

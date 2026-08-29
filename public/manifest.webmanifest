@@ -6,8 +6,8 @@
   "scope": "./",
   "display": "standalone",
   "orientation": "any",
-  "background_color": "#0a0a0f",
-  "theme_color": "#0a0a0f",
+  "background_color": "#121316",
+  "theme_color": "#121316",
   "categories": ["games", "puzzle"],
   "icons": [
     { "src": "./icons/icon.svg", "type": "image/svg+xml", "sizes": "any" },

@@ -11,7 +11,7 @@ import { parseShareLink, bankLink, puzzleLink, copyToClipboard } from './share.j
 import { candidatesFor, candidateGrid, peersOf, cellName, nextStep } from './techniques.js';
 import { formatTime, escapeHtml } from './format.js';
 import { createDialogs } from './dialogs.js';
-import { applyTheme, DEFAULT_THEME } from './theme.js';
+import { applyTheme } from './theme.js';
 import * as store from './storage.js';
 import * as leaderboard from './leaderboard-client.js';
 
@@ -2022,7 +2022,8 @@ function loadBank() {
     // Restore saved theme
     // Restore the saved theme. Persisting is skipped here: reading it back and
     // writing it straight out again would be pointless work on every load.
-    applyTheme(store.getTheme(DEFAULT_THEME), { dropdown: themeDropdown, persist: false });
+    // No saved theme resolves to the system scheme inside applyTheme.
+    applyTheme(store.getTheme(null), { dropdown: themeDropdown, persist: false });
 
     // ══════════════════════════════════════════════════════════════════
     //  LEADERBOARD (graceful degradation)
