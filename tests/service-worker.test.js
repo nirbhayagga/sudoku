@@ -15,6 +15,7 @@ import { repoRoot } from './helpers/paths.js';
 let swSource;
 let precache;
 let cacheName;
+let indexHtml;
 
 beforeAll(() => {
     const dist = fs.mkdtempSync(path.join(os.tmpdir(), 'sudoku-sw-'));
@@ -26,6 +27,7 @@ beforeAll(() => {
     swSource = fs.readFileSync(path.join(dist, 'sw.js'), 'utf8');
     precache = JSON.parse(swSource.match(/const PRECACHE = (\[[\s\S]*?\]);/)[1]);
     cacheName = swSource.match(/const CACHE = '(.*?)'/)[1];
+    indexHtml = fs.readFileSync(path.join(dist, 'index.html'), 'utf8');
     fs.rmSync(dist, { recursive: true, force: true });
 }, 120_000);
 
@@ -88,6 +90,25 @@ async function handleFetch(listeners, request) {
 }
 
 const req = (url, extra = {}) => ({ url, method: 'GET', mode: 'no-cors', ...extra });
+
+/**
+ * A navigation response stub. The worker reads the body to decide whether it
+ * holds the assets the document names, so `html` is not decoration.
+ */
+function page(body, html) {
+    const response = { ok: true, type: 'basic', body, text: async () => html };
+    response.clone = () => ({ ...response });
+    return response;
+}
+
+/** Markup naming exactly the assets this build precached — the good case. */
+const backedHtml = () => precache
+    .filter((p) => p.includes('assets/'))
+    .map((p) => `<script src="${p}"></script>`)
+    .join('');
+
+/** Markup from a later build, whose hashes this worker has never seen. */
+const unbackedHtml = '<script src="./assets/index.Nvvvvvvv.js"></script>';
 
 describe('precache manifest', () => {
     it('includes the navigation entry', () => {
@@ -220,7 +241,7 @@ describe('fetch strategy', () => {
         const caches = makeCaches(new Map([['c', new Map([['https://sudoku.example.com/', { body: 'stale page' }]])]]));
         const worker = loadWorker({
             caches,
-            fetchImpl: async () => ({ ok: true, type: 'basic', body: 'fresh page', clone: () => ({ body: 'fresh page' }) }),
+            fetchImpl: async () => page('fresh page', backedHtml()),
         });
         const response = await handleFetch(worker.listeners, req('https://sudoku.example.com/', { mode: 'navigate' }));
         expect(response.body).toBe('fresh page');
@@ -264,7 +285,7 @@ describe('fetch strategy', () => {
         const worker = loadWorker({
             caches,
             fetchImpl: () => new Promise((resolve) => setTimeout(
-                () => resolve({ ok: true, type: 'basic', body: 'slow page', clone: () => ({ body: 'slow page' }) }),
+                () => resolve(page('slow page', backedHtml())),
                 20
             )),
             setTimeoutImpl: (fn) => setTimeout(fn, 0),
@@ -342,6 +363,71 @@ describe('fetch strategy', () => {
         });
         const response = await handleFetch(worker.listeners, req('https://sudoku.example.com/', { mode: 'navigate' }));
         expect(response.body).toBe('edge error');
+    });
+
+    /**
+     * The seam network-first opens. Between a deploy and the new worker
+     * finishing its install, the network answers with the *new* document while
+     * this worker holds only the *old* build's assets — so every hashed name in
+     * it misses the cache and goes to the network. On the connection that made
+     * us race in the first place that is a blank screen, and unlike a stale
+     * page it has no way back.
+     */
+    it('refuses a document naming assets it cannot supply', async () => {
+        const caches = makeCaches(new Map([[cacheName, new Map([
+            ['https://sudoku.example.com/', { body: 'cached page' }],
+        ])]]));
+        const worker = loadWorker({
+            caches,
+            fetchImpl: async () => page('next build', unbackedHtml),
+        });
+        const response = await handleFetch(worker.listeners, req('https://sudoku.example.com/', { mode: 'navigate' }));
+        expect(response.body).toBe('cached page');
+    });
+
+    // Refusing it must not cache it either: the next launch would inherit the
+    // same unservable document with no network to rescue it.
+    it('never caches a document it cannot supply', async () => {
+        const caches = makeCaches(new Map([[cacheName, new Map([
+            ['https://sudoku.example.com/', { body: 'cached page' }],
+        ])]]));
+        const worker = loadWorker({
+            caches,
+            fetchImpl: async () => page('next build', unbackedHtml),
+        });
+        await handleFetch(worker.listeners, req('https://sudoku.example.com/', { mode: 'navigate' }));
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        expect(caches.store.get(cacheName).get('https://sudoku.example.com/').body).toBe('cached page');
+    });
+
+    // A first visit has nothing to fall back to, and the connection that just
+    // delivered the document can deliver its assets too.
+    it('serves a document it cannot supply when nothing is cached', async () => {
+        const worker = loadWorker({
+            caches: makeCaches(),
+            fetchImpl: async () => page('next build', unbackedHtml),
+        });
+        const response = await handleFetch(worker.listeners, req('https://sudoku.example.com/', { mode: 'navigate' }));
+        expect(response.body).toBe('next build');
+    });
+
+    /**
+     * The guard that keeps the guard honest. isBackedByPrecache matches asset
+     * paths out of the markup by shape, so a change to how Vite emits or names
+     * them would silently make *every* document look unbacked — freezing every
+     * installed client on the build it already had, for ever. Asserting the
+     * real built index.html against the real precache is what catches that.
+     */
+    it('accepts the document this very build emitted', async () => {
+        const caches = makeCaches(new Map([[cacheName, new Map([
+            ['https://sudoku.example.com/', { body: 'cached page' }],
+        ])]]));
+        const worker = loadWorker({
+            caches,
+            fetchImpl: async () => page('this build', indexHtml),
+        });
+        const response = await handleFetch(worker.listeners, req('https://sudoku.example.com/', { mode: 'navigate' }));
+        expect(response.body).toBe('this build');
     });
 
     it('does not cache failed or opaque responses', async () => {

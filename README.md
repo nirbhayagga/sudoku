@@ -463,7 +463,7 @@ The caching rules, and the reasoning:
 
 | Request | Strategy | Why |
 |---|---|---|
-| Navigations | Network first, 2 s deadline, cache fallback, `ok` responses only | A stale document would pin clients to old asset hashes, and a bad deploy could not be fixed by reloading |
+| Navigations | Network first, 2 s deadline, cache fallback, `ok` and backed responses only | A stale document would pin clients to old asset hashes, and a bad deploy could not be fixed by reloading |
 | Hashed assets | Cache first | The filename changes whenever the bytes do, so a cached copy is never wrong |
 | `/api/` | Never cached | Cached scores would be replayed, and a cached health check would report a backend that is down as available |
 
@@ -484,6 +484,30 @@ and the cached app wins. Skipping that check broke the app twice per bad
 network: a blank screen at the time, and the portal's reply written over the
 cached document, so every later launch stayed broken until a good network
 happened to overwrite it back.
+
+There is a second seam, and it is the one network-first opens by itself. A
+document and its assets ship as one build but are cached as separate entries, so
+between a deploy and the new worker finishing its install the network returns
+the *new* `index.html` while the active worker still holds only the *old*
+build's assets. Every hashed filename in it misses the cache and goes to the
+network — and on a connection bad enough to need a deadline, that is a blank
+screen with no way back, which is strictly worse than a stale page.
+
+`isBackedByPrecache` closes it. `PRECACHE` is the exact asset list of the
+worker's own build, so a document naming anything absent from it belongs to a
+build whose worker is already installing; serving the cached page for one more
+load lets that install finish and swap document and assets together, which is
+the only way they were ever safe to swap. A test asserts the real built
+`index.html` passes this against the real precache — a change to how Vite names
+assets would otherwise make every document look unbacked and freeze every
+installed client on the build it had.
+
+The app asks for an update whenever it returns to the foreground, throttled to
+hourly. The browser's own check runs on navigation, which an installed app
+barely does — no address bar, no reload button, and iOS resumes a home-screen
+app from the app switcher without navigating at all. This is also what makes the
+caution above free: the new build is picked up quietly while the app is open, so
+the next launch is current rather than one behind.
 
 The app also asks for `navigator.storage.persist()`, which covers the precached
 bank and `localStorage` alike — but **only once it is installed**

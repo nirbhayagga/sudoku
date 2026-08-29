@@ -2332,6 +2332,37 @@ function loadBank() {
                 .catch(() => { /* offline support unavailable; the app still works */ });
         });
 
+        // Look for a new build when the app returns to the foreground.
+        //
+        // The browser checks for an updated worker on navigation, which is
+        // fine in a tab and close to useless in an installed app: there is no
+        // address bar and no reload button, and iOS resumes a home-screen app
+        // from the app switcher without navigating at all. Left to itself it
+        // can sit on the build it was installed with for days.
+        //
+        // It also pays for the worker's own caution. A document whose assets
+        // the active worker does not hold is refused until that build's worker
+        // has installed, so picking the new build up quietly in the background
+        // is exactly what makes the next launch current rather than one behind.
+        //
+        // Throttled because visibilitychange fires on every tab switch; the
+        // request is a conditional GET of a file that is served no-cache.
+        const UPDATE_CHECK_INTERVAL_MS = 60 * 60 * 1000;
+        let lastUpdateCheck = Date.now();
+
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState !== 'visible') return;
+            if (Date.now() - lastUpdateCheck < UPDATE_CHECK_INTERVAL_MS) return;
+            lastUpdateCheck = Date.now();
+
+            const pending = navigator.serviceWorker.getRegistration?.();
+            if (pending) {
+                pending
+                    .then((registration) => registration?.update())
+                    .catch(() => { /* nothing to do; checked again next time */ });
+            }
+        });
+
         // Ask the browser not to evict us when storage runs short. This covers
         // the precached bank *and* localStorage — the saved game, stats and
         // streak.

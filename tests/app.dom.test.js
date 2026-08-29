@@ -888,6 +888,97 @@ describe('progressive web app', () => {
         withSW.close();
     });
 
+    /**
+     * The browser looks for a new worker on navigation, which an installed app
+     * barely does: no address bar, no reload button, and iOS resumes one from
+     * the app switcher without navigating at all. Left alone it can sit on the
+     * build it was installed with for days.
+     */
+    it('checks for a new build when the app returns to the foreground', async () => {
+        let updates = 0;
+        const withSW = await bootApp({
+            serviceWorker: {
+                register: () => Promise.resolve(),
+                getRegistration: () => Promise.resolve({ update: () => { updates += 1; } }),
+            },
+        });
+        await withSW.tick(20);
+
+        const clock = withSW.useFakeClock();
+        clock.advance(2 * 60 * 60 * 1000);
+        withSW.document.dispatchEvent(new withSW.window.Event('visibilitychange'));
+        await withSW.tick(20);
+
+        expect(updates).toBe(1);
+        clock.restore();
+        withSW.close();
+    });
+
+    // visibilitychange fires on every tab switch; asking that often would be a
+    // request per switch for a file that changes on deploys.
+    it('does not ask again on every tab switch', async () => {
+        let updates = 0;
+        const withSW = await bootApp({
+            serviceWorker: {
+                register: () => Promise.resolve(),
+                getRegistration: () => Promise.resolve({ update: () => { updates += 1; } }),
+            },
+        });
+        await withSW.tick(20);
+
+        const clock = withSW.useFakeClock();
+        clock.advance(2 * 60 * 60 * 1000);
+        for (let i = 0; i < 3; i += 1) {
+            withSW.document.dispatchEvent(new withSW.window.Event('visibilitychange'));
+        }
+        await withSW.tick(20);
+
+        expect(updates).toBe(1);
+        clock.restore();
+        withSW.close();
+    });
+
+    // The event also fires on the way *out*, which is not a return at all.
+    it('does not check while the page is hidden', async () => {
+        let updates = 0;
+        const withSW = await bootApp({
+            serviceWorker: {
+                register: () => Promise.resolve(),
+                getRegistration: () => Promise.resolve({ update: () => { updates += 1; } }),
+            },
+        });
+        await withSW.tick(20);
+
+        Object.defineProperty(withSW.document, 'visibilityState', {
+            value: 'hidden',
+            configurable: true,
+        });
+        const clock = withSW.useFakeClock();
+        clock.advance(2 * 60 * 60 * 1000);
+        withSW.document.dispatchEvent(new withSW.window.Event('visibilitychange'));
+        await withSW.tick(20);
+
+        expect(updates).toBe(0);
+        clock.restore();
+        withSW.close();
+    });
+
+    it('survives a browser that offers no getRegistration', async () => {
+        const withSW = await bootApp({
+            serviceWorker: { register: () => Promise.resolve() },
+        });
+        await withSW.tick(20);
+
+        const clock = withSW.useFakeClock();
+        clock.advance(2 * 60 * 60 * 1000);
+        withSW.document.dispatchEvent(new withSW.window.Event('visibilitychange'));
+        await withSW.tick(20);
+
+        expect(withSW.cells()).toHaveLength(81);
+        clock.restore();
+        withSW.close();
+    });
+
     it('survives a registration that rejects', async () => {
         const withSW = await bootApp({
             serviceWorker: { register: () => Promise.reject(new Error('denied')) },

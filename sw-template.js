@@ -13,6 +13,9 @@
  *     deadline though — see NAV_TIMEOUT_MS.
  *   - Hashed assets are CACHE-FIRST. Their filename changes whenever their
  *     bytes do, so a cached copy can never be wrong.
+ *   - A navigation is only served when this worker holds the assets it names —
+ *     see isBackedByPrecache. Document and assets are versioned together and
+ *     cached separately, and that is the seam a bad network falls through.
  *   - /api/ is never cached. Leaderboard responses must not be replayed, and a
  *     cached health check would misreport the backend as available.
  */
@@ -55,6 +58,44 @@ function isUsable(response) {
     return response.ok && response.type === 'basic';
 }
 
+/**
+ * The hashed assets this worker actually holds, as they appear in a document.
+ *
+ * PRECACHE entries are root-relative ("./assets/index.DLHzd0x1.js") while the
+ * markup may name them any number of ways, so both sides are reduced to the
+ * "assets/<file>" tail that the content hash makes unique anyway.
+ */
+const PRECACHED_ASSETS = new Set(
+    PRECACHE.filter((p) => p.includes('assets/'))
+        .map((p) => p.slice(p.indexOf('assets/')))
+);
+
+/**
+ * Whether this worker can actually back the document it is about to serve.
+ *
+ * The document and its assets ship as one build but are cached as separate
+ * entries, and network-first opens a seam between them: from a deploy until the
+ * new worker finishes installing, the network hands back the *new* index.html
+ * while this worker still holds only the *old* build's assets. Every hashed
+ * filename in it then misses the cache and goes to the network — and on the
+ * connection that made us race in the first place, that is a blank screen with
+ * no way back.
+ *
+ * PRECACHE is the exact asset list of this worker's own build, so the question
+ * is just whether the document names anything missing from it. If it does, the
+ * build it belongs to has a worker already installing; serving the cached page
+ * for one more load lets that install finish and swap document and assets
+ * together, which is the only way they were ever safe to swap.
+ *
+ * Note this only has to cover what the *markup* names. The entry script is one
+ * of those, and a cached entry script can only ever import the chunk hashes it
+ * was built with — which are precached alongside it.
+ */
+function isBackedByPrecache(html) {
+    const referenced = html.match(/assets\/[A-Za-z0-9._-]+/g) || [];
+    return referenced.every((name) => PRECACHED_ASSETS.has(name));
+}
+
 /** Store a response, ignoring a cache that refuses it (opaque, over quota). */
 function cacheResponse(request, response) {
     const copy = response.clone();
@@ -70,10 +111,7 @@ function cacheResponse(request, response) {
  * still refreshes the cached document, so the next launch is current.
  */
 function navigationResponse(request) {
-    const network = fetch(request).then((response) => {
-        if (isUsable(response)) cacheResponse(request, response);
-        return response;
-    });
+    const network = fetch(request);
 
     // The losing branch is deliberately left running; swallow its rejection so
     // it cannot surface as an unhandled one.
@@ -83,21 +121,35 @@ function navigationResponse(request) {
         (hit) => hit || caches.match(PRECACHE[0], MATCH_OPTIONS)
     );
 
-    // An unusable answer counts as a loss, not a win: a cached app beats a
-    // portal login page or an error document every time.
-    const settled = network.then(
-        (response) => (isUsable(response) ? 'network' : 'failed'),
-        () => 'failed'
-    );
+    /**
+     * Whether the answer is worth showing — which is what the race waits on,
+     * not the bare response. An unusable or unbacked answer counts as a loss:
+     * a cached app beats a portal login page, an error document, or a fresh
+     * page whose scripts this worker cannot supply.
+     */
+    const verdict = network.then((response) => {
+        if (!isUsable(response)) return 'failed';
+        return response.clone().text().then(
+            (html) => {
+                if (!isBackedByPrecache(html)) return 'unbacked';
+                cacheResponse(request, response);
+                return 'network';
+            },
+            // A body we cannot read is not evidence of a bad document.
+            () => { cacheResponse(request, response); return 'network'; }
+        );
+    }, () => 'failed');
+
     const expired = new Promise((resolve) => {
         setTimeout(() => resolve('timeout'), NAV_TIMEOUT_MS);
     });
 
-    return Promise.race([settled, expired]).then((outcome) => {
+    return Promise.race([verdict, expired]).then((outcome) => {
         if (outcome === 'network') return network;
-        // Failed, rejected or too slow. Serve the cached page if there is one;
-        // with nothing cached there is nothing better to offer than whatever
-        // the network eventually says, which is then the honest answer.
+        // Failed, unbacked, rejected or too slow. Serve the cached page if
+        // there is one; with nothing cached — a first visit — there is nothing
+        // better to offer than whatever the network says, and the assets it
+        // names are then fetched over the same working connection.
         return cached().then((hit) => hit || network);
     });
 }
