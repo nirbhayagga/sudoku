@@ -1530,6 +1530,18 @@ describe('auto-notes', () => {
         await startGame(app);
     });
 
+    // Leaving it on marked the next game as assisted before a single move.
+    it('switches itself off when a new game starts', async () => {
+        app.click('#btn-auto-notes');
+        expect(app.$('#btn-auto-notes').getAttribute('aria-pressed')).toBe('true');
+
+        await startGame(app);
+        expect(app.$('#btn-auto-notes').getAttribute('aria-pressed')).toBe('false');
+
+        completePuzzle(app);
+        expect(app.$('#win-details').textContent).not.toMatch(/auto-notes/i);
+    });
+
     it('is off by default', () => {
         expect(app.$('#btn-auto-notes').getAttribute('aria-pressed')).toBe('false');
     });

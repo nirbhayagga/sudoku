@@ -1026,7 +1026,11 @@ function loadBank() {
         hintsUsed = 0;
         mistakes = 0;
         handedOff = false;
-        autoNotesUsed = autoNotes; // carrying the mode over counts as using it
+        // Each game opts into auto-notes itself. Carrying the mode over from
+        // the last game marked the new one as assisted before a single move,
+        // which mostly caught players who forgot it was on.
+        if (autoNotes) setAutoNotes(false);
+        autoNotesUsed = false;
         gameWon = false;
         undoStack.length = 0;
         redoStack.length = 0;
