@@ -87,6 +87,9 @@ const CONTROL_SURFACES = {
     ocean: ['rgb(21, 36, 57)', 'rgb(21, 36, 57)'],
     forest: ['rgb(22, 35, 22)', 'rgb(22, 35, 22)'],
     arctic: ['rgb(203, 214, 234)', 'rgb(197, 209, 233)'],
+    peony: ['rgb(255, 251, 242)', 'rgb(255, 253, 248)'],
+    matcha: ['rgb(247, 242, 236)', 'rgb(251, 247, 241)'],
+    vino: ['rgb(67, 26, 34)', 'rgb(69, 29, 37)'],
 };
 
 export function parseThemes(css) {

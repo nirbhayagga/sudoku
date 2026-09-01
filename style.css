@@ -285,6 +285,135 @@ body::before {
         radial-gradient(ellipse 500px 350px at 80% 80%, rgba(16, 185, 129, 0.06), transparent);
 }
 
+/* ── Theme: Peony (vanilla cream, blush, rosewood) ─────────────────
+   The three palette themes below (Peony, Matcha, Vino) come from palettes
+   the user's partner picked; hues are theirs, lightness nudged where AA
+   demanded it. */
+:root[data-theme="peony"] {
+    --bg-primary: #fff7e6;
+    --bg-secondary: #fffcf4;
+    --bg-card: #fffbf2;
+    --bg-cell: #fffdf8;
+    --bg-cell-hover: #f8ecdd;
+    --bg-cell-focus: #f8d7df;
+    --bg-cell-given: #f9efdf;
+    --bg-cell-solved: #eaf0dc;
+    --border-subtle: rgba(45, 58, 71, 0.15);
+    --border-box: rgba(45, 58, 71, 0.55);
+    --border-focus: rgba(180, 106, 114, 0.75);
+    --text-primary: #2d3a47;
+    --text-secondary: #55626e;
+    --text-muted: #5e6b77;
+    --text-given: #1f2a35;
+    --text-entry: #8e4750;
+    --text-solved: #4e6034;
+    --text-error: #9c2f42;
+    --text-hint: #7a4e10;
+    --text-note: #55626e;
+    --text-conflict: #8f3d10;
+    --accent: #b46a72;
+    --accent-text: #8e4750;
+    --accent-surface: #96515a;
+    --accent-on: #fff7e6;
+    --accent-glow: rgba(180, 106, 114, 0.25);
+    --success: #4e6034;
+    --success-glow: rgba(168, 181, 138, 0.35);
+    --danger: #a3334b;
+    --hint-color: #b98039;
+    --hint-glow: rgba(201, 138, 45, 0.25);
+    --nightmare-color: #a3334b;
+}
+
+:root[data-theme="peony"] body::before {
+    background:
+        radial-gradient(ellipse 600px 400px at 20% 20%, rgba(247, 200, 211, 0.35), transparent),
+        radial-gradient(ellipse 500px 350px at 80% 80%, rgba(168, 181, 138, 0.25), transparent);
+}
+
+/* ── Theme: Matcha (warm fog, berry, soldier green) ────────────────── */
+:root[data-theme="matcha"] {
+    --bg-primary: #e9e1d7;
+    --bg-secondary: #f5f0e8;
+    --bg-card: #f7f2eb;
+    --bg-cell: #fbf7f1;
+    --bg-cell-hover: #efe7db;
+    --bg-cell-focus: #e3e7cd;
+    --bg-cell-given: #f4e3e1;
+    --bg-cell-solved: #e5ebd1;
+    --border-subtle: rgba(58, 58, 44, 0.15);
+    --border-box: rgba(58, 58, 44, 0.5);
+    --border-focus: rgba(87, 85, 39, 0.6);
+    --text-primary: #34342a;
+    --text-secondary: #565647;
+    --text-muted: #5f5f4f;
+    --text-given: #262620;
+    --text-entry: #575527;
+    --text-solved: #465521;
+    --text-error: #a02c3f;
+    --text-hint: #7a4e10;
+    --text-note: #565647;
+    --text-conflict: #8f3d10;
+    --accent: #928e5e;
+    --accent-text: #63603a;
+    --accent-surface: #575527;
+    --accent-on: #f7f2eb;
+    --accent-glow: rgba(146, 142, 94, 0.3);
+    --success: #465521;
+    --success-glow: rgba(146, 142, 94, 0.35);
+    --danger: #a02c3f;
+    --hint-color: #b98039;
+    --hint-glow: rgba(185, 128, 57, 0.25);
+    --nightmare-color: #a02c3f;
+}
+
+:root[data-theme="matcha"] body::before {
+    background:
+        radial-gradient(ellipse 600px 400px at 20% 20%, rgba(236, 196, 195, 0.4), transparent),
+        radial-gradient(ellipse 500px 350px at 80% 80%, rgba(146, 142, 94, 0.25), transparent);
+}
+
+/* ── Theme: Vino (deep wine, sakura mochi, scarlet ribbons) ────────── */
+:root[data-theme="vino"] {
+    --bg-primary: #2a0e13;
+    --bg-secondary: #3a1219;
+    --bg-card: rgba(66, 21, 29, 0.78);
+    --bg-cell: rgba(255, 255, 255, 0.045);
+    --bg-cell-hover: rgba(255, 255, 255, 0.09);
+    --bg-cell-focus: rgba(207, 115, 129, 0.18);
+    --bg-cell-given: rgba(207, 115, 129, 0.1);
+    --bg-cell-solved: rgba(168, 181, 138, 0.1);
+    --border-subtle: rgba(255, 255, 255, 0.08);
+    --border-box: rgba(255, 235, 238, 0.3);
+    --border-focus: rgba(207, 115, 129, 0.65);
+    --text-primary: #f4dfe1;
+    --text-secondary: #d6abb0;
+    --text-muted: #cba0a6;
+    --text-given: #f0bfc5;
+    --text-entry: #e8a3ae;
+    --text-solved: #becf9c;
+    --text-error: #ff9aa8;
+    --text-hint: #f0b95e;
+    --text-note: #d6abb0;
+    --text-conflict: #f5a26f;
+    --accent: #cf7381;
+    --accent-text: #e8a3ae;
+    --accent-surface: #a3334b;
+    --accent-on: #fff2f0;
+    --accent-glow: rgba(207, 115, 129, 0.3);
+    --success: #b7c596;
+    --success-glow: rgba(168, 181, 138, 0.3);
+    --danger: #e4566e;
+    --hint-color: #e0a34e;
+    --hint-glow: rgba(224, 163, 78, 0.3);
+    --nightmare-color: #ff8095;
+}
+
+:root[data-theme="vino"] body::before {
+    background:
+        radial-gradient(ellipse 600px 400px at 25% 20%, rgba(163, 51, 75, 0.25), transparent),
+        radial-gradient(ellipse 500px 350px at 75% 80%, rgba(204, 160, 160, 0.12), transparent);
+}
+
 /* ── Theme: Light (clean, neutral) ─────────────────────────────────
    Light and Dark are the defaults, picked by the system colour scheme.
    Deliberately plain: opaque surfaces, one restrained accent, flat headings,

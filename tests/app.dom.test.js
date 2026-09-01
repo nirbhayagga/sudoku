@@ -1328,7 +1328,7 @@ describe('theme dropdown', () => {
     it('offers every theme', () => {
         const themes = app.$$('.theme-option').map((b) => b.dataset.theme);
         expect(themes).toEqual([
-            'light', 'sakura', 'arctic', 'dark', 'midnight', 'ocean', 'forest',
+            'light', 'sakura', 'arctic', 'peony', 'matcha', 'dark', 'midnight', 'ocean', 'forest', 'vino',
         ]);
     });
 

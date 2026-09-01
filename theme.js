@@ -32,6 +32,9 @@ export const THEME_COLORS = {
     ocean: '#0b1628',
     forest: '#091209',
     arctic: '#dce4ef',
+    peony: '#fff7e6',
+    matcha: '#e9e1d7',
+    vino: '#2a0e13',
 };
 
 /**
