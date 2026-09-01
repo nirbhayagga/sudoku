@@ -56,6 +56,10 @@
     --text-secondary: #94a3b8;
     --text-muted: #7e8fa7;
     --text-given: #c7d2fe;
+    /* Digits the player typed, as opposed to the puzzle's givens. Defaults to
+       the body text colour; a theme that wants entries to stand apart from
+       givens overrides just this. */
+    --text-entry: var(--text-primary);
     --text-solved: #6ee7b7;
     --text-error: #f87171;
     --text-hint: #fbbf24;
@@ -718,7 +722,7 @@ body::before {
     font-family: 'JetBrains Mono', 'Inter', monospace;
     font-size: 1.3rem;
     font-weight: 500;
-    color: var(--text-primary);
+    color: var(--text-entry);
     caret-color: transparent;
     cursor: inherit;
     z-index: 2;

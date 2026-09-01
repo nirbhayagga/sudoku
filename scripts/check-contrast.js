@@ -41,6 +41,9 @@ const FIX_TARGET = 5.0;
 const TEXT_TOKENS = [
     '--text-primary', '--text-secondary', '--text-muted', '--text-note',
     '--text-given', '--text-solved', '--text-error', '--text-conflict',
+    // Player-typed digits; only checked in themes that override it, since its
+    // default is var(--text-primary), which parseColor skips.
+    '--text-entry',
     // Used on the hint button and in win messaging respectively; both were
     // missed on the first pass simply because they are not named --text-*.
     '--text-hint', '--success',
