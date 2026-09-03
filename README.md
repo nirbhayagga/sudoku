@@ -22,7 +22,7 @@ Play sudoku puzzles with built-in hints, pencil marks, undo/redo, and more.
 
 - **6 difficulty levels** — Easy, Medium, Hard, Expert, Evil, Nightmare, graded by measured solving effort rather than clue count alone
 - **5,500 pre-generated puzzles** — 500 per difficulty (Easy–Evil) + 3,000 Nightmare (the hardest 17-clue puzzles from the published 49,158-puzzle catalogue), served instantly from a puzzle bank
-- **Level selector** — Enter a specific level number or leave blank for a random puzzle
+- **Level selector** — Enter a specific level number or leave blank for a random puzzle. In Evil and Nightmare the level number is a difficulty ramp (see below); Nightmare 3000 is the hardest board in the app
 - **Share a puzzle** — Copy a link to the board you are on: `?d=evil&level=42` for a bank puzzle, `?p=<81 digits>` for any grid, `?daily=YYYY-MM-DD` for a day. Opening one loads it straight away
 - **Daily puzzle** — One board a day, derived from the date so everyone gets the same one; difficulty ramps across the week and the leaderboard for that level compares like with like
 - **10 color themes** — Light and Dark follow the system scheme by default; Midnight, Sakura, Ocean, Forest, Arctic, Peony, Matcha and Vino for atmosphere — a choice is saved in localStorage, and all meet WCAG AA contrast
@@ -46,6 +46,37 @@ Play sudoku puzzles with built-in hints, pencil marks, undo/redo, and more.
 - **Continue on another device** — From the pause panel, copy a link that carries the whole game: board, notes, revealed hints, clock, hint and mistake counts. Open it anywhere and play on. No account, no server — the state rides in the URL. The device you left stops offering that game to resume, so you are never shown a puzzle you finished elsewhere; making a move there again brings it back
 - **Installable / offline** — Add to home screen and play with no network
 
+### How hard is each tier, really?
+
+Difficulty is measured, not asserted: `rateDifficulty()` counts the search
+nodes a puzzle needs beyond pure constraint propagation, where 0 means logic
+alone cracks it. Rating the entire bank gives this ladder:
+
+| tier | puzzles | avg clues | nodes: min | median | p90 | max | solvable by pure logic |
+|---|---|---|---|---|---|---|---|
+| easy | 500 | 38 | 0 | 0 | 0 | 0 | 100% |
+| medium | 500 | 32 | 0 | 0 | 0 | 3 | 95% |
+| hard | 500 | 27 | 0 | 0 | 4 | 22 | 67% |
+| expert | 500 | 24 | 0 | 1 | 7 | 45 | 39% |
+| evil | 500 | 25 | 7 | 11 | 20 | 122 | 0% |
+| nightmare | 3,000 | 17 | 19 | 33 | 107 | 3,262 | 0% |
+
+Note evil averages slightly *more* clues than expert while being far harder —
+clue count and difficulty genuinely diverge, which is why tiers are selected
+by measured effort.
+
+Adjacent tiers overlap at the tails, as any honest ladder does: the hardest
+evil (122 nodes) out-rates most nightmares. But every nightmare puzzle needs
+search (min 19 nodes — harder than ~90% of evil and ~99% of expert), and at
+17 clues even a low-node nightmare is a long grind.
+
+**Within Evil and Nightmare, the level number is a difficulty ramp**: both
+tiers are stored easiest to hardest, so Evil level 500 is that tier's hardest
+and **Nightmare level 3000 is the hardest board in the app** (3,262 search
+nodes, versus 19 for Nightmare level 1). Type the level into the level box, or
+jump straight there with `?d=nightmare&level=3000`. Easy through Expert are
+not ordered — any level is a fair draw of its tier.
+
 ### Solver Mode
 
 Paste or type a puzzle and solve it instantly. Constraint propagation plus backtracking with the MRV heuristic, over 9-bit candidate masks in a typed array — most puzzles solve in about 0.1 ms.
@@ -58,8 +89,9 @@ Switching from Play → Solver retains your current puzzle so you can have the s
 |---|---|
 | **Click and type** | Click any cell and type a digit (1-9). Auto-advances to next empty cell. |
 | **Quick paste** | Press `Ctrl+V` with an 81-character puzzle string on the clipboard. |
-| **Import modal** | Press `Ctrl+I`. Paste an 81-char string or 9 lines of 9 digits. |
+| **Import modal** | Press `Ctrl+I`. Paste an 81-char string, 9 lines of 9 digits, or a grid with separators. `0` and `.` mark empty cells, and `*` `x` `_` `-` are accepted too. |
 | **Example loader** | Click Example to cycle through 5,500+ built-in puzzles. |
+| **Export** | Copy the board back out as text — one line (dots or zeros), nine rows, or a boxed grid — for another solver, a visualizer, or a forum post. While playing, the pause panel exports either the dealt puzzle or your current position. |
 
 ## Keyboard Shortcuts
 
