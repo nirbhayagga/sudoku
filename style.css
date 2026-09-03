@@ -1296,6 +1296,41 @@ body::before {
     border-color: var(--border-focus);
 }
 
+/* Export dialog: source/format pickers and the grid preview beneath them.
+   The 11-line grid format sets the height; the one-liners just wrap. */
+.export-options {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+}
+
+.export-options select {
+    background: var(--bg-cell);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    font-family: inherit;
+    font-size: 0.875rem;
+    padding: 0.35rem 0.5rem;
+}
+
+#export-text {
+    height: 200px;
+    white-space: pre-wrap;
+    overflow: auto;
+}
+
+.export-hint {
+    min-height: 1.25rem;
+    margin: 0.5rem 0 0;
+    font-size: 0.8125rem;
+    color: var(--text-muted);
+}
+
 .modal-actions {
     display: flex;
     gap: 0.5rem;

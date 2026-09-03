@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 import { describe, it, expect } from 'vitest';
-import { formatTime, escapeHtml } from '../format.js';
+import { formatTime, escapeHtml, formatPuzzle, parsePuzzleText } from '../format.js';
+
+const BOARD = '530070000600195000098000060800060003400803001700020006060000280000419005000080079';
 
 describe('formatTime', () => {
     it('formats under a minute', () => {
@@ -52,5 +54,67 @@ describe('escapeHtml', () => {
         expect(escapeHtml(42)).toBe('42');
         expect(escapeHtml(null)).toBe('');
         expect(escapeHtml(undefined)).toBe('');
+    });
+});
+
+describe('formatPuzzle', () => {
+    it('renders one line with dots', () => {
+        expect(formatPuzzle(BOARD, 'line')).toBe(BOARD.replace(/0/g, '.'));
+    });
+
+    it('renders one line with zeros, accepting dotted input', () => {
+        expect(formatPuzzle(BOARD, 'zeros')).toBe(BOARD);
+        expect(formatPuzzle(BOARD.replace(/0/g, '.'), 'zeros')).toBe(BOARD);
+    });
+
+    it('renders nine rows of nine', () => {
+        const rows = formatPuzzle(BOARD, 'rows').split('\n');
+        expect(rows).toHaveLength(9);
+        for (const row of rows) expect(row).toMatch(/^[1-9.]{9}$/);
+    });
+
+    it('renders a grid with box separators', () => {
+        const lines = formatPuzzle(BOARD, 'grid').split('\n');
+        expect(lines).toHaveLength(11);
+        expect(lines[0]).toBe('5 3 . | . 7 . | . . .');
+        expect(lines[3]).toBe('------+-------+------');
+        expect(lines[7]).toBe('------+-------+------');
+    });
+
+    it('round-trips every style through parsePuzzleText', () => {
+        for (const style of ['line', 'zeros', 'rows', 'grid']) {
+            expect(parsePuzzleText(formatPuzzle(BOARD, style))).toBe(BOARD);
+        }
+    });
+
+    it('rejects short boards and unknown styles', () => {
+        expect(() => formatPuzzle('123')).toThrow();
+        expect(() => formatPuzzle(BOARD, 'nope')).toThrow();
+    });
+});
+
+describe('parsePuzzleText', () => {
+    it('accepts digits and dots regardless of separators', () => {
+        expect(parsePuzzleText(BOARD)).toBe(BOARD);
+        expect(parsePuzzleText(BOARD.match(/.{9}/g).join(' | '))).toBe(BOARD);
+    });
+
+    it('accepts the common empty markers', () => {
+        for (const ch of ['*', '_', '?', 'x', 'X', '-']) {
+            expect(parsePuzzleText(BOARD.replace(/0/g, ch))).toBe(BOARD);
+        }
+    });
+
+    // The strict pass wins first, so the dashes in a pretty grid's separator
+    // lines stay separators rather than becoming twenty extra empty cells.
+    it('keeps dashes as separators when digits and dots already make a board', () => {
+        expect(parsePuzzleText(formatPuzzle(BOARD, 'grid'))).toBe(BOARD);
+    });
+
+    it('returns null for wrong lengths and junk', () => {
+        expect(parsePuzzleText('123')).toBe(null);
+        expect(parsePuzzleText('')).toBe(null);
+        expect(parsePuzzleText(null)).toBe(null);
+        expect(parsePuzzleText(BOARD + '1')).toBe(null);
     });
 });

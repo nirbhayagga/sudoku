@@ -128,6 +128,9 @@
         <button class="btn" id="btn-handoff" title="Copy a link that resumes this game, clock and all, on another device">
           Continue on another device
         </button>
+        <button class="btn" id="btn-pause-export" title="Copy this puzzle as text to paste into another solver">
+          Export puzzle
+        </button>
       </div>
     </div>
 
@@ -136,6 +139,7 @@
       <button class="btn btn-primary" id="btn-solve" title="Solve (Enter)">Solve</button>
       <button class="btn" id="btn-example" title="Load example puzzle">Example</button>
       <button class="btn" id="btn-paste" title="Import from text (Ctrl+I)">Import</button>
+      <button class="btn" id="btn-export" title="Copy the grid as text">Export</button>
       <button class="btn btn-danger" id="btn-clear" title="Clear grid (Esc)">Clear</button>
     </div>
 
@@ -224,8 +228,9 @@
   <div class="modal-overlay" id="modal-overlay">
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="import-title">
       <h2 id="import-title">Import Puzzle</h2>
-      <p>Paste an 81-character string using digits 1-9 and 0 or . for empty cells.<br>
-        You can also paste 9 lines of 9 digits.</p>
+      <p>Paste an 81-character string using digits 1-9 and 0 or . for empty cells
+        (<code>*</code> <code>x</code> <code>_</code> <code>-</code> work too).<br>
+        You can also paste 9 lines of 9 digits, or a grid with separators.</p>
       <label class="visually-hidden" for="import-text">Puzzle to import</label>
       <textarea id="import-text"
         placeholder="530070000600195000098000060800060003400803001700020006060000280000419005000080079"
@@ -234,6 +239,34 @@
       <div class="modal-actions">
         <button class="btn" id="btn-modal-cancel">Cancel</button>
         <button class="btn btn-primary" id="btn-modal-import">Import</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Export Modal -->
+  <div class="modal-overlay" id="export-overlay">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="export-title">
+      <h2 id="export-title">Export Puzzle</h2>
+      <div class="export-options">
+        <label for="export-source" id="export-source-label">Board:</label>
+        <select id="export-source">
+          <option value="original">Original puzzle</option>
+          <option value="current">Current position</option>
+        </select>
+        <label for="export-format">Format:</label>
+        <select id="export-format">
+          <option value="line">One line, dots</option>
+          <option value="zeros">One line, zeros</option>
+          <option value="rows">Nine rows</option>
+          <option value="grid">Grid</option>
+        </select>
+      </div>
+      <label class="visually-hidden" for="export-text">Exported puzzle</label>
+      <textarea id="export-text" readonly spellcheck="false"></textarea>
+      <p class="export-hint" id="export-hint" role="status"></p>
+      <div class="modal-actions">
+        <button class="btn" id="btn-export-close">Close</button>
+        <button class="btn btn-primary" id="btn-export-copy">Copy</button>
       </div>
     </div>
   </div>

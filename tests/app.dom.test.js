@@ -154,6 +154,42 @@ describe('solver mode', () => {
             expect(app.readGrid()).toBe('0'.repeat(81));
             expect(app.$('#import-error').textContent).toMatch(/found 3/);
         });
+
+        it('imports a string using * for empty cells', () => {
+            app.click('#btn-paste');
+            app.$('#import-text').value = EASY_PUZZLE.replace(/0/g, '*');
+            app.click('#btn-modal-import');
+            expect(app.readGrid()).toBe(EASY_PUZZLE);
+        });
+    });
+
+    describe('export', () => {
+        function setExport(sel, value) {
+            const el = app.$(sel);
+            el.value = value;
+            el.dispatchEvent(new app.window.Event('change', { bubbles: true }));
+        }
+
+        it('exports the grid in the chosen format', () => {
+            app.click('#btn-paste');
+            app.$('#import-text').value = EASY_PUZZLE;
+            app.click('#btn-modal-import');
+
+            app.click('#btn-export');
+            expect(app.$('#export-overlay').classList.contains('active')).toBe(true);
+            // Solver mode has no dealt puzzle, so no original/current picker.
+            expect(app.$('#export-source').style.display).toBe('none');
+            expect(app.$('#export-text').value).toBe(EASY_PUZZLE.replace(/0/g, '.'));
+
+            setExport('#export-format', 'zeros');
+            expect(app.$('#export-text').value).toBe(EASY_PUZZLE);
+
+            setExport('#export-format', 'rows');
+            expect(app.$('#export-text').value.split('\n')).toHaveLength(9);
+
+            setExport('#export-format', 'grid');
+            expect(app.$('#export-text').value.split('\n')).toHaveLength(11);
+        });
     });
 });
 
@@ -384,6 +420,25 @@ describe('error checking', () => {
 describe('pause panel', () => {
     beforeEach(async () => {
         await startGame(app);
+    });
+
+    it('exports the puzzle from the pause panel', () => {
+        const empty = EASY_PUZZLE.indexOf('0');
+        app.type(empty, EASY_SOLUTION[empty]);
+        app.click('#btn-pause');
+        app.click('#btn-pause-export');
+
+        expect(app.$('#export-overlay').classList.contains('active')).toBe(true);
+        // Mid-game there is a real choice, defaulting to the dealt puzzle —
+        // the typed digit is absent.
+        expect(app.$('#export-source').style.display).not.toBe('none');
+        expect(app.$('#export-source').value).toBe('original');
+        expect(app.$('#export-text').value).toBe(EASY_PUZZLE.replace(/0/g, '.'));
+
+        const source = app.$('#export-source');
+        source.value = 'current';
+        source.dispatchEvent(new app.window.Event('change', { bubbles: true }));
+        expect(app.$('#export-text').value[empty]).toBe(EASY_SOLUTION[empty]);
     });
 
     it('appears over the grid while paused and offers to resume', () => {

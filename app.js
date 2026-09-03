@@ -9,7 +9,7 @@ import { DIFFICULTY_LABELS, BANK_SIZES } from './difficulties.js';
 import { dailyPuzzle, formatDay } from './daily.js';
 import { parseShareLink, bankLink, puzzleLink, gameLink, parseGameLink, copyToClipboard } from './share.js';
 import { candidatesFor, candidateGrid, peersOf, cellName, nextStep } from './techniques.js';
-import { formatTime, escapeHtml } from './format.js';
+import { formatTime, escapeHtml, formatPuzzle, parsePuzzleText } from './format.js';
 import { createDialogs } from './dialogs.js';
 import { applyTheme } from './theme.js';
 import * as store from './storage.js';
@@ -86,6 +86,17 @@ function loadBank() {
     const importError = document.getElementById('import-error');
     const btnModalOk = document.getElementById('btn-modal-import');
     const btnModalNo = document.getElementById('btn-modal-cancel');
+
+    const btnExport = document.getElementById('btn-export');
+    const btnPauseExport = document.getElementById('btn-pause-export');
+    const exportOverlay = document.getElementById('export-overlay');
+    const exportSource = document.getElementById('export-source');
+    const exportSourceLabel = document.getElementById('export-source-label');
+    const exportFormat = document.getElementById('export-format');
+    const exportText = document.getElementById('export-text');
+    const exportHint = document.getElementById('export-hint');
+    const btnExportCopy = document.getElementById('btn-export-copy');
+    const btnExportClose = document.getElementById('btn-export-close');
 
     const winOverlay = document.getElementById('win-overlay');
     const winDetails = document.getElementById('win-details');
@@ -978,8 +989,9 @@ function loadBank() {
 
     function doImport() {
         const raw = importText.value.trim();
-        const digits = raw.replace(/[^0-9.]/g, '');
-        if (digits.length !== 81) {
+        const board = parsePuzzleText(raw);
+        if (!board) {
+            const digits = raw.replace(/[^0-9.]/g, '');
             importText.style.borderColor = 'var(--danger)';
             setTimeout(() => importText.style.borderColor = '', 1500);
             // Say what is wrong. The border flash alone conveyed nothing to a
@@ -992,7 +1004,7 @@ function loadBank() {
             return;
         }
         if (importError) importError.textContent = '';
-        writeGrid(digits.replace(/\./g, '0'), true);
+        writeGrid(board, true);
         solved = false;
         solveTimeEl.textContent = '';
         solveTimeEl.classList.remove('visible');
@@ -1005,16 +1017,51 @@ function loadBank() {
         if (e.target === importText) return;
         if (mode === 'play') return;
         const text = (e.clipboardData || window.clipboardData).getData('text').trim();
-        const digits = text.replace(/[^0-9.]/g, '');
-        if (digits.length === 81) {
+        const board = parsePuzzleText(text);
+        if (board) {
             e.preventDefault();
-            writeGrid(digits.replace(/\./g, '0'), true);
+            writeGrid(board, true);
             solved = false;
             solveTimeEl.textContent = '';
             solveTimeEl.classList.remove('visible');
             setStatus('Puzzle pasted from clipboard');
         }
     });
+
+    // ── Export Modal ───────────────────────────────────────────────────
+    // Copies the board as text for other tools (a solver, a visualizer, a
+    // forum post). In play mode the source picker chooses between the dealt
+    // puzzle and the position as played; solver mode exports the grid as-is.
+    function exportBoard() {
+        if (mode === 'play' && currentPuzzle && exportSource.value === 'original') {
+            return currentPuzzle;
+        }
+        return readGrid();
+    }
+
+    function renderExport() {
+        exportText.value = formatPuzzle(exportBoard(), exportFormat.value);
+    }
+
+    function openExportDialog() {
+        // The source choice only means something mid-game.
+        const showSource = mode === 'play' && !!currentPuzzle;
+        exportSource.value = 'original';
+        exportSource.style.display = showSource ? '' : 'none';
+        exportSourceLabel.style.display = showSource ? '' : 'none';
+        exportHint.textContent = '';
+        renderExport();
+        dialogs.open(exportOverlay, { initialFocus: exportFormat });
+    }
+
+    async function copyExport() {
+        if (await copyToClipboard(exportText.value)) {
+            exportHint.textContent = 'Copied to clipboard.';
+        } else {
+            exportHint.textContent = 'Clipboard unavailable — select the text and copy it yourself.';
+            exportText.select();
+        }
+    }
 
     // ══════════════════════════════════════════════════════════════════
     //  PLAY MODE
@@ -1973,6 +2020,18 @@ function loadBank() {
     btnExample.addEventListener('click', loadSolverExample);
     btnPaste.addEventListener('click', openModal);
     btnClear.addEventListener('click', clearGrid);
+
+    if (btnExport) btnExport.addEventListener('click', openExportDialog);
+    if (btnPauseExport) btnPauseExport.addEventListener('click', openExportDialog);
+    if (exportFormat) exportFormat.addEventListener('change', renderExport);
+    if (exportSource) exportSource.addEventListener('change', renderExport);
+    if (btnExportCopy) btnExportCopy.addEventListener('click', copyExport);
+    if (btnExportClose) btnExportClose.addEventListener('click', () => dialogs.close(exportOverlay));
+    if (exportOverlay) {
+        exportOverlay.addEventListener('click', (e) => {
+            if (e.target === exportOverlay) dialogs.close(exportOverlay);
+        });
+    }
 
     btnNewGame.addEventListener('click', () => startGame());
     if (btnShare) {
