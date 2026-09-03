@@ -335,6 +335,13 @@ The leaderboard API includes rate limiting (5 submissions/minute per IP) and dif
 CORS_ORIGIN=https://sudoku.example.com node server.js
 ```
 
+The Docker image runs the API as the unprivileged `node` user. A data volume
+created by an older (root) image needs its ownership fixed once:
+
+```bash
+docker compose exec -u root leaderboard chown -R node:node /app/data
+```
+
 ## Deploying
 
 Two shapes of deployment, and they can be combined:

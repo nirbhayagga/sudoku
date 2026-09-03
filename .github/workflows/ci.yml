@@ -4,6 +4,10 @@ on:
   push:
   pull_request:
 
+# Read-only by default; the publish job widens its own token to push packages.
+permissions:
+  contents: read
+
 jobs:
   check:
     runs-on: ubuntu-latest

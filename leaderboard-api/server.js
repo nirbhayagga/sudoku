@@ -11,7 +11,8 @@ const DATA_FILE = process.env.DATA_FILE || path.join(__dirname, 'data', 'leaderb
 app.use(cors({
     origin: process.env.CORS_ORIGIN || '*',
 }));
-app.use(express.json());
+// A score submission is well under 1 kB; anything bigger is not a score.
+app.use(express.json({ limit: '10kb' }));
 
 // How many proxies sit in front of this process. Rate limiting is per client
 // address, and behind nginx every request arrives from nginx's own address —

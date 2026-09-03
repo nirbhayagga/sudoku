@@ -60,6 +60,11 @@ describe('GET /api/health', () => {
 });
 
 describe('POST /api/leaderboard', () => {
+    it('refuses oversized bodies — a score is under 1 kB', async () => {
+        const resp = await post(server.base, { ...validScore, name: 'x'.repeat(20000) });
+        expect(resp.status).toBe(413);
+    });
+
     it('accepts a valid score and returns its rank', async () => {
         const resp = await post(server.base, validScore);
         expect(resp.status).toBe(200);

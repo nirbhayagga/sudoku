@@ -6,6 +6,10 @@ on:
   pull_request:
   workflow_dispatch:
 
+# The default token can do far more than any job here needs.
+permissions:
+  contents: read
+
 jobs:
   audit:
     runs-on: ubuntu-latest
