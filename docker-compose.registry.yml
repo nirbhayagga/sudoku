@@ -3,16 +3,17 @@
 ##   docker compose -f docker-compose.registry.yml pull
 ##   docker compose -f docker-compose.registry.yml up -d
 ##
-## Images are published to GHCR by CI on every push to main, tagged `latest`
-## and with the commit SHA. Pin to a SHA to roll back:
-##   SUDOKU_TAG=<sha> docker compose -f docker-compose.registry.yml up -d
+## Images are published to GHCR by CI on every push to main (`latest` and the
+## commit SHA) and on release tags (`1.0.0`, `1.0`, `1`). Pin to a version or
+## SHA to roll back:
+##   SUDOKU_TAG=1.0.0 docker compose -f docker-compose.registry.yml up -d
 ##
 ## Replaces the old remote-build compose file: pulling a tested image beats
 ## rebuilding from a git URL on every deploy.
 
 services:
   sudoku:
-    image: ghcr.io/${SUDOKU_OWNER:-nirb}/sudoku:${SUDOKU_TAG:-latest}
+    image: ghcr.io/${SUDOKU_OWNER:-nirbhayagga}/sudoku:${SUDOKU_TAG:-latest}
     container_name: sudoku
     restart: unless-stopped
     depends_on:
@@ -33,7 +34,7 @@ services:
       - traefik
 
   leaderboard:
-    image: ghcr.io/${SUDOKU_OWNER:-nirb}/sudoku-leaderboard:${SUDOKU_TAG:-latest}
+    image: ghcr.io/${SUDOKU_OWNER:-nirbhayagga}/sudoku-leaderboard:${SUDOKU_TAG:-latest}
     container_name: sudoku-leaderboard
     restart: unless-stopped
     environment:
