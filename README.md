@@ -91,7 +91,7 @@ Switching from Play → Solver retains your current puzzle so you can have the s
 | **Quick paste** | Press `Ctrl+V` with an 81-character puzzle string on the clipboard. |
 | **Import modal** | Press `Ctrl+I`. Paste an 81-char string, 9 lines of 9 digits, or a grid with separators. `0` and `.` mark empty cells, and `*` `x` `_` `-` are accepted too. |
 | **Example loader** | Click Example to cycle through 5,500+ built-in puzzles. |
-| **Export** | Copy the board back out as text — one line (dots or zeros), nine rows, or a boxed grid — for another solver, a visualizer, or a forum post. While playing, the pause panel exports either the dealt puzzle or your current position. |
+| **Export** | Copy the board back out as text — one line (dots or zeros), nine rows, a boxed grid for monospace contexts, or keycap emoji that stay aligned in chat apps. While playing, the pause panel exports either the dealt puzzle or your current position. |
 
 ## Keyboard Shortcuts
 

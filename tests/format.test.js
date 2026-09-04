@@ -81,8 +81,16 @@ describe('formatPuzzle', () => {
         expect(lines[7]).toBe('------+-------+------');
     });
 
+    // Monospace alignment does not survive a messaging app's proportional
+    // font; keycap emoji are uniform-width there, which is the whole point.
+    it('renders keycap emoji for chat apps', () => {
+        const rows = formatPuzzle(BOARD, 'chat').split('\n');
+        expect(rows).toHaveLength(9);
+        expect(rows[0]).toBe('5️⃣3️⃣⬜⬜7️⃣⬜⬜⬜⬜');
+    });
+
     it('round-trips every style through parsePuzzleText', () => {
-        for (const style of ['line', 'zeros', 'rows', 'grid']) {
+        for (const style of ['line', 'zeros', 'rows', 'grid', 'chat']) {
             expect(parsePuzzleText(formatPuzzle(BOARD, style))).toBe(BOARD);
         }
     });
@@ -100,7 +108,7 @@ describe('parsePuzzleText', () => {
     });
 
     it('accepts the common empty markers', () => {
-        for (const ch of ['*', '_', '?', 'x', 'X', '-']) {
+        for (const ch of ['*', '_', '?', 'x', 'X', '-', '⬜', '⬛', '🔲']) {
             expect(parsePuzzleText(BOARD.replace(/0/g, ch))).toBe(BOARD);
         }
     });

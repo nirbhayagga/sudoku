@@ -31,7 +31,9 @@ export function escapeHtml(value) {
  *   line  - one line, dots for empties (what most solvers/visualizers accept)
  *   zeros - one line, zeros for empties
  *   rows  - nine lines of nine, dots
- *   grid  - human-readable grid with box separators
+ *   grid  - human-readable grid with box separators (needs a monospace font)
+ *   chat  - keycap-digit emoji, one row per line; emoji are uniform-width in
+ *           messaging apps, so this stays aligned where grid cannot
  * Every style round-trips through parsePuzzleText.
  */
 export function formatPuzzle(board, style = 'line') {
@@ -63,6 +65,19 @@ export function formatPuzzle(board, style = 'line') {
             }
             return lines.join('\n');
         }
+        case 'chat': {
+            const rows = [];
+            for (let r = 0; r < 9; r++) {
+                let line = '';
+                for (let c = 0; c < 9; c++) {
+                    const ch = cells[r * 9 + c];
+                    // U+FE0F U+20E3 turns a bare digit into its keycap emoji.
+                    line += ch === '0' ? '⬜' : ch + '️⃣';
+                }
+                rows.push(line);
+            }
+            return rows.join('\n');
+        }
         default:
             throw new Error(`unknown puzzle format: ${style}`);
     }
@@ -75,15 +90,21 @@ export function formatPuzzle(board, style = 'line') {
  * Two passes, strict first: the strict alphabet (digits and dots, everything
  * else is a separator) already accepts bare strings, 9x9 rows, and pretty
  * grids — including ones whose separator lines are made of dashes. Only when
- * that fails are the common empty markers (* _ ? x -) read as empties, so a
- * dash can be a separator in one paste and an empty cell in another without
- * ambiguity inside a single paste.
+ * that fails are the common empty markers (* _ ? x -, and the empty-cell
+ * emoji the chat format emits) read as empties, so a dash can be a separator
+ * in one paste and an empty cell in another without ambiguity inside a
+ * single paste. Keycap digits need no handling: the digit is their first
+ * code point and the keycap marks are stripped as separators.
  */
 export function parsePuzzleText(raw) {
     const text = String(raw ?? '');
     const strict = text.replace(/[^0-9.]/g, '');
     if (strict.length === 81) return strict.replace(/\./g, '0');
-    const relaxed = text.replace(/[*_?xX-]/g, '.').replace(/[^0-9.]/g, '');
+    // The escapes are the white/black square emoji family (U+2B1C etc.).
+    // U+FE0F must NOT be in this class — keycap digits carry it.
+    const relaxed = text
+        .replace(/[*_?xX⬜⬛◻◼▫\u{1F532}-]/gu, '.')
+        .replace(/[^0-9.]/g, '');
     if (relaxed.length === 81) return relaxed.replace(/\./g, '0');
     return null;
 }
