@@ -48,7 +48,9 @@ export function dailyPuzzle(dayKey) {
     // Parse as local, not UTC: `new Date('2026-03-01')` is midnight UTC and can
     // land on the previous day west of Greenwich.
     const [year, month, day] = dayKey.split('-').map(Number);
-    const date = new Date(year, month - 1, day);
+    const date = new Date(0);
+    date.setFullYear(year, month - 1, day);
+    date.setHours(0, 0, 0, 0);
 
     const difficulty = WEEKDAY_DIFFICULTY[date.getDay()];
     const level = (hashString(dayKey) % BANK_SIZES[difficulty]) + 1;
@@ -59,6 +61,8 @@ export function dailyPuzzle(dayKey) {
 /** Human-readable date for the status line, e.g. "Mon 2 March". */
 export function formatDay(dayKey) {
     const [year, month, day] = dayKey.split('-').map(Number);
-    const date = new Date(year, month - 1, day);
+    const date = new Date(0);
+    date.setFullYear(year, month - 1, day);
+    date.setHours(0, 0, 0, 0);
     return date.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'long' });
 }

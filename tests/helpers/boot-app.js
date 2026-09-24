@@ -20,15 +20,31 @@ let bundledApp = null;
 /** Bundle app.js and its imports into one classic script. */
 function appBundle() {
     if (bundledApp === null) {
-        const result = esbuild.buildSync({
+        bundledApp = esbuild.build({
             entryPoints: [path.join(repoRoot, 'app.js')],
             bundle: true,
             format: 'iife',
             target: ['es2020'],
             write: false,
             logLevel: 'silent',
-        });
-        bundledApp = result.outputFiles[0].text;
+            plugins: [{ name: 'inline-worker-in-jsdom', setup(build) {
+                build.onResolve({ filter: /\?worker&inline$/ }, args => ({ path: path.resolve(args.resolveDir, args.path.split('?')[0]), namespace: 'test-worker' }));
+                build.onLoad({ filter: /.*/, namespace: 'test-worker' }, async args => {
+                    const worker = await esbuild.build({ entryPoints: [args.path], bundle: true, format: 'iife', write: false });
+                    // Run the real worker module behind a queued Worker-shaped transport.
+                    // Native browsers exercise actual isolation/cancellation in Playwright.
+                    const script = JSON.stringify(worker.outputFiles[0].text);
+                    return { contents: `export default class TestWorker {
+                        constructor() {
+                            this.scope = { postMessage: data => queueMicrotask(() => { if (!this.dead) this.onmessage?.({ data }); }) };
+                            new Function('self', ${script})(this.scope);
+                        }
+                        postMessage(data) { queueMicrotask(() => { if (!this.dead) this.scope.onmessage({ data }); }); }
+                        terminate() { this.dead = true; }
+                    }`, loader: 'js' };
+                });
+            } }],
+        }).then(result => result.outputFiles[0].text);
     }
     return bundledApp;
 }
@@ -110,7 +126,7 @@ export async function bootApp({ localStorage: seed = {}, serviceWorker = null, u
         });
     }
 
-    dom.window.eval(appBundle());
+    dom.window.eval(await appBundle());
 
     const { window } = dom;
     const $ = (sel) => window.document.querySelector(sel);

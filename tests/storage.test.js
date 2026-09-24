@@ -1,6 +1,14 @@
 // @vitest-environment jsdom
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import * as store from '../storage.js';
+import { SudokuSolver } from '../solver.js';
+import { isDifficulty } from '../difficulties.js';
+
+const puzzle = '530070000600195000098000060800060003400803001700020006060000280000419005000080079';
+const gameState = () => ({
+    puzzle, userValues: puzzle, difficulty: 'easy', timerSeconds: 42,
+    notes: Array.from({ length: 81 }, () => []),
+});
 
 beforeEach(() => {
     localStorage.clear();
@@ -9,9 +17,9 @@ beforeEach(() => {
 
 describe('saved game', () => {
     it('round-trips a game state', () => {
-        const state = { puzzle: '0'.repeat(81), difficulty: 'easy', timerSeconds: 42 };
+        const state = gameState();
         expect(store.saveGameState(state)).toBe(true);
-        expect(store.loadSavedGame()).toEqual(state);
+        expect(store.loadSavedGame()).toMatchObject(state);
     });
 
     it('returns null when nothing is saved', () => {
@@ -295,5 +303,250 @@ describe('dayKey', () => {
 
     it('pads months and days', () => {
         expect(store.dayKey(new Date(2026, 8, 9))).toBe('2026-09-09');
+    });
+});
+
+describe('untrusted personal data', () => {
+    it.each(['__proto__', 'constructor', 'toString', 'hasOwnProperty', '<b>evil</b>'])('rejects difficulty %s at every storage boundary', difficulty => {
+        expect(isDifficulty(difficulty)).toBe(false);
+        expect(store.recordStart(difficulty)).toEqual({});
+        expect(store.recordWin(difficulty, 10, 0)).toEqual({});
+        expect(store.markPlayed(difficulty, 'e01')).toEqual([]);
+        store.clearPlayed(difficulty);
+        expect(store.getPlayed(difficulty)).toEqual([]);
+        expect(store.saveGameState({ ...gameState(), difficulty })).toBe(false);
+        expect(localStorage.length).toBe(0);
+        expect(Object.prototype).not.toHaveProperty('started');
+    });
+
+    it('normalizes stats and drops unexpected keys without poisoning prototypes', () => {
+        localStorage.setItem('sudoku_stats', '{"__proto__":{"started":8},"constructor":{"won":9},"easy":{"won":2,"totalTime":"oops","totalHints":-4},"evil":null}');
+        expect(store.getStats()).toEqual({ easy: {
+            started: 2, played: 0, won: 2, bestTime: null, totalTime: 0,
+            totalHints: 0, totalMistakes: 0, autoNotesGames: 0,
+        } });
+        expect(store.getSummary().won).toBe(2);
+        expect(store.recordStart('easy').easy.started).toBe(3);
+    });
+
+    it('normalizes malformed streaks, daily dates and played ids', () => {
+        localStorage.setItem('sudoku_streak', '{"current":"oops","best":-5,"lastWin":"2026-02-30"}');
+        expect(store.getStreak()).toEqual({ current: 0, best: 0, lastWin: null });
+        localStorage.setItem('sudoku_daily_done', '["2026-02-30","2024-02-29","2024-02-29",null,{}]');
+        expect(store.getDailyDone()).toEqual(['2024-02-29']);
+        expect(store.markDailyDone('2026-02-29')).toEqual(['2024-02-29']);
+        localStorage.setItem('played_easy', '["e01","e01","e500","e501","v01","__proto__",1,{}]');
+        expect(store.getPlayed('easy')).toEqual(['e01', 'e500']);
+        expect(store.markPlayed('easy', 'e01')).toEqual(['e01', 'e500']);
+    });
+
+    it('keeps counters safe at their upper bound', () => {
+        store.saveStats({ easy: { started: Number.MAX_SAFE_INTEGER, totalTime: Number.MAX_SAFE_INTEGER } });
+        store.recordStart('easy');
+        store.recordWin('easy', 3, 0);
+        expect(store.getStats().easy.started).toBe(Number.MAX_SAFE_INTEGER);
+        expect(store.getStats().easy.totalTime).toBe(Number.MAX_SAFE_INTEGER);
+    });
+
+    it('clears a theme for system mode without affecting other settings', () => {
+        store.setTheme('forest');
+        store.setPlayerName('Nirb');
+        store.clearTheme();
+        expect(store.getTheme(null)).toBeNull();
+        expect(store.getPlayerName()).toBe('Nirb');
+        store.setTheme('constructor');
+        expect(store.getTheme(null)).toBeNull();
+    });
+});
+
+describe('saved game validation', () => {
+    const load = state => {
+        localStorage.setItem('sudoku_saved_game', JSON.stringify(state));
+        return store.loadSavedGame();
+    };
+
+    it('repairs the solution and preserves valid old fields', () => {
+        const state = { ...gameState(), timestamp: 1234, level: 4, solution: '1'.repeat(81) };
+        const restored = load(state);
+        expect(restored).toMatchObject({ ...gameState(), timestamp: 1234, level: 4, mistakes: 0, autoNotesUsed: false });
+        expect(SudokuSolver.validateSolution(restored.solution)).toBe(true);
+        expect(restored.lockedCells[0]).toBe(true);
+        expect(restored.lockedCells[2]).toBe(false);
+    });
+
+    it('upgrades a pre-notes save without dropping progress or timestamps', () => {
+        const old = gameState();
+        delete old.notes;
+        old.userValues = puzzle.slice(0, 2) + '4' + puzzle.slice(3);
+        old.timestamp = 12345;
+        const restored = load(old);
+        expect(restored).toMatchObject(old);
+        expect(restored.notes).toEqual(Array.from({ length: 81 }, () => []));
+        expect(restored.lockedCells[2]).toBe(false);
+        expect(restored.autoNotes).toBe(false);
+        expect(restored.mistakes).toBe(0);
+        expect(load({ ...old, notes: null })).toBeNull();
+    });
+
+    it.each([82, Number.MAX_SAFE_INTEGER])('preserves cumulative hint counts of %s', hintsUsed => {
+        const state = { ...gameState(), hintsUsed };
+        expect(store.saveGameState(state)).toBe(true);
+        expect(store.loadSavedGame().hintsUsed).toBe(hintsUsed);
+        expect(store.restoreBackup(store.exportBackup()).success).toBe(true);
+        expect(store.loadSavedGame().hintsUsed).toBe(hintsUsed);
+    });
+
+    it('does not recompute solutions on move saves', () => {
+        const solve = vi.spyOn(SudokuSolver, 'solveSudoku');
+        expect(store.saveGameState(gameState())).toBe(true);
+        expect(solve).not.toHaveBeenCalled();
+        expect(store.loadSavedGame()).not.toBeNull();
+        expect(solve).toHaveBeenCalledTimes(1);
+    });
+
+    it.each([
+        null, [], 42, {},
+        { ...gameState(), puzzle: '1'.repeat(81), userValues: '1'.repeat(81) },
+        { ...gameState(), userValues: '0'.repeat(81) },
+        { ...gameState(), notes: [] },
+        { ...gameState(), notes: Array(81).fill(['<b>']) },
+        { ...gameState(), notes: Array(81).fill(['1', '1']) },
+        { ...gameState(), hintCells: Array(81).fill(0) },
+        { ...gameState(), lockedCells: Array(81).fill(false) },
+        { ...gameState(), timerSeconds: -1 },
+        { ...gameState(), timerSeconds: Number.MAX_SAFE_INTEGER + 1 },
+        { ...gameState(), mistakes: '2' },
+        { ...gameState(), autoNotes: 1 },
+        { ...gameState(), level: 501 },
+        { ...gameState(), daily: '2026-04-31' },
+    ])('rejects malformed save %#', state => {
+        expect(load(state)).toBeNull();
+    });
+
+    it('rejects incorrect hints but allows mistakes in editable cells', () => {
+        const wrong = { ...gameState(), userValues: puzzle.slice(0, 2) + '1' + puzzle.slice(3) };
+        expect(load(wrong)).not.toBeNull();
+        expect(load({ ...wrong, hintsUsed: 1, hintCells: Array.from({ length: 81 }, (_, i) => i === 2) })).toBeNull();
+    });
+});
+
+describe('personal backup API', () => {
+    const seed = () => {
+        store.recordStart('easy');
+        store.recordWin('easy', 80, 1, true, new Date(2026, 8, 19), 2);
+        store.setTheme('forest');
+        store.setPlayerName('Nirb');
+        store.markPlayed('easy', 'e01');
+        store.markDailyDone('2026-09-19');
+        store.saveGameState(gameState());
+    };
+    const snapshot = () => Object.fromEntries(Object.keys(localStorage).map(key => [key, localStorage.getItem(key)]));
+
+    it('round-trips all personal data and a validated saved game', () => {
+        seed();
+        const backup = store.exportBackup();
+        expect(typeof backup).toBe('string');
+        localStorage.clear();
+        localStorage.setItem('unrelated', 'keep');
+        expect(store.restoreBackup(backup)).toEqual({ success: true });
+        expect(store.exportBackup()).toEqual(backup);
+        expect(localStorage.getItem('unrelated')).toBe('keep');
+    });
+
+    it('can omit a game, and distinguishes omission from an explicit clear', () => {
+        seed();
+        const backup = store.exportBackup({ includeSavedGame: false });
+        const original = localStorage.getItem('sudoku_saved_game');
+        expect(store.restoreBackup(backup).success).toBe(true);
+        expect(localStorage.getItem('sudoku_saved_game')).toBe(original);
+        const parsed = JSON.parse(backup);
+        parsed.savedGame = null;
+        parsed.settings.theme = null;
+        expect(store.restoreBackup(JSON.stringify(parsed)).success).toBe(true);
+        expect(store.loadSavedGame()).toBeNull();
+        expect(store.getTheme(null)).toBeNull();
+    });
+
+    it.each([
+        data => { data.version = 2; },
+        data => { data.stats = { constructor: { started: 5 } }; },
+        data => { data.settings.theme = '__proto__'; },
+        data => { data.settings.playerName = 42; },
+        data => { data.played.easy = ['__proto__']; },
+        data => { data.streak.current = -1; },
+        data => { data.dailyDone = ['2026-02-30']; },
+        data => { data.savedGame.userValues = '0'.repeat(81); },
+    ])('validates the whole backup before any writes %#', corrupt => {
+        seed();
+        const backup = JSON.parse(store.exportBackup());
+        corrupt(backup);
+        const before = snapshot();
+        const write = vi.spyOn(Storage.prototype, 'setItem');
+        const remove = vi.spyOn(Storage.prototype, 'removeItem');
+        expect(store.restoreBackup(JSON.stringify(backup)).success).toBe(false);
+        expect(write).not.toHaveBeenCalled();
+        expect(remove).not.toHaveBeenCalled();
+        expect(snapshot()).toEqual(before);
+    });
+
+    it('rejects malformed JSON and missing required sections', () => {
+        expect(store.restoreBackup('{{').success).toBe(false);
+        expect(store.restoreBackup('{}').success).toBe(false);
+        expect(store.restoreBackup(null).success).toBe(false);
+        expect(store.restoreBackup('{"format":"sudoku-backup","version":1}').success).toBe(false);
+    });
+
+    it('restores the old data after a partial write fails', () => {
+        seed();
+        const backup = store.exportBackup();
+        localStorage.clear();
+        store.setTheme('dark');
+        const before = snapshot();
+        const setItem = Storage.prototype.setItem;
+        let calls = 0;
+        vi.spyOn(Storage.prototype, 'setItem').mockImplementation(function (key, value) {
+            if (++calls === 5) throw new Error('quota');
+            return setItem.call(this, key, value);
+        });
+        expect(store.restoreBackup(backup)).toMatchObject({ success: false, rollbackFailed: false });
+        expect(snapshot()).toEqual(before);
+    });
+
+    it('reports rollback failure explicitly', () => {
+        seed();
+        const backup = store.exportBackup();
+        vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('quota'); });
+        expect(store.restoreBackup(backup)).toMatchObject({ success: false, rollbackFailed: true });
+    });
+
+    it('reports unreadable storage rather than exporting an empty backup', () => {
+        vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => { throw new Error('denied'); });
+        expect(() => store.exportBackup()).toThrow();
+    });
+
+    it('reports a settings-only read failure instead of silently defaulting it', () => {
+        seed();
+        const getItem = Storage.prototype.getItem;
+        vi.spyOn(Storage.prototype, 'getItem').mockImplementation(function (key) {
+            if (key === 'sudoku-theme') throw new Error('denied');
+            return getItem.call(this, key);
+        });
+        expect(() => store.exportBackup()).toThrow();
+    });
+
+    it('does not write when the rollback snapshot cannot be read', () => {
+        seed();
+        const backup = store.exportBackup();
+        const write = vi.spyOn(Storage.prototype, 'setItem');
+        vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => { throw new Error('denied'); });
+        expect(store.restoreBackup(backup).success).toBe(false);
+        expect(write).not.toHaveBeenCalled();
+    });
+
+    it('can recover personal data while excluding a corrupt save', () => {
+        seed();
+        localStorage.setItem('sudoku_saved_game', '{}');
+        expect(() => store.exportBackup()).toThrow();
+        expect(typeof store.exportBackup({ includeSavedGame: false })).toBe('string');
     });
 });

@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import {
-    audit, parseThemes, parseColor, contrastRatio, adjustForContrast, AA_THRESHOLD,
+    audit, parseThemes, parseColor, contrastRatio, adjustForContrast, AA_THRESHOLD, resolveToken,
 } from '../scripts/check-contrast.js';
 import { repoRoot } from './helpers/paths.js';
 
@@ -12,14 +12,14 @@ const themes = parseThemes(css);
 describe('theme contrast', () => {
     // Every theme failed this before it was measured: --text-muted was as low
     // as 2.09:1, and the two light themes failed across several tokens.
-    it('meets WCAG AA on every text token in every theme', () => {
+    it('meets AA for modeled text and solid surfaces in every theme', () => {
         const failures = audit(css).map(
             (f) => `${f.theme} ${f.token} ${f.ratio.toFixed(2)}:1`
         );
         expect(failures).toEqual([]);
     });
 
-    it('covers all seven themes', () => {
+    it('covers all ten themes', () => {
         expect(Object.keys(themes).sort()).toEqual(
             ['arctic', 'dark', 'forest', 'light', 'matcha', 'midnight', 'ocean', 'peony', 'sakura', 'vino']
         );
@@ -91,5 +91,18 @@ describe('adjustForContrast', () => {
         const background = [10, 10, 15];
         const already = [255, 255, 255];
         expect(adjustForContrast(already, background)).toBe('#ffffff');
+    });
+});
+
+
+describe('modeled cell states', () => {
+    it('resolves entry aliases and rejects alias cycles', () => {
+        expect(resolveToken({ '--entry': 'var(--ink)', '--ink': '#123456' }, '--entry')).toBe('#123456');
+        expect(resolveToken({ '--entry': 'var(--ink)', '--ink': 'var(--entry)' }, '--entry')).toBeNull();
+    });
+
+    it('detects unreadable notes on selected cells independently of page contrast', () => {
+        const changed = css.replace('--bg-cell-focus: #dbe7fb;', '--bg-cell-focus: #4b5563;');
+        expect(audit(changed).some(f => f.theme === 'light' && f.token === '--text-note' && f.surface === 'cell selected')).toBe(true);
     });
 });

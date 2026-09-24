@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { SudokuSolver } from '../solver.js';
 
 /**
  * Short screens, where the layout has to scroll.
@@ -9,9 +10,8 @@ import { test, expect } from '@playwright/test';
  * unreachable — the page could not be scrolled at all, because a touchmove
  * handler was cancelling every drag.
  *
- * Driven through Chromium, since WebKit needs system libraries CI does not
- * always have. Viewport and touch behaviour reproduce; iOS-specific dvh
- * behaviour does not, so a real device is still the final word.
+ * Layout runs in Chromium and WebKit. Only native drag injection requires
+ * Chromium CDP; actual iOS toolbar and keyboard behavior still needs a device.
  */
 const SCREENS = [
     { name: 'iPhone SE, toolbars showing', width: 375, height: 553 },
@@ -56,7 +56,9 @@ for (const screen of SCREENS) {
             const overflows = await page.evaluate(
                 () => document.documentElement.scrollHeight > window.innerHeight
             );
-            if (overflows) await touchDrag(context, page, screen.width, screen.height);
+            if (overflows && browser.browserType().name() === 'chromium') {
+                await touchDrag(context, page, screen.width, screen.height);
+            }
 
             // Reachable means "some scroll position shows it fully" — not
             // "everything fits at once", which is impossible on a short screen
@@ -65,7 +67,7 @@ for (const screen of SCREENS) {
                 const settle = () => new Promise((r) => setTimeout(r, 120));
                 const out = [];
 
-                for (const id of ['btn-new-game', 'btn-daily', 'btn-hint', 'btn-check', 'btn-reset', 'btn-share']) {
+                for (const id of ['btn-new-game', 'btn-random', 'btn-daily', 'btn-hint', 'btn-check', 'btn-reset', 'btn-share']) {
                     const el = document.getElementById(id);
                     if (!el || getComputedStyle(el).display === 'none') continue;
 
@@ -84,9 +86,43 @@ for (const screen of SCREENS) {
             await context.close();
         });
 
+        test('Random, update, System and backup controls fit and remain reachable', async ({ browser }) => {
+            const context = await browser.newContext({
+                viewport: { width: screen.width, height: screen.height },
+                hasTouch: true, isMobile: true,
+            });
+            const page = await context.newPage();
+            await page.goto('/');
+            await page.locator('#btn-update').evaluate(el => { el.style.display = ''; });
+            await page.evaluate(() => window.dispatchEvent(new Event('resize')));
+            async function reachable(selector) {
+                const el = page.locator(selector);
+                await expect(el).toBeVisible();
+                await el.scrollIntoViewIfNeeded();
+                const box = await el.boundingBox();
+                expect(box.x, selector).toBeGreaterThanOrEqual(-1);
+                expect(box.x + box.width, selector).toBeLessThanOrEqual(screen.width + 1);
+                expect(box.y, selector).toBeGreaterThanOrEqual(-1);
+                expect(box.y + box.height, selector).toBeLessThanOrEqual(screen.height + 1);
+            }
+            await reachable('#btn-random');
+            await reachable('#btn-update');
+            await page.locator('#theme-toggle').click();
+            await reachable('.theme-option[data-theme="system"]');
+            await reachable('.theme-option[data-theme="vino"]');
+            await page.locator('.theme-option[data-theme="system"]').click();
+            await page.locator('#btn-stats').click();
+            for (const id of ['btn-backup', 'btn-restore', 'btn-stats-reset', 'btn-stats-close']) {
+                await reachable(`#${id}`);
+            }
+            expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
+            await context.close();
+        });
+
         // Cancelling touchmove to stop rubber-banding also cancels scrolling.
         // overscroll-behavior does the former without the latter.
         test('a touch drag actually scrolls when content overflows', async ({ browser }) => {
+            test.skip(browser.browserType().name() !== 'chromium', 'Native drag injection uses Chromium CDP; WebKit still checks layout and reachable controls.');
             const context = await browser.newContext({
                 viewport: { width: screen.width, height: screen.height },
                 hasTouch: true, isMobile: true, deviceScaleFactor: 3,
@@ -254,6 +290,7 @@ test.describe('setup controls fold while playing', () => {
     });
 
     test('setup returns after a win', async ({ browser }) => {
+        test.slow(); // Enter every missing digit through real touch controls.
         const context = await browser.newContext({ viewport: { width: 393, height: 664 }, hasTouch: true, isMobile: true });
         const page = await context.newPage();
         await page.goto('/');
@@ -261,21 +298,17 @@ test.describe('setup controls fold while playing', () => {
         await page.locator('#btn-new-game').click();
         await page.locator('.cell-wrapper.locked').first().waitFor();
 
-        // Fill the board from the solution the page already derived.
-        await page.evaluate(async () => {
-            const inputs = [...document.querySelectorAll('.cell-input')];
-            for (let i = 0; i < 81; i++) {
-                if (inputs[i].readOnly) continue;
-                inputs[i].focus();
-                inputs[i].value = window.__solutionForTest ? window.__solutionForTest[i] : '';
-                inputs[i].dispatchEvent(new Event('input', { bubbles: true }));
-            }
-        });
-
-        // Regardless of whether the fill completed, opening setup must work.
-        await page.locator('#btn-setup-toggle').click().catch(() => {});
-        await page.waitForTimeout(200);
-        await expect(page.locator('#difficulty-selector')).toBeVisible();
+        const inputs = page.locator('.cell-input');
+        const board = await inputs.evaluateAll(cells => cells.map(el => el.value || '0').join(''));
+        const { solution } = SudokuSolver.solveSudoku(board);
+        expect(solution).toHaveLength(81);
+        for (let i = 0; i < 81; i++) {
+            if (board[i] !== '0') continue;
+            await inputs.nth(i).tap();
+            await page.locator(`.numpad-btn[data-digit="${solution[i]}"]`).tap();
+        }
+        await expect(page.locator('#win-overlay')).toHaveClass(/active/);
+        await expect(page.locator('#setup-controls')).toBeVisible();
         await context.close();
     });
 });

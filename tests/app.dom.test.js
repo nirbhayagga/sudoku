@@ -53,8 +53,8 @@ describe('initial render', () => {
     });
 
     it('labels cells for screen readers by row and column', () => {
-        expect(app.inputs()[0].getAttribute('aria-label')).toBe('Row 1, Column 1');
-        expect(app.inputs()[80].getAttribute('aria-label')).toBe('Row 9, Column 9');
+        expect(app.inputs()[0].getAttribute('aria-label')).toMatch(/^Row 1, Column 1/);
+        expect(app.inputs()[80].getAttribute('aria-label')).toMatch(/^Row 9, Column 9/);
     });
 
     it('starts in play mode', () => {
@@ -214,7 +214,7 @@ describe('play mode', () => {
 
     it('reports the difficulty and clue count', () => {
         const clues = EASY_PUZZLE.replace(/0/g, '').length;
-        expect(app.$('#status').textContent).toBe(`Easy — ${clues} clues`);
+        expect(app.$('#status').textContent).toBe(`Easy #1 — ${clues} clues`);
     });
 
     it('accepts a digit in an empty cell', () => {
@@ -325,6 +325,7 @@ describe('hints', () => {
 
     it('fills a cell with its correct value', () => {
         app.click('#btn-hint');
+        app.click('#btn-hint');
         const hinted = app.cells().findIndex((c) => c.classList.contains('hint'));
         expect(hinted).toBeGreaterThanOrEqual(0);
         expect(app.inputs()[hinted].value).toBe(EASY_SOLUTION[hinted]);
@@ -332,18 +333,19 @@ describe('hints', () => {
 
     it('only ever fills empty cells', () => {
         app.click('#btn-hint');
+        app.click('#btn-hint');
         const hinted = app.cells().findIndex((c) => c.classList.contains('hint'));
         expect(EASY_PUZZLE[hinted]).toBe('0');
     });
 
     it('counts hints towards the win summary', () => {
-        // With a cell selected each press reveals immediately, so two presses
-        // are two hints. Deselected, a press only nudges — see the scoring
-        // tests in the hints suite.
+        // Each selected cell gets a free preview followed by a counted reveal.
         const empty = [...Array(81).keys()].filter((i) => EASY_PUZZLE[i] === '0');
         app.inputs()[empty[0]].focus();
         app.click('#btn-hint');
+        app.click('#btn-hint');
         app.inputs()[empty[1]].focus();
+        app.click('#btn-hint');
         app.click('#btn-hint');
 
         completePuzzle(app);
@@ -474,8 +476,9 @@ describe('continuing on another device', () => {
         harness.type(noted, '5');
         harness.click('#btn-notes-toggle');
 
-        // A focused cell is revealed straight away.
+        // Preview, then confirm the answer for the focused cell.
         harness.$$('.cell-input')[hinted].focus();
+        harness.click('#btn-hint');
         harness.click('#btn-hint');
 
         clock.advance(65_000);
@@ -502,7 +505,10 @@ describe('continuing on another device', () => {
         expect(app.$('#share-title').textContent).toBe('Continue on another device');
         expect(app.$('#btn-pause').textContent).toBe('Resume');
 
-        // Deleted at hand-off, and a flush afterwards must not bring it back.
+        // Clipboard fallback keeps recovery until the user confirms copying.
+        expect(app.window.localStorage.getItem('sudoku_saved_game')).not.toBeNull();
+        app.click('#btn-handoff-confirm');
+        // Confirmed hand-off must not be saved again on pagehide.
         expect(app.window.localStorage.getItem('sudoku_saved_game')).toBeNull();
         app.window.dispatchEvent(new app.window.Event('pagehide'));
         expect(app.window.localStorage.getItem('sudoku_saved_game')).toBeNull();
@@ -810,7 +816,7 @@ describe('themes', () => {
      */
     it('applies the same rule inline before first paint', () => {
         const html = fs.readFileSync(path.join(repoRoot, 'index.html'), 'utf8');
-        const inline = html.match(/<script>([\s\S]*?)<\/script>/)[1];
+        const inline = html.split('<script>')[1].split('</script>')[0];
         expect(inline).toContain("localStorage.getItem('sudoku-theme')");
         expect(inline).toContain('(prefers-color-scheme: dark)');
         expect(inline).toContain("setAttribute('data-theme'");
@@ -1383,7 +1389,7 @@ describe('theme dropdown', () => {
     it('offers every theme', () => {
         const themes = app.$$('.theme-option').map((b) => b.dataset.theme);
         expect(themes).toEqual([
-            'light', 'sakura', 'arctic', 'peony', 'matcha', 'dark', 'midnight', 'ocean', 'forest', 'vino',
+            'system', 'light', 'sakura', 'arctic', 'peony', 'matcha', 'dark', 'midnight', 'ocean', 'forest', 'vino',
         ]);
     });
 
@@ -1679,6 +1685,7 @@ describe('auto-notes', () => {
         it('recomputes after a hint', () => {
             app.click('#btn-auto-notes');
             app.click('#btn-hint');
+            app.click('#btn-hint');
             const hinted = app.cells().findIndex((c) => c.classList.contains('hint'));
             expect(notesOf(app, hinted)).toEqual([]);
         });
@@ -1726,7 +1733,7 @@ describe('auto-notes', () => {
         it('is reported in the win summary', () => {
             app.click('#btn-auto-notes');
             completePuzzle(app);
-            expect(app.$('#win-details').textContent).toMatch(/auto-notes used/i);
+            expect(app.$('#win-details').textContent).toMatch(/generated notes used/i);
         });
 
         it('is not reported when it was never used', () => {
@@ -1746,7 +1753,7 @@ describe('auto-notes', () => {
             app.click('#btn-auto-notes');
             app.click('#btn-auto-notes');
             completePuzzle(app);
-            expect(app.$('#win-details').textContent).toMatch(/auto-notes used/i);
+            expect(app.$('#win-details').textContent).toMatch(/generated notes used/i);
         });
 
         it('survives save and resume', async () => {
@@ -2080,11 +2087,11 @@ describe('hints', () => {
 
         it('relabels the button so the next press is obvious', () => {
             deselect();
-            expect(app.$('#btn-hint').textContent).toBe('Hint');
+            expect(app.$('#btn-hint').textContent).toBe('Hint (free)');
             app.click('#btn-hint');
-            expect(app.$('#btn-hint').textContent).toBe('Reveal');
+            expect(app.$('#btn-hint').textContent).toBe('Reveal (+1 hint)');
             app.click('#btn-hint');
-            expect(app.$('#btn-hint').textContent).toBe('Hint');
+            expect(app.$('#btn-hint').textContent).toBe('Hint (free)');
         });
 
         // The deduction may not survive a change, so a stale nudge must go.
@@ -2097,7 +2104,7 @@ describe('hints', () => {
             app.type(empty, EASY_SOLUTION[empty]);
 
             expect(app.$$('.cell-wrapper.hint-target')).toHaveLength(0);
-            expect(app.$('#btn-hint').textContent).toBe('Hint');
+            expect(app.$('#btn-hint').textContent).toBe('Hint (free)');
         });
 
         it('drops it on undo too', () => {
@@ -2146,6 +2153,7 @@ describe('hints', () => {
             const target = empty[empty.length - 1]; // deliberately not the first
 
             app.inputs()[target].focus();
+            app.click('#btn-hint');
             app.click('#btn-hint');
 
             expect(hintedIndex()).toBe(target);
@@ -2210,6 +2218,7 @@ describe('hints', () => {
 
             app.document.activeElement.blur();
             app.click('#btn-hint');
+            expect(app.$('#status').textContent).toContain('prevents reliable reasoning');
             app.click('#btn-hint');
 
             const idx = hintedIndex();
@@ -2228,9 +2237,14 @@ describe('hints', () => {
         });
     });
 
-    it('reveals immediately for a selected cell, with no nudge step', () => {
+    it('previews a selected-cell answer without revealing or counting a hint', () => {
         const empty = [...Array(81).keys()].filter((i) => EASY_PUZZLE[i] === '0');
         app.inputs()[empty[3]].focus();
+        app.click('#btn-hint');
+        expect(hintedIndex()).toBe(-1);
+        expect(app.readGrid()).toBe(EASY_PUZZLE);
+        expect(app.$('#status').textContent).toMatch(/Answer preview — free/);
+        expect(app.$('#btn-hint').textContent).toBe('Reveal (+1 hint)');
         app.click('#btn-hint');
         expect(hintedIndex()).toBe(empty[3]);
     });

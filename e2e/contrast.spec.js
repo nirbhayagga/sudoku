@@ -7,11 +7,13 @@ import { test, expect } from '@playwright/test';
  * as good as the surface pairings it knows about. It passed while the
  * leaderboard tabs failed in a real browser, because those sit on
  * --bg-secondary and the script only compared against --bg-primary. This runs
- * the same rule the browser does, over the real DOM, and needs no such list.
+ * computed solid layers over the real DOM. Gradients, shadows, backdrop blur
+ * and pseudo-elements are not sampled; this is a regression check, not a
+ * complete WCAG certification.
  */
 const THEMES = ['light', 'dark', 'midnight', 'sakura', 'ocean', 'forest', 'arctic', 'peony', 'matcha', 'vino'];
 
-/** Every visible text node whose contrast falls under the WCAG AA threshold. */
+/** Visible text nodes and form values below AA against computed solid layers. */
 async function contrastFailures(page) {
     return page.evaluate(() => {
         const luminance = ([r, g, b]) => {
@@ -58,10 +60,15 @@ async function contrastFailures(page) {
         }
 
         const failures = [];
-        for (const element of document.querySelectorAll('*')) {
+        // A modal covers and tints the page; its backdrop is not an ancestor
+        // of the board and therefore cannot be composited by this checker.
+        const root = document.querySelector('.modal-overlay.active, .win-overlay.active') || document;
+        for (const element of root.querySelectorAll('*')) {
             const hasText = [...element.childNodes]
                 .some((n) => n.nodeType === Node.TEXT_NODE && n.textContent.trim());
-            if (!hasText) continue;
+            const value = element.matches('input, textarea') ? element.value : '';
+            if (!hasText && !value) continue;
+            if (element.closest('.visually-hidden')) continue;
 
             // Hidden anywhere up the tree counts as hidden: the overlays are
             // dismissed with opacity, not display, so their contents are laid
@@ -95,7 +102,7 @@ async function contrastFailures(page) {
             if (measured < required) {
                 failures.push(
                     `${element.tagName.toLowerCase()}${element.id ? '#' + element.id : ''} `
-                    + `"${element.textContent.trim().slice(0, 20)}" `
+                    + `"${(value || element.textContent).trim().slice(0, 20)}" `
                     + `${measured.toFixed(2)} < ${required}`
                 );
             }
@@ -105,12 +112,18 @@ async function contrastFailures(page) {
 }
 
 for (const theme of THEMES) {
-    test(`${theme} meets WCAG AA as rendered`, async ({ page }) => {
+    test(`${theme} populated controls and states pass solid-layer contrast`, async ({ page }, testInfo) => {
+        testInfo.annotations.push({ type: 'coverage', description: 'Computed solid backgrounds; gradients, blur and pseudo-elements require visual review.' });
+        await page.emulateMedia({ reducedMotion: 'reduce' });
         await page.goto('/');
         await page.evaluate((name) => {
             localStorage.setItem('sudoku-theme', name);
         }, theme);
         await page.reload();
+        await page.locator('#btn-update').evaluate(el => { el.style.display = ''; });
+        await page.locator('#theme-toggle').click();
+        expect(await contrastFailures(page), 'theme picker and update notice').toEqual([]);
+        await page.locator('#theme-toggle').click();
 
         // Play state has the most on screen: locked givens, status, controls.
         await page.locator('.diff-btn[data-diff="easy"]').click();
@@ -118,11 +131,46 @@ for (const theme of THEMES) {
         await page.locator('#btn-new-game').click();
         await expect(page.locator('.cell-wrapper.locked').first()).toBeVisible();
 
-        expect(await contrastFailures(page)).toEqual([]);
+        // State fixtures deliberately exercise CSS combinations independently of
+        // the solving logic (real input/hint/resume flows live in play.spec.js).
+        await page.evaluate(() => {
+            const cells = [...document.querySelectorAll('.cell-wrapper')];
+            const states = ['', 'given', 'focused', 'hint', 'user-error', 'conflict', 'solved', 'digit-highlight', 'peer-highlight', 'hint-evidence'];
+            states.forEach((state, i) => {
+                cells[i].className = `cell-wrapper ${state}`;
+                cells[i].querySelector('input').value = String(i % 9 + 1);
+                const noteCell = cells[i + 18];
+                noteCell.className = `cell-wrapper ${state}`;
+                noteCell.querySelector('input').value = '';
+                noteCell.querySelectorAll('.note-digit').forEach(el => el.classList.add('visible'));
+            });
+        });
+        await page.mouse.move(0, 0);
+        expect(await contrastFailures(page), 'board values and visible notes').toEqual([]);
+
+        // Use the actual dialog markup with representative populated content.
+        // This avoids an optional backend or a full win becoming prerequisites
+        // for checking every theme's dialog surfaces.
+        for (const id of ['modal-overlay', 'generator-overlay', 'export-overlay', 'stats-overlay', 'leaderboard-overlay', 'win-overlay', 'share-overlay']) {
+            await page.evaluate((id) => {
+                const overlay = document.getElementById(id);
+                overlay.classList.add('active');
+                overlay.querySelectorAll('input:not([type="file"]), textarea').forEach(el => { el.value = '123456789'; });
+                if (id === 'modal-overlay') document.getElementById('import-error').textContent = 'Expected 81 cells.';
+                if (id === 'win-overlay') {
+                    document.getElementById('win-details').textContent = 'Easy · 1:23 · 2 hints';
+                    document.getElementById('win-submit').style.display = '';
+                }
+                if (id === 'leaderboard-overlay') document.getElementById('leaderboard-content').innerHTML = '<table class="lb-table"><thead><tr><th>Player</th><th>Time</th></tr></thead><tbody><tr><td>Player One</td><td>1:23</td></tr></tbody></table>';
+                if (id === 'stats-overlay') document.getElementById('stats-content').innerHTML = '<table class="stats-table"><thead><tr><th>Difficulty</th><th>Won</th></tr></thead><tbody><tr><td>Easy</td><td>12</td></tr></tbody></table>';
+            }, id);
+            expect(await contrastFailures(page), id).toEqual([]);
+            await page.locator(`#${id}`).evaluate(el => el.classList.remove('active'));
+        }
     });
 }
 
-test('the landing state meets WCAG AA', async ({ page }) => {
+test('the landing state passes solid-layer contrast', async ({ page }) => {
     // Lighthouse audits the page as loaded, before any game starts — a
     // different set of controls is on screen than in play.
     await page.goto('/');
@@ -130,7 +178,7 @@ test('the landing state meets WCAG AA', async ({ page }) => {
     expect(await contrastFailures(page)).toEqual([]);
 });
 
-test('dialogs meet WCAG AA too', async ({ page }) => {
+test('the stats dialog passes solid-layer contrast', async ({ page }) => {
     await page.goto('/');
     await page.locator('#btn-stats').click();
     await expect(page.locator('#stats-overlay')).toHaveClass(/active/);

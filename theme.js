@@ -16,7 +16,7 @@
  * neither a saved nor a system theme flashes the :root defaults; that script
  * and this module must agree.
  */
-import { setTheme } from './storage.js';
+import { setTheme, clearTheme } from './storage.js';
 
 /** The theme the system asks for, when nothing has been chosen. */
 export function systemTheme() {
@@ -38,13 +38,17 @@ export const THEME_COLORS = {
 };
 
 /**
- * Apply a theme and remember it.
+ * Apply a selection and optionally remember it. System (including unknown
+ * names) clears the preference so future OS changes remain effective.
+ * Dropdown state describes the selection, while the return value describes
+ * the concrete light/dark theme rendered for System.
  *
  * @param {string} theme
  * @param {{dropdown?: Element, persist?: boolean}} [options]
  */
 export function applyTheme(theme, { dropdown, persist = true } = {}) {
-    const name = THEME_COLORS[theme] ? theme : systemTheme();
+    const selection = Object.hasOwn(THEME_COLORS, theme) ? theme : 'system';
+    const name = selection === 'system' ? systemTheme() : selection;
 
     // Always set, even for midnight, whose values live on :root and would apply
     // without it — an unknown name is what must never be left standing.
@@ -55,10 +59,15 @@ export function applyTheme(theme, { dropdown, persist = true } = {}) {
 
     if (dropdown) {
         dropdown.querySelectorAll('.theme-option').forEach((option) => {
-            option.classList.toggle('active', option.dataset.theme === name);
+            const active = option.dataset.theme === selection;
+            option.classList.toggle('active', active);
+            option.setAttribute('aria-pressed', String(active));
         });
     }
 
-    if (persist) setTheme(name);
+    if (persist) {
+        if (selection === 'system') clearTheme();
+        else setTheme(selection);
+    }
     return name;
 }

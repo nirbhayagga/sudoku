@@ -154,7 +154,7 @@ describe('copyToClipboard', () => {
 });
 
 describe('game links', () => {
-    const puzzle = '53007000060019500009800006080006000340080300170002000606000028000041900500080079'.padEnd(81, '0').slice(0, 81);
+    const puzzle = '530070000600195000098000060800060003400803001700020006060000280000419005000080079';
     const state = () => ({
         puzzle,
         userValues: puzzle.replace(/0/, '4'),
@@ -232,11 +232,64 @@ describe('game links', () => {
         expect(parseGameLink(tweak('x', 'insane'))).toBeNull();
         expect(parseGameLink(tweak('l', '999999'))).toBeNull();
         expect(parseGameLink(tweak('t', '-5'))).toBeNull();
-        expect(parseGameLink(tweak('t', '99999999'))).toBeNull();
-        expect(parseGameLink(tweak('k', '82'))).toBeNull();
+        expect(parseGameLink(tweak('t', '9007199254740992'))).toBeNull();
+        expect(parseGameLink(tweak('k', '9007199254740992'))).toBeNull();
         expect(parseGameLink(tweak('n', 'not-base64!'))).toBeNull();
         expect(parseGameLink(tweak('n', 'AAAA'))).toBeNull();
         expect(parseGameLink(tweak('day', '29/08/2026'))).toBeNull();
         expect(parseGameLink(tweak('n', null))).not.toBeNull();
+    });
+});
+
+describe('untrusted share inputs', () => {
+    it.each(['constructor', '__proto__', 'toString'])('rejects inherited difficulty %s', difficulty => {
+        expect(parseShareLink(`?d=${difficulty}&level=1`)).toBeNull();
+        expect(() => bankLink(ORIGIN, difficulty, 1)).toThrow(TypeError);
+        expect(parseGameLink(`?g=1&x=${difficulty}&b=${'0'.repeat(81)}&v=${'0'.repeat(81)}`)).toBeNull();
+    });
+
+    it.each(['2026-02-29', '2026-04-31', '1900-02-29', '2026-00-10', '2026-01-00', '0000-01-01'])('rejects impossible date %s', day => {
+        expect(parseShareLink(`?daily=${day}`)).toBeNull();
+        expect(() => dailyLink(ORIGIN, day)).toThrow(TypeError);
+    });
+
+    it('accepts actual leap days', () => {
+        expect(parseShareLink('?daily=2000-02-29')).toEqual({ kind: 'daily', dayKey: '2000-02-29' });
+    });
+
+    const puzzle = '530070000600195000098000060800060003400803001700020006060000280000419005000080079';
+    const state = () => ({
+        puzzle, userValues: puzzle, difficulty: 'easy', notes: Array.from({ length: 81 }, () => []),
+        timerSeconds: 86401, mistakes: 1000,
+    });
+
+    it.each([82, 86401, 99999999, Number.MAX_SAFE_INTEGER])('round-trips safe large time/mistake/hint counters %s', value => {
+        const parsed = parseGameLink(new URL(gameLink(ORIGIN, { ...state(), timerSeconds: value, mistakes: value, hintsUsed: value })).search);
+        expect(parsed).toMatchObject({ timerSeconds: value, mistakes: value, hintsUsed: value });
+    });
+
+    it('refuses to build links that cannot be resumed', () => {
+        for (const invalid of [
+            { ...state(), timerSeconds: -1 }, { ...state(), mistakes: Number.MAX_SAFE_INTEGER + 1 },
+            { ...state(), difficulty: '__proto__' }, { ...state(), userValues: '0'.repeat(81) },
+            { ...state(), puzzle: '1'.repeat(81), userValues: '1'.repeat(81) },
+        ]) expect(() => gameLink(ORIGIN, invalid)).toThrow(TypeError);
+    });
+
+    it('rejects bad flags, dates, duplicate parameters, and incorrect hints', () => {
+        const url = new URL(gameLink(ORIGIN, state()));
+        for (const [key, value] of [['a', 'true'], ['u', '2'], ['day', '2026-02-30'], ['t', '1e2'], ['m', ''], ['t', '1.5']]) {
+            const params = new URLSearchParams(url.search);
+            params.set(key, value);
+            expect(parseGameLink(`?${params}`)).toBeNull();
+        }
+        expect(parseGameLink(url.search + '&x=hard')).toBeNull();
+        const hinted = {
+            ...state(), userValues: puzzle.slice(0, 2) + '4' + puzzle.slice(3), hintsUsed: 1,
+            hintCells: Array.from({ length: 81 }, (_, i) => i === 2),
+        };
+        const badHint = new URL(gameLink(ORIGIN, hinted));
+        badHint.searchParams.set('v', puzzle.slice(0, 2) + '1' + puzzle.slice(3));
+        expect(parseGameLink(badHint.search)).toBeNull();
     });
 });

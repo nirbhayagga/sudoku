@@ -29,3 +29,10 @@ export const BANK_SIZES = {
     evil: 500,
     nightmare: 3000,
 };
+
+/** Accept only published difficulty keys, never inherited object properties. */
+export const isDifficulty = (value) => typeof value === 'string' && Object.hasOwn(BANK_SIZES, value);
+
+// Imported games have their own statistics, never a bank tier or leaderboard.
+export const GAME_LABELS = { ...DIFFICULTY_LABELS, imported: 'Imported' };
+export const isGameDifficulty = value => isDifficulty(value) || value === 'imported';

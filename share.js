@@ -20,22 +20,21 @@
  * link's (`d`, `p`, `daily`) so parseShareLink never mistakes one for a bank
  * puzzle; callers check for a game link first.
  */
-import { BANK_SIZES } from './difficulties.js';
-
-const DAY_KEY = /^\d{4}-\d{2}-\d{2}$/;
+import { BANK_SIZES, isDifficulty, isGameDifficulty } from './difficulties.js';
+import { isCalendarDay, validateGameState } from './storage.js';
 
 /** Parse a shared puzzle out of a URL. Returns null when there is nothing to load. */
 export function parseShareLink(search) {
     const params = new URLSearchParams(search || '');
 
     const daily = params.get('daily');
-    if (daily && /^\d{4}-\d{2}-\d{2}$/.test(daily)) {
+    if (isCalendarDay(daily)) {
         return { kind: 'daily', dayKey: daily };
     }
 
     const difficulty = params.get('d');
     const level = Number(params.get('level'));
-    if (difficulty && BANK_SIZES[difficulty]) {
+    if (isDifficulty(difficulty)) {
         if (Number.isInteger(level) && level >= 1 && level <= BANK_SIZES[difficulty]) {
             return { kind: 'bank', difficulty, level };
         }
@@ -46,7 +45,7 @@ export function parseShareLink(search) {
     const puzzle = params.get('p');
     if (puzzle) {
         const board = puzzle.replace(/[.\s]/g, '0');
-        if (/^[0-9]{81}$/.test(board)) return { kind: 'puzzle', puzzle: board };
+        if (/^[0-9]{81}$/.test(board)) return { kind: 'puzzle', puzzle: board, ...(params.get('play') === '1' ? { play: true } : {}) };
     }
 
     return null;
@@ -54,6 +53,7 @@ export function parseShareLink(search) {
 
 /** Build a link for a bank puzzle. */
 export function bankLink(origin, difficulty, level) {
+    if (!isDifficulty(difficulty) || (level != null && (!Number.isInteger(level) || level < 1 || level > BANK_SIZES[difficulty]))) throw new TypeError('Invalid bank puzzle.');
     const url = new URL(origin);
     url.search = '';
     url.searchParams.set('d', difficulty);
@@ -62,15 +62,18 @@ export function bankLink(origin, difficulty, level) {
 }
 
 /** Build a link for an arbitrary board. */
-export function puzzleLink(origin, board) {
+export function puzzleLink(origin, board, { play = false } = {}) {
+    if (typeof board !== 'string' || !/^[0-9]{81}$/.test(board)) throw new TypeError('Invalid puzzle.');
     const url = new URL(origin);
     url.search = '';
     url.searchParams.set('p', board);
+    if (play) url.searchParams.set('play', '1');
     return url.toString();
 }
 
 /** Build a link for a day's puzzle. */
 export function dailyLink(origin, dayKey) {
+    if (!isCalendarDay(dayKey)) throw new TypeError('Invalid calendar day.');
     const url = new URL(origin);
     url.search = '';
     url.searchParams.set('daily', dayKey);
@@ -96,7 +99,7 @@ export async function copyToClipboard(text) {
 // ── Game-in-progress links ─────────────────────────────────────────────
 
 const GAME_LINK_VERSION = '1';
-const MAX_TIME_SECONDS = 24 * 60 * 60;
+const MAX_TIME_SECONDS = Number.MAX_SAFE_INTEGER;
 
 /** Pack an array of booleans into base64url, eight to a byte. */
 function packBits(bits) {
@@ -118,7 +121,8 @@ function unpackBits(text, count) {
         return null;
     }
     if (binary.length !== Math.ceil(count / 8)) return null;
-    return Array.from({ length: count }, (_, i) => (binary.charCodeAt(i >> 3) >> (i & 7)) & 1 ? true : false);
+    const bits = Array.from({ length: count }, (_, i) => (binary.charCodeAt(i >> 3) >> (i & 7)) & 1 ? true : false);
+    return packBits(bits) === text ? bits : null;
 }
 
 const DIGITS = ['1', '2', '3', '4', '5', '6', '7', '8', '9'];
@@ -133,6 +137,8 @@ const DIGITS = ['1', '2', '3', '4', '5', '6', '7', '8', '9'];
  * on arrival, which also means a tampered board cannot smuggle a wrong one.
  */
 export function gameLink(origin, state) {
+    state = validateGameState(state);
+    if (!state) throw new TypeError('Invalid saved game.');
     const url = new URL(origin);
     url.search = '';
     const set = (key, value) => url.searchParams.set(key, String(value));
@@ -151,7 +157,7 @@ export function gameLink(origin, state) {
     const hintCells = state.hintCells || [];
     if (hintCells.some(Boolean)) set('h', packBits(Array.from({ length: 81 }, (_, i) => Boolean(hintCells[i]))));
 
-    set('t', Math.max(0, Math.floor(state.timerSeconds || 0)));
+    set('t', state.timerSeconds);
     if (state.hintsUsed) set('k', state.hintsUsed);
     if (state.mistakes) set('m', state.mistakes);
     set('x', state.difficulty);
@@ -170,6 +176,10 @@ export function gameLink(origin, state) {
 export function parseGameLink(search) {
     const params = new URLSearchParams(search || '');
     if (params.get('g') !== GAME_LINK_VERSION) return null;
+    if ([...params.keys()].some(key => params.getAll(key).length !== 1)) return null;
+    for (const key of ['a', 'u']) {
+        if (params.has(key) && !['0', '1'].includes(params.get(key))) return null;
+    }
 
     const puzzle = params.get('b') || '';
     const userValues = params.get('v') || '';
@@ -180,7 +190,7 @@ export function parseGameLink(search) {
     }
 
     const difficulty = params.get('x');
-    if (!BANK_SIZES[difficulty]) return null;
+    if (!isGameDifficulty(difficulty)) return null;
 
     const noteBits = params.has('n') ? unpackBits(params.get('n'), 81 * 9) : new Array(81 * 9).fill(false);
     const hintCells = params.has('h') ? unpackBits(params.get('h'), 81) : new Array(81).fill(false);
@@ -188,13 +198,14 @@ export function parseGameLink(search) {
 
     const bounded = (key, max) => {
         if (!params.has(key)) return 0;
+        if (!/^(0|[1-9][0-9]*)$/.test(params.get(key))) return null;
         const n = Number(params.get(key));
-        if (!Number.isInteger(n) || n < 0 || n > max) return null;
+        if (!Number.isSafeInteger(n) || n < 0 || n > max) return null;
         return n;
     };
     const timerSeconds = bounded('t', MAX_TIME_SECONDS);
-    const hintsUsed = bounded('k', 81);
-    const mistakes = bounded('m', 999);
+    const hintsUsed = bounded('k', Number.MAX_SAFE_INTEGER);
+    const mistakes = bounded('m', Number.MAX_SAFE_INTEGER);
     if (timerSeconds === null || hintsUsed === null || mistakes === null) return null;
 
     let level = null;
@@ -204,9 +215,9 @@ export function parseGameLink(search) {
     }
 
     const daily = params.get('day');
-    if (daily && !DAY_KEY.test(daily)) return null;
+    if (params.has('day') && !isCalendarDay(daily)) return null;
 
-    return {
+    return validateGameState({
         puzzle,
         userValues,
         notes: Array.from({ length: 81 }, (_, i) => DIGITS.filter((_, d) => noteBits[i * 9 + d])),
@@ -221,5 +232,5 @@ export function parseGameLink(search) {
         daily: daily || null,
         autoNotes: params.get('a') === '1',
         autoNotesUsed: params.get('u') === '1',
-    };
+    });
 }

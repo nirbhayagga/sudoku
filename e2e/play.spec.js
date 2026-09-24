@@ -46,7 +46,7 @@ test.describe('playing', () => {
         expect(given).toBeGreaterThan(20);
 
         const empty = page.locator('.cell-wrapper:not(.locked) .cell-input').first();
-        if (testInfo.project.name === 'mobile') {
+        if (testInfo.project.use.isMobile) {
             await empty.click();
             await page.locator('.numpad-btn[data-digit="5"]').click();
         } else {
@@ -67,7 +67,7 @@ test.describe('playing', () => {
         for (const i of [0, 1]) {
             const cell = row.nth(i);
             await cell.locator('.cell-input').click();
-            if (testInfo.project.name === 'mobile') {
+            if (testInfo.project.use.isMobile) {
                 await page.locator('.numpad-btn[data-digit="9"]').click();
             } else {
                 await page.keyboard.press('9');
@@ -86,10 +86,11 @@ test.describe('playing', () => {
     test('reveals a hint for the cell you pick', async ({ page }) => {
         await startGame(page);
 
-        // Selecting a cell asks for the answer there, so it reveals on one
-        // press. With nothing selected the first press only nudges, which is
-        // covered separately below.
+        // The preview is free even with a selected cell; only confirmation fills.
         await page.locator('.cell-wrapper:not(.locked)').first().click();
+        await page.locator('#btn-hint').click();
+        await expect(page.locator('.cell-wrapper.hint')).toHaveCount(0);
+        await expect(page.locator('#btn-hint')).toHaveText('Reveal (+1 hint)');
         await page.locator('#btn-hint').click();
 
         await expect(page.locator('.cell-wrapper.hint')).toHaveCount(1);
@@ -131,7 +132,7 @@ test.describe('explaining hints', () => {
         await page.locator('#btn-hint').click();
 
         await expect(page.locator('.cell-wrapper.hint-target')).toHaveCount(1);
-        await expect(page.locator('#btn-hint')).toHaveText('Reveal');
+        await expect(page.locator('#btn-hint')).toHaveText('Reveal (+1 hint)');
 
         // The dimming is CSS, so only a real browser can confirm it applied.
         // Polled rather than sampled once: opacity is transitioned, so an
@@ -146,10 +147,50 @@ test.describe('explaining hints', () => {
 
         await page.locator('#btn-hint').click();
         await expect(page.locator('.cell-wrapper.hint')).toHaveCount(1);
-        await expect(page.locator('#btn-hint')).toHaveText('Hint');
+        await expect(page.locator('#btn-hint')).toHaveText('Hint (free)');
 
         await expect
             .poll(async () => Number(await dimmed.evaluate((el) => getComputedStyle(el).opacity)))
             .toBe(1);
     });
+});
+
+test('System follows the OS and explicit selections stay pinned', async ({ page }) => {
+    await page.emulateMedia({ colorScheme: 'dark' });
+    await page.goto('/');
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+    await page.locator('#theme-toggle').click();
+    const system = page.locator('.theme-option[data-theme="system"]');
+    await expect(system).toHaveAttribute('aria-pressed', 'true');
+    await page.locator('.theme-option[data-theme="light"]').click();
+    await page.emulateMedia({ colorScheme: 'light' });
+    await page.emulateMedia({ colorScheme: 'dark' });
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+    await page.locator('#theme-toggle').click();
+    await system.click();
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+    expect(await page.evaluate(() => localStorage.getItem('sudoku-theme'))).toBeNull();
+    await page.emulateMedia({ colorScheme: 'light' });
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+    await page.reload();
+    await page.locator('#theme-toggle').click();
+    await expect(system).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('.theme-option.active')).toHaveCount(1);
+});
+
+test('reduced motion covers controls, dialogs and the paused timer', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await startGame(page);
+    await page.locator('#btn-pause').click();
+    const motion = await page.locator('#game-timer, .cell-wrapper, .modal, .btn, .mode-indicator').evaluateAll(elements =>
+        elements.map(el => {
+            const s = getComputedStyle(el);
+            return { animation: parseFloat(s.animationDuration), transition: parseFloat(s.transitionDuration), iterations: s.animationIterationCount };
+        })
+    );
+    for (const state of motion) {
+        expect(state.animation).toBeLessThanOrEqual(0.00001);
+        expect(state.transition).toBeLessThanOrEqual(0.00001);
+        expect(state.iterations).not.toBe('infinite');
+    }
 });

@@ -27,13 +27,13 @@ export function escapeHtml(value) {
 }
 
 /**
- * Render an 81-char board (0 or . = empty) in one of four text styles:
+ * Render an 81-char board (0 or . = empty) in one of five text styles:
  *   line  - one line, dots for empties (what most solvers/visualizers accept)
  *   zeros - one line, zeros for empties
  *   rows  - nine lines of nine, dots
  *   grid  - human-readable grid with box separators (needs a monospace font)
- *   chat  - keycap-digit emoji, one row per line; emoji are uniform-width in
- *           messaging apps, so this stays aligned where grid cannot
+ *   chat  - keycap-digit emoji, one row per line; intended for messaging apps;
+ *           exact alignment and wrapping depend on the destination
  * Every style round-trips through parsePuzzleText.
  */
 export function formatPuzzle(board, style = 'line') {

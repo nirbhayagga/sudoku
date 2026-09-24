@@ -25,8 +25,8 @@ export const AA_THRESHOLD = 4.5;
  * This script models the surface a control sits on by compositing the layers it
  * knows about, which is an approximation — the browser has the real stack,
  * including tints this file cannot see. Fixing to exactly 4.5 lands a hair
- * under once rendered. The margin absorbs that; e2e/contrast.spec.js measures
- * the real DOM and is the authority.
+ * under once rendered. The margin absorbs that; e2e/contrast.spec.js also checks computed solid layers in the real DOM.
+ * Neither check samples gradients, pseudo-elements or backdrop filters.
  */
 const FIX_TARGET = 5.0;
 
@@ -41,8 +41,7 @@ const FIX_TARGET = 5.0;
 const TEXT_TOKENS = [
     '--text-primary', '--text-secondary', '--text-muted', '--text-note',
     '--text-given', '--text-solved', '--text-error', '--text-conflict',
-    // Player-typed digits; only checked in themes that override it, since its
-    // default is var(--text-primary), which parseColor skips.
+    // Player-typed digits, resolving the default --text-primary alias too.
     '--text-entry',
     // Used on the hint button and in win messaging respectively; both were
     // missed on the first pass simply because they are not named --text-*.
@@ -68,7 +67,7 @@ const SURFACE_TOKENS = ['--bg-primary', '--bg-secondary'];
  * reported everything clear.
  *
  * To re-measure after changing any surface colour, run the contrast e2e spec —
- * it computes the same values from the real DOM and is the authority.
+ * it computes solid layers from the real DOM; gradients still need visual review.
  */
 /**
  * Pairs where the foreground is fixed rather than a token — a button label on
@@ -109,6 +108,14 @@ function readVars(block) {
 }
 
 /** Parse hex or rgb()/rgba(), compositing alpha over `over` when present. */
+export function resolveToken(vars, token, seen = new Set()) {
+    if (seen.has(token)) return null;
+    seen.add(token);
+    const value = vars[token];
+    const alias = /^var\((--[a-z-]+)\)$/.exec(value || '');
+    return alias ? resolveToken(vars, alias[1], seen) : value;
+}
+
 export function parseColor(value, over) {
     const text = String(value).trim();
 
@@ -158,13 +165,37 @@ export function audit(css, threshold = AA_THRESHOLD) {
             if (!background) continue;
 
             for (const token of TEXT_TOKENS) {
-                const foreground = parseColor(vars[token], background);
+                const foreground = parseColor(resolveToken(vars, token), background);
                 if (!foreground) continue;
 
                 const ratio = contrastRatio(foreground, background);
                 if (ratio < threshold) {
-                    failures.push({ theme, token, surface: surfaceToken, ratio, color: vars[token] });
+                    failures.push({ theme, token, surface: surfaceToken, ratio, color: resolveToken(vars, token) });
                 }
+            }
+        }
+
+        // Cells sit over the grid, which itself sits over the card. Model the
+        // solid layers, including selected/error/hint states and visible notes.
+        const page = parseColor(vars['--bg-primary']);
+        const card = parseColor(vars['--bg-card'], page);
+        const grid = parseColor(vars['--border-subtle'], card);
+        const states = [
+            ['normal', vars['--bg-cell'], '--text-entry'],
+            ['selected', vars['--bg-cell-focus'], '--text-entry'],
+            ['given', vars['--bg-cell-given'], '--text-given'],
+            ['solved', vars['--bg-cell-solved'], '--text-solved'],
+            ['hint', 'rgba(245, 158, 11, 0.08)', '--text-hint'],
+            ['error', 'rgba(239, 68, 68, 0.08)', '--text-error'],
+            ['conflict', 'rgba(251, 146, 60, 0.12)', '--text-conflict'],
+            ['highlight', 'rgba(99, 102, 241, 0.18)', '--text-entry'],
+        ];
+        for (const [state, surface, text] of states) {
+            const background = parseColor(surface, grid);
+            for (const token of [text, '--text-note']) {
+                const foreground = parseColor(resolveToken(vars, token), background);
+                const ratio = contrastRatio(foreground, background);
+                if (ratio < threshold) failures.push({ theme, token, surface: `cell ${state}`, ratio, color: resolveToken(vars, token), background });
             }
         }
 
@@ -228,7 +259,7 @@ function hslToRgb([h, s, l]) {
 export function adjustForContrast(color, background, threshold = AA_THRESHOLD) {
     const [h, s, l] = rgbToHsl(color);
     // Move away from the background: darken on light, lighten on dark.
-    const direction = relativeLuminance(background) > 0.5 ? -1 : 1;
+    const direction = contrastRatio([0, 0, 0], background) > contrastRatio([255, 255, 255], background) ? -1 : 1;
 
     for (let step = 0; step <= 100; step++) {
         const candidate = hslToRgb([h, s, Math.max(0, Math.min(1, l + direction * step / 100))]);
@@ -246,7 +277,7 @@ function main() {
     const failures = audit(css);
 
     if (failures.length === 0) {
-        console.log('All themes meet WCAG AA (4.5:1).');
+        console.log('All modeled solid-layer text pairs meet 4.5:1. Gradients, blur and pseudo-elements need visual review.');
         return;
     }
 
@@ -255,9 +286,9 @@ function main() {
 
     for (const failure of failures) {
         const control = /^control (\d)$/.exec(failure.surface || '');
-        const background = control
+        const background = failure.background || (control
             ? parseColor(CONTROL_SURFACES[failure.theme][Number(control[1]) - 1])
-            : parseColor(themes[failure.theme][failure.surface || '--bg-primary']);
+            : parseColor(themes[failure.theme][failure.surface || '--bg-primary']));
         const current = parseColor(failure.color, background);
         const replacement = adjustForContrast(current, background, FIX_TARGET);
         const after = contrastRatio(parseColor(replacement), background);

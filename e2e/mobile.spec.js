@@ -1,4 +1,5 @@
-import { test, expect, devices } from '@playwright/test';
+import { test, expect } from '@playwright/test';
+import { SudokuSolver } from '../solver.js';
 
 /**
  * The touch path is a separate branch through app.js: cells are readOnly with
@@ -6,7 +7,9 @@ import { test, expect, devices } from '@playwright/test';
  * the on-screen numpad. jsdom reports no touch support, so none of this is
  * reachable there.
  */
-test.use({ ...devices['Pixel 5'] });
+test.beforeEach(({ isMobile }) => {
+    test.skip(!isMobile, 'Touch input requires a mobile project; desktop input is covered in play.spec.js.');
+});
 
 test.describe('touch input', () => {
     test.beforeEach(async ({ page }) => {
@@ -40,6 +43,8 @@ test.describe('touch input', () => {
         const empty = page.locator('.cell-wrapper:not(.locked)').first();
         await empty.tap();
         await page.locator('.numpad-btn[data-digit="7"]').tap();
+        // Entering advances selection; explicitly return to the digit to erase.
+        await empty.tap();
         await page.locator('.numpad-erase').tap();
         await expect(empty.locator('.cell-input')).toHaveValue('');
     });
@@ -63,9 +68,16 @@ test.describe('touch input', () => {
     });
 
     test('greys out a digit once it is fully placed', async ({ page }) => {
-        // Not asserting which digit — only that the mechanism runs at all.
-        const completed = page.locator('.numpad-btn.completed');
-        expect(await completed.count()).toBeGreaterThanOrEqual(0);
+        const inputs = page.locator('.cell-input');
+        const board = await inputs.evaluateAll(cells => cells.map(el => el.value || '0').join(''));
+        const { solution } = SudokuSolver.solveSudoku(board);
+        const digit = solution[board.indexOf('0')];
+        for (let i = 0; i < 81; i++) {
+            if (board[i] !== '0' || solution[i] !== digit) continue;
+            await inputs.nth(i).tap();
+            await page.locator(`.numpad-btn[data-digit="${digit}"]`).tap();
+        }
+        await expect(page.locator(`.numpad-btn[data-digit="${digit}"]`)).toHaveClass(/completed/);
     });
 });
 

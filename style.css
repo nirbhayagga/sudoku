@@ -60,6 +60,7 @@
        the body text colour; a theme that wants entries to stand apart from
        givens overrides just this. */
     --text-entry: var(--text-primary);
+    --entry-weight: 500;
     --text-solved: #6ee7b7;
     --text-error: #f87171;
     --text-hint: #fbbf24;
@@ -137,12 +138,12 @@ body::before {
     --text-primary: #3d1520;
     --text-secondary: #7a4a5c;
     --text-muted: #6c4857;
-    --text-given: #9e144e;
-    --text-solved: #045f43;
-    --text-error: #a11534;
-    --text-hint: #7b4303;
-    --text-note: #7a4a5c;
-    --text-conflict: #973908;
+    --text-given: #8c1245;
+    --text-solved: #04553c;
+    --text-error: #8f132e;
+    --text-hint: #6c3b03;
+    --text-note: #5d3946;
+    --text-conflict: #7f3007;
     --accent: #ec4899;
     --accent-text: #9f1156;
     --accent-surface: #ec4899;
@@ -260,12 +261,12 @@ body::before {
     --text-primary: #1a2340;
     --text-secondary: #3d4e72;
     --text-muted: #47556f;
-    --text-given: #4338ca;
-    --text-solved: #045f43;
-    --text-error: #a51b1b;
-    --text-hint: #804604;
-    --text-note: #455580;
-    --text-conflict: #8e3607;
+    --text-given: #382fb0;
+    --text-solved: #035039;
+    --text-error: #8b1717;
+    --text-hint: #6c3b03;
+    --text-note: #333f5f;
+    --text-conflict: #7b2f06;
     --accent: #6366f1;
     --accent-text: #2b2feb;
     --accent-surface: #5e61f1;
@@ -305,11 +306,11 @@ body::before {
     --text-secondary: #55626e;
     --text-muted: #5e6b77;
     --text-given: #1f2a35;
-    --text-entry: #8e4750;
+    --text-entry: #763b43;
     --text-solved: #4e6034;
     --text-error: #9c2f42;
     --text-hint: #7a4e10;
-    --text-note: #55626e;
+    --text-note: #45505a;
     --text-conflict: #8f3d10;
     --accent: #b46a72;
     --accent-text: #8e4750;
@@ -347,11 +348,11 @@ body::before {
     --text-secondary: #565647;
     --text-muted: #5f5f4f;
     --text-given: #262620;
-    --text-entry: #575527;
+    --text-entry: #4c4b22;
     --text-solved: #465521;
     --text-error: #a02c3f;
     --text-hint: #7a4e10;
-    --text-note: #565647;
+    --text-note: #4b4b3e;
     --text-conflict: #8f3d10;
     --accent: #928e5e;
     --accent-text: #63603a;
@@ -437,6 +438,8 @@ body::before {
     --text-secondary: #4b5563;
     --text-muted: #5b6470;
     --text-given: #0f172a;
+    --text-entry: #1944bd;
+    --entry-weight: 400;
     --text-solved: #166534;
     --text-error: #b91c1c;
     --text-hint: #92400e;
@@ -478,10 +481,12 @@ body::before {
     --text-secondary: #a3a8b0;
     --text-muted: #8e949c;
     --text-given: #f5f6f7;
+    --text-entry: #9bc2ff;
+    --entry-weight: 400;
     --text-solved: #4ade80;
-    --text-error: #f87171;
+    --text-error: #f98989;
     --text-hint: #fbbf24;
-    --text-note: #a3a8b0;
+    --text-note: #b1b5bc;
     --text-conflict: #fb923c;
     --accent: #3b82f6;
     --accent-text: #7cb0ff;
@@ -539,6 +544,8 @@ body::before {
     border-radius: var(--radius);
     padding: 0.4rem;
     min-width: 170px;
+    max-height: 65dvh;
+    overflow-y: auto;
     box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
     animation: dropIn 0.15s ease-out;
 }
@@ -696,6 +703,11 @@ body::before {
     transform: translateX(100%);
 }
 
+/* The board is measured before it is interactive. Keep its layout space while
+   loading, but show the fitted board once instead of a shrinking empty grid. */
+.is-loading .card, .is-loading .shortcuts { visibility: hidden; }
+.loading-status { position: absolute; top: 45%; color: var(--text-secondary); }
+
 /* ── Main Card ────────────────────────────────────────────────────── */
 .card {
     background: var(--bg-card);
@@ -850,7 +862,7 @@ body::before {
     text-align: center;
     font-family: 'JetBrains Mono', 'Inter', monospace;
     font-size: 1.3rem;
-    font-weight: 500;
+    font-weight: var(--entry-weight);
     color: var(--text-entry);
     caret-color: transparent;
     cursor: inherit;
@@ -1152,6 +1164,8 @@ body::before {
 /* ── Status Bar ───────────────────────────────────────────────────── */
 .status-bar {
     display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
     justify-content: space-between;
     align-items: center;
     margin-top: 1rem;
@@ -1164,6 +1178,7 @@ body::before {
 
 .status-right {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 0.75rem;
 }
@@ -1222,6 +1237,7 @@ body::before {
 
 /* ── Modals ────────────────────────────────────────────────────────── */
 .modal-overlay {
+    visibility: hidden;
     position: fixed;
     inset: 0;
     background: rgba(0, 0, 0, 0.6);
@@ -1236,6 +1252,7 @@ body::before {
 }
 
 .modal-overlay.active {
+    visibility: visible;
     opacity: 1;
     pointer-events: all;
 }
@@ -1333,6 +1350,7 @@ body::before {
 
 .modal-actions {
     display: flex;
+    flex-wrap: wrap;
     gap: 0.5rem;
     justify-content: flex-end;
     margin-top: 1rem;
@@ -1389,6 +1407,7 @@ body::before {
 
 /* ── Win Overlay ──────────────────────────────────────────────────── */
 .win-overlay {
+    visibility: hidden;
     position: fixed;
     inset: 0;
     background: rgba(0, 0, 0, 0.7);
@@ -1403,6 +1422,7 @@ body::before {
 }
 
 .win-overlay.active {
+    visibility: visible;
     opacity: 1;
     pointer-events: all;
 }
@@ -1858,9 +1878,13 @@ kbd {
         touch-action: manipulation;
     }
 
-    /* Keyboard shortcuts section hidden on touch */
+    /* Notes is already beside Erase on the touch numpad. Avoid a duplicate
+       toggle so Fill notes and Auto-notes fit beside the game actions. */
+    #btn-notes-toggle { display: none; }
+
+    /* Keep the collapsed shortcut disclosure available for external keyboards. */
     .shortcuts {
-        display: none;
+        margin-top: 0.35rem;
     }
 
     /* Fit the viewport where possible, but never clamp the document: a fixed
@@ -2213,7 +2237,7 @@ kbd {
     }
 
     .shortcuts {
-        display: none;
+        margin-top: 0.35rem;
     }
 }
 
@@ -2240,7 +2264,9 @@ kbd {
     }
 
     .numpad-btn {
-        height: 34px;
+        /* Keep the digit targets usable even with Safari's toolbars showing;
+           fitBoard measures this space and reduces the board if necessary. */
+        height: 40px;
     }
 
     .btn {
@@ -2469,3 +2495,68 @@ kbd {
 .btn-setup-toggle {
     align-self: center;
 }
+
+/* Respect reduced motion across dialogs, grid effects, timers and controls. */
+.print-options { margin-top: 1rem; color: var(--text-secondary); }
+.print-options summary { cursor: pointer; }
+.print-options label { display: block; margin-top: 0.75rem; }
+.print-options select, .print-options input[type="number"], #generator-overlay select, #generator-overlay input {
+    padding: 0.5rem; max-width: 100%; background: var(--bg-secondary);
+    color: var(--text-primary); border: 1px solid var(--border-subtle); border-radius: 0.4rem;
+}
+.print-options button { margin-top: 0.75rem; }
+#win-puzzle { color: var(--text-primary); font-weight: 600; margin: 0.5rem 0; }
+#win-review-hint { color: var(--text-secondary); font-size: 0.85rem; margin: 1rem 0; }
+#print-area { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+}
+
+@media print {
+    @page { size: auto; margin: 12mm; }
+    html, body { background: white !important; color: black !important; padding: 0 !important; margin: 0 !important; display: block !important; overflow: visible !important; height: auto !important; min-height: 0 !important; }
+    body > :not(#print-area), body::before, body::after { display: none !important; }
+    #print-area { display: block !important; font-family: Arial, sans-serif; color: black; }
+    .worksheet-page { width: min(100%, 186mm); height: 240mm; break-after: page; break-inside: avoid; }
+    .worksheet-page:last-child { break-after: auto; }
+    .worksheet-page h1 { font-size: 16pt; font-weight: 600; color: black; background: none; -webkit-text-fill-color: black; margin: 0 0 6mm; }
+    .worksheet-page h2 { font-size: 10pt; color: black; margin: 0 0 3mm; font-weight: normal; }
+    .worksheet-boards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8mm; align-items: start; }
+    .worksheet-boards article { break-inside: avoid; }
+    .worksheet-grid { display: grid; grid-template-columns: repeat(9, 1fr); aspect-ratio: 1; border: 1.5pt solid black; width: 100%; }
+    .worksheet-grid span { display: flex; align-items: center; justify-content: center; border-right: 0.4pt solid black; border-bottom: 0.4pt solid black; font-size: 15pt; }
+    .worksheet-grid span:nth-child(3n) { border-right-width: 1.5pt; }
+    .worksheet-grid span:nth-child(9n) { border-right: 0; }
+    .worksheet-grid span:nth-child(n+19):nth-child(-n+27), .worksheet-grid span:nth-child(n+46):nth-child(-n+54) { border-bottom-width: 1.5pt; }
+    .worksheet-grid span:nth-child(n+73) { border-bottom: 0; }
+    .worksheet-1 .worksheet-boards { grid-template-columns: minmax(0, 165mm); }
+    .worksheet-1 .worksheet-grid span { font-size: 23pt; }
+    .worksheet-2 .worksheet-boards { grid-template-columns: minmax(0, 100mm); justify-content: center; }
+    .worksheet-6 .worksheet-boards { grid-template-columns: repeat(2, minmax(0, 60mm)); justify-content: space-between; }
+    .worksheet-6 .worksheet-grid span { font-size: 12pt; }
+}
+
+
+/* Proofs and generation use the same readable surfaces as other dialogs. */
+.hint-details { width: 100%; color: var(--text-secondary); font-size: 0.875rem; }
+.hint-details[hidden], #generator-result[hidden], #generator-clue-fields[hidden], #generator-max-field[hidden], #btn-generator-cancel[hidden] { display: none; }
+.hint-details summary, .generator-advanced summary { cursor: pointer; color: var(--text-primary); padding: 0.6rem 0; }
+.hint-details ol, .hint-details ul { padding-left: 1.4rem; }
+.hint-details p { margin: 0.4rem 0; }
+.hint-details li { overflow-wrap: anywhere; margin-bottom: 0.5rem; }
+.generator-fields, .generator-advanced { display: grid; gap: 0.5rem; }
+.generator-advanced:not([open]) { display: block; }
+#generator-overlay input, #generator-overlay select { width: 100%; box-sizing: border-box; }
+#generator-clue-fields label, #generator-max-field label { display: block; margin: 0.5rem 0; }
+.generator-preview { display: grid; grid-template-columns: repeat(9, 1fr); width: min(100%, 288px); margin: 1rem auto; border: 2px solid var(--text-primary); }
+.generator-preview span { aspect-ratio: 1; display: grid; place-items: center; color: var(--text-primary); background: var(--bg-secondary); border-right: 1px solid var(--text-muted); border-bottom: 1px solid var(--text-muted); font-variant-numeric: tabular-nums; }
+.generator-preview span:nth-child(3n) { border-right: 2px solid var(--text-primary); }
+.generator-preview span:nth-child(9n) { border-right: 0; }
+.generator-preview span:nth-child(n+19):nth-child(-n+27), .generator-preview span:nth-child(n+46):nth-child(-n+54) { border-bottom: 2px solid var(--text-primary); }
+.generator-preview span:nth-child(n+73) { border-bottom: 0; }

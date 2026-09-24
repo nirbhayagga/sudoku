@@ -9,7 +9,8 @@ import path from 'node:path';
  * Vite writes `<script type="module" crossorigin>`, and browsers refuse to load
  * ES modules over file:// — which would have cost this project its "just open
  * index.html" property. Building the bundle as a single IIFE and then stripping
- * the module attributes gives a classic script that works either way; served
+ * the module attributes gives a classic script. Preserve deferred execution so
+ * the head script waits for the controls to exist. Served
  * over HTTP nothing changes.
  */
 function classicScriptOutput() {
@@ -19,7 +20,7 @@ function classicScriptOutput() {
         apply: 'build',
         transformIndexHtml(html) {
             return html
-                .replace(/\s+type="module"/g, '')
+                .replace(/\s+type="module"/g, ' defer')
                 .replace(/\s+crossorigin/g, '');
         },
     };
@@ -53,7 +54,7 @@ function sameOriginAssets() {
  * the finished directory means new icons or static files are picked up with no
  * change here.
  *
- * The file list doubles as the cache version, so a rebuild that changes nothing
+ * The file names and contents determine the cache version, so an unchanged rebuild
  * produces an identical service worker and clients are not churned needlessly.
  */
 function pwa() {
@@ -84,16 +85,26 @@ function pwa() {
                 .map((f) => `./${f}`);
 
             const precache = ['./', ...files];
-            const version = createHash('sha256')
-                .update(precache.join('|'))
-                .digest('hex')
-                .slice(0, 12);
+            const hash = createHash('sha256');
+            for (const file of ['index.html', ...files.map((f) => f.slice(2))]) {
+                const bytes = fs.readFileSync(path.join(outDir, file));
+                hash.update(JSON.stringify([file, bytes.length])).update(bytes);
+            }
+            const version = hash.digest('hex').slice(0, 12);
+            const html = fs.readFileSync(path.join(outDir, 'index.html'), 'utf8');
+            const entryTag = html.match(/<script\b[^>]*\bsrc="([^"<>]+\.js)"[^>]*>/);
+            const entry = entryTag?.[1];
+            const entryType = entryTag?.[0].match(/\btype="([^"]*)"/)?.[1] || '';
+            if (!['', 'module'].includes(entryType)) throw new Error('Unsupported PWA entry script type');
+            if (!entry || !files.includes(entry)) throw new Error('PWA entry script is missing from precache');
 
             const template = fs.readFileSync(path.resolve('sw-template.js'), 'utf8');
             fs.writeFileSync(
                 path.join(outDir, 'sw.js'),
                 template
-                    .replace('__CACHE_VERSION__', `sudoku-${version}`)
+                    .replace('__CACHE_VERSION__', version)
+                    .replace('__ENTRY_ASSET__', entry)
+                    .replace('__ENTRY_TYPE__', entryType)
                     .replace('__PRECACHE_MANIFEST__', JSON.stringify(precache, null, 4))
             );
         },
@@ -181,12 +192,12 @@ return {
     // filesystem.
     base: './',
 
-    // The standalone build is for file://, where service workers do not exist,
-    // so it ships none. Its script must stay a classic script.
+    // Standalone keeps its classic script for file://; its worker is used only
+    // when served over HTTP(S), where app registration is enabled.
     // siteUrl applies to both targets: a self-hosted or standalone copy should
     // not advertise the public site as its canonical URL either.
     plugins: standalone
-        ? [injectApiBase(), siteUrl(), classicScriptOutput()]
+        ? [injectApiBase(), siteUrl(), classicScriptOutput(), pwa()]
         : [injectApiBase(), siteUrl(), sameOriginAssets(), pwa()],
 
     server: {
@@ -209,13 +220,20 @@ return {
         // guard is the gzipped payload budget asserted in tests/build.test.js.
         chunkSizeWarningLimit: 900,
         cssCodeSplit: false,
+        // The single classic bundle has no module chunks to preload.
+        modulePreload: !standalone,
         // Single self-contained IIFE — see classicScriptOutput above.
-        rollupOptions: {
+        rolldownOptions: {
+            // Vite 8 still injects its preload helper with modulePreload:false.
+            // All imports are inlined here, so its module metadata is unused.
+            // Rolldown documents this transform for non-ESM output; keep it
+            // standalone-only rather than hiding EMPTY_IMPORT_META warnings.
+            transform: standalone ? { define: { 'import.meta': '{}' } } : undefined,
             output: {
                 // iife cannot code-split, so dynamic imports are inlined back
                 // into the single file — which is exactly what standalone wants.
                 format: standalone ? 'iife' : 'es',
-                inlineDynamicImports: standalone,
+                codeSplitting: !standalone,
                 entryFileNames: 'assets/[name].[hash].js',
                 chunkFileNames: 'assets/[name].[hash].js',
                 assetFileNames: 'assets/[name].[hash].[ext]',

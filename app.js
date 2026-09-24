@@ -5,15 +5,18 @@
  */
 import { SudokuSolver } from './solver.js';
 import { SudokuGenerator } from './generator.js';
-import { DIFFICULTY_LABELS, BANK_SIZES } from './difficulties.js';
+import { DIFFICULTY_LABELS, GAME_LABELS, BANK_SIZES, isDifficulty } from './difficulties.js';
 import { dailyPuzzle, formatDay } from './daily.js';
 import { parseShareLink, bankLink, puzzleLink, gameLink, parseGameLink, copyToClipboard } from './share.js';
-import { candidatesFor, candidateGrid, peersOf, cellName, nextStep } from './techniques.js';
+import { candidatesFor, candidateGrid, peersOf, cellName, findNakedSingle, findHiddenSingle } from './techniques.js';
 import { formatTime, escapeHtml, formatPuzzle, parsePuzzleText } from './format.js';
 import { createDialogs } from './dialogs.js';
-import { applyTheme } from './theme.js';
+import { applyTheme, THEME_COLORS } from './theme.js';
 import * as store from './storage.js';
 import * as leaderboard from './leaderboard-client.js';
+import { MAX_WORKSHEET_PUZZLES, planWorksheet, renderWorksheet } from './printing.js';
+import { createAnalysisClient } from './analysis-client.js';
+import { createGeneratorDialog } from './generator-dialog.js';
 
 /**
  * The puzzle bank is ~450 kB — over 90% of the app — and is not needed to draw
@@ -23,7 +26,10 @@ import * as leaderboard from './leaderboard-client.js';
  */
 let bankPromise = null;
 function loadBank() {
-    if (!bankPromise) bankPromise = import('./puzzle-bank.js');
+    if (!bankPromise) bankPromise = import('./puzzle-bank.js').catch((error) => {
+        bankPromise = null;
+        throw error;
+    });
     return bankPromise;
 }
 
@@ -80,6 +86,8 @@ function loadBank() {
     const btnShareClose = document.getElementById('btn-share-close');
     const shareTitle = document.getElementById('share-title');
     const shareHint = document.getElementById('share-hint');
+    const handoffConfirm = document.getElementById('btn-handoff-confirm');
+    let pendingHandoff = null;
 
     const modalOverlay = document.getElementById('modal-overlay');
     const importText = document.getElementById('import-text');
@@ -137,6 +145,11 @@ function loadBank() {
 
     // Play mode
     let currentDifficulty = 'easy';
+    let selectedDifficulty = currentDifficulty;
+    let gameRequest = 0;
+    let gameLoading = false;
+    let winTimeout = null;
+    let completion = null;
     let currentPuzzle = null;
     let currentSolution = null;
     let gameActive = false;
@@ -195,7 +208,7 @@ function loadBank() {
      * input would let a player solve at leisure and submit a near-zero time.
      */
     function isPlayBlocked() {
-        return mode === 'play' && timerPaused;
+        return mode === 'play' && (timerPaused || gameLoading);
     }
 
     /**
@@ -301,6 +314,8 @@ function loadBank() {
         const input = inputs[idx];
         const val = input.value;
 
+        if (gameWon && !wrappers[idx].classList.contains('locked')) reopenCompletedGame();
+
         if (isPlayBlocked()) {
             input.value = currentPuzzle && currentPuzzle[idx] !== '0' ? currentPuzzle[idx] : '';
             return;
@@ -330,8 +345,10 @@ function loadBank() {
             }
 
             // Record for undo
-            const prevValue = '';  // input just changed, prev was empty or we handle in keydown
-            pushUndo(idx, prevValue, val, new Set(cellNotes[idx]), new Set());
+            const prevValue = input.dataset.prevVal ?? input.dataset.lastValue ?? '';
+            delete input.dataset.prevVal;
+            delete input.dataset.prevNotes;
+            const prevNotes = new Set(cellNotes[idx]);
             noteMistake(idx, val);
 
             // Clear notes on this cell
@@ -341,7 +358,8 @@ function loadBank() {
             wrappers[idx].classList.remove('user-error', 'correct-check');
 
             // Auto-clear conflicting notes in peers
-            clearPeerNotes(idx, val);
+            const peerNotes = clearPeerNotes(idx, val);
+            pushUndo(idx, prevValue, val, prevNotes, new Set(), peerNotes);
 
             // Check conflicts
             highlightConflicts(idx);
@@ -366,12 +384,24 @@ function loadBank() {
     }
 
     function onCellKeydown(e, idx) {
+        if (e.isComposing) return;
+        // Leave browser/OS shortcuts intact, including modified digits and paste.
+        if (e.ctrlKey || e.metaKey || e.altKey) {
+            const key = e.key.toLowerCase();
+            if (!e.altKey && mode === 'play' && (key === 'z' || key === 'y')) {
+                e.preventDefault();
+                if (key === 'y' || e.shiftKey) doRedo();
+                else doUndo();
+            }
+            return;
+        }
         const row = Math.floor(idx / 9);
         const col = idx % 9;
         const isLocked = mode === 'play' && wrappers[idx].classList.contains('locked');
+        if (gameWon && !isLocked && (/^[0-9]$/.test(e.key) || ['Backspace', 'Delete'].includes(e.key))) reopenCompletedGame();
 
         // Arrow keys still navigate while paused; nothing may change the board.
-        if (isPlayBlocked() && !e.key.startsWith('Arrow') && e.key !== 'Tab') {
+        if (isPlayBlocked() && !e.key.startsWith('Arrow') && !['Tab', 'Escape', 'p', 'P'].includes(e.key)) {
             e.preventDefault();
             return;
         }
@@ -412,6 +442,10 @@ function loadBank() {
                     wrappers[idx].classList.remove('given', 'solved', 'error', 'solve-anim');
                     if (solved) clearSolution();
                 }
+                refreshAutoNotes();
+                clearHintNudge();
+                resetCheckButton();
+                updateNumpadCompletion();
                 updateDigitHighlight();
                 break;
 
@@ -429,6 +463,10 @@ function loadBank() {
                     wrappers[idx].classList.remove('given', 'solved', 'error');
                     if (solved) clearSolution();
                 }
+                refreshAutoNotes();
+                clearHintNudge();
+                resetCheckButton();
+                updateNumpadCompletion();
                 updateDigitHighlight();
                 break;
 
@@ -456,8 +494,13 @@ function loadBank() {
 
             case 'Escape':
                 e.preventDefault();
-                if (mode === 'solver') clearGrid();
-                else resetGame();
+                clearHintNudge();
+                inputs[idx].blur();
+                focusedIdx = -1;
+                lastTouchedIdx = -1;
+                for (const wrapper of wrappers) wrapper.classList.remove('focused');
+                clearHighlights();
+                clearDigitHighlight();
                 break;
 
             case 'n': case 'N':
@@ -481,24 +524,24 @@ function loadBank() {
                 }
                 break;
 
-            case 'z':
-                if (e.ctrlKey || e.metaKey) {
+            case 'f': case 'F':
+                if (mode === 'play') {
                     e.preventDefault();
-                    if (e.shiftKey) doRedo();
-                    else doUndo();
+                    fillNotesOnce();
                 }
                 break;
 
-            case 'y':
-                if (e.ctrlKey || e.metaKey) {
+            case 'p': case 'P':
+                if (mode === 'play') {
                     e.preventDefault();
-                    doRedo();
+                    setPaused(!timerPaused);
                 }
                 break;
         }
     }
 
     function onCellFocus(idx) {
+        if (pendingHint && pendingHint.idx !== idx) clearHintNudge();
         focusedIdx = idx;
         lastTouchedIdx = idx;
         // Remove previous focus
@@ -522,6 +565,8 @@ function loadBank() {
 
     // Touch-only: visually select a cell without calling input.focus()
     function selectCellTouch(idx) {
+        if (pendingHint && pendingHint.idx !== idx) clearHintNudge();
+        focusedIdx = idx;
         lastTouchedIdx = idx;
         for (const w of wrappers) w.classList.remove('focused');
         wrappers[idx].classList.add('focused');
@@ -530,6 +575,17 @@ function loadBank() {
         highlightRelated(idx);
         updateDigitHighlight();
     }
+
+    // Tapping the status text is the touch equivalent of blurring a grid input.
+    // Keep button taps selected so the numpad and selected-cell hints still work.
+    document.querySelector('.status-bar').addEventListener('click', event => {
+        if (!isTouchDevice || event.target.closest('button')) return;
+        focusedIdx = -1;
+        lastTouchedIdx = -1;
+        for (const wrapper of wrappers) wrapper.classList.remove('focused');
+        clearHighlights();
+        clearDigitHighlight();
+    });
 
     function advanceToNextEmpty(fromIdx) {
         for (let i = 1; i <= 81; i++) {
@@ -551,13 +607,19 @@ function loadBank() {
     // ══════════════════════════════════════════════════════════════════
 
     function toggleNotesMode() {
-        notesMode = !notesMode;
+        setNotesMode(!notesMode);
+    }
+
+    function setNotesMode(on) {
+        notesMode = on;
         btnNotesToggle.setAttribute('aria-pressed', String(notesMode));
         btnNotesToggle.classList.toggle('notes-active', notesMode);
-        btnNotesToggle.setAttribute('aria-pressed', String(notesMode));
         if (numpadEl) {
             const notesBtn = numpadEl.querySelector('#numpad-notes');
-            if (notesBtn) notesBtn.setAttribute('aria-pressed', String(notesMode));
+            if (notesBtn) {
+                notesBtn.setAttribute('aria-pressed', String(notesMode));
+                notesBtn.classList.toggle('notes-active', notesMode);
+            }
         }
     }
 
@@ -598,7 +660,43 @@ function loadBank() {
         }
     }
 
-    function setAutoNotes(on) {
+    function notesSnapshot() {
+        return { autoNotes, notesMode, notes: cellNotes.map(notes => [...notes]) };
+    }
+
+    function applyNotesSnapshot(snapshot) {
+        autoNotes = snapshot.autoNotes;
+        for (let i = 0; i < 81; i++) {
+            cellNotes[i] = new Set(snapshot.notes[i]);
+            renderNotes(i);
+        }
+        btnAutoNotes.setAttribute('aria-pressed', String(autoNotes));
+        btnAutoNotes.classList.toggle('notes-active', autoNotes);
+        setNotesMode(snapshot.notesMode);
+    }
+
+    function pushNotesUndo(before) {
+        undoStack.push({ kind: 'notes', before, after: notesSnapshot() });
+        redoStack.length = 0;
+        if (undoStack.length > 200) undoStack.shift();
+    }
+
+    function fillNotesOnce() {
+        if (isPlayBlocked() || !gameActive || gameWon) return;
+        const before = notesSnapshot();
+        const board = readGrid();
+        applyNotesSnapshot({ autoNotes: false, notesMode, notes: candidateGrid(board).map(notes => notes ? [...notes] : []) });
+        autoNotesUsed = true;
+        pushNotesUndo(before);
+        clearHintNudge();
+        resetCheckButton();
+        debounceSave();
+        setStatus('Notes filled once — edit them by hand, or Undo to restore your notes');
+    }
+
+    function setAutoNotes(on, { record = true } = {}) {
+        if (record && (isPlayBlocked() || !gameActive || gameWon)) return;
+        const before = notesSnapshot();
         autoNotes = on;
         if (on) {
             autoNotesUsed = true;
@@ -614,8 +712,8 @@ function loadBank() {
         if (btnAutoNotes) {
             btnAutoNotes.setAttribute('aria-pressed', String(on));
             btnAutoNotes.classList.toggle('notes-active', on);
-            btnAutoNotes.setAttribute('aria-pressed', String(on));
         }
+        if (record) pushNotesUndo(before);
         debounceSave();
     }
 
@@ -624,6 +722,7 @@ function loadBank() {
             const digit = String(d + 1);
             notesEls[idx][d].classList.toggle('visible', cellNotes[idx].has(digit));
         }
+        if (inputs[idx]) updateCellLabel(idx);
     }
 
     function clearCellNotes(idx) {
@@ -632,6 +731,7 @@ function loadBank() {
     }
 
     function clearPeerNotes(idx, digit) {
+        const changed = [];
         const row = Math.floor(idx / 9);
         const col = idx % 9;
         const boxRow = Math.floor(row / 3) * 3;
@@ -644,10 +744,12 @@ function loadBank() {
             const isPeer = (r === row) || (c === col) ||
                 (r >= boxRow && r < boxRow + 3 && c >= boxCol && c < boxCol + 3);
             if (isPeer && cellNotes[i].has(digit)) {
+                changed.push({ idx: i, before: [...cellNotes[i]], after: [...cellNotes[i]].filter(d => d !== digit) });
                 cellNotes[i].delete(digit);
                 renderNotes(i);
             }
         }
+        return changed;
     }
 
     // ══════════════════════════════════════════════════════════════════
@@ -695,7 +797,20 @@ function loadBank() {
     }
 
     // ── Numpad Completion Tracking ─────────────────────────────────────
+    function updateCellLabel(i) {
+        inputs[i].dataset.lastValue = inputs[i].value;
+        const kind = wrappers[i].classList.contains('given') ? 'given' : wrappers[i].classList.contains('hint') ? 'revealed hint' : 'entry';
+        const value = inputs[i].value || 'empty';
+        const notes = !inputs[i].value && cellNotes[i].size ? `, notes ${[...cellNotes[i]].sort().join(', ')}` : '';
+        inputs[i].setAttribute('aria-label', `Row ${Math.floor(i / 9) + 1}, Column ${i % 9 + 1}, ${kind}, ${value}${notes}`);
+    }
+
+    function updateCellLabels() {
+        for (let i = 0; i < inputs.length; i++) updateCellLabel(i);
+    }
+
     function updateNumpadCompletion() {
+        updateCellLabels();
         if (!numpadEl) return;
         const counts = {};
         for (let d = 1; d <= 9; d++) counts[d] = 0;
@@ -781,21 +896,45 @@ function loadBank() {
     //  UNDO / REDO
     // ══════════════════════════════════════════════════════════════════
 
-    function pushUndo(idx, prevVal, newVal, prevNotes, newNotes) {
-        undoStack.push({ idx, prevVal, newVal, prevNotes, newNotes });
+    function pushUndo(idx, prevVal, newVal, prevNotes, newNotes, peerNotes = [], hint = null) {
+        undoStack.push({ idx, prevVal, newVal, prevNotes, newNotes, peerNotes, hint });
         redoStack.length = 0; // clear redo on new action
         if (undoStack.length > 200) undoStack.shift();
     }
 
+    function restoreMovePeers(action, forward) {
+        for (const change of action.peerNotes || []) {
+            cellNotes[change.idx] = new Set(forward ? change.after : change.before);
+            renderNotes(change.idx);
+        }
+        if (action.hint) {
+            const hinted = forward || action.hint.wasHint;
+            const locked = forward || action.hint.wasLocked;
+            wrappers[action.idx].classList.toggle('hint', hinted);
+            wrappers[action.idx].classList.toggle('locked', locked);
+            inputs[action.idx].readOnly = isTouchDevice || locked;
+        }
+    }
+
     function doUndo() {
         if (isPlayBlocked()) return;
-        if (undoStack.length === 0 || !gameActive) return;
+        if (undoStack.length === 0 || (!gameActive && !gameWon)) return;
+        reopenCompletedGame();
         const action = undoStack.pop();
         redoStack.push(action);
+
+        if (action.kind === 'notes') {
+            applyNotesSnapshot(action.before);
+            clearHintNudge();
+            resetCheckButton();
+            debounceSave();
+            return;
+        }
 
         inputs[action.idx].value = action.prevVal;
         cellNotes[action.idx] = new Set(action.prevNotes);
         renderNotes(action.idx);
+        restoreMovePeers(action, false);
         wrappers[action.idx].classList.remove('user-error', 'correct-check');
         recheckAllConflicts();
         updateNumpadCompletion();
@@ -810,18 +949,29 @@ function loadBank() {
             inputs[action.idx].focus();
         }
         updateDigitHighlight();
+        checkWin();
         debounceSave();
     }
 
     function doRedo() {
         if (isPlayBlocked()) return;
-        if (redoStack.length === 0 || !gameActive) return;
+        if (redoStack.length === 0 || (!gameActive && !gameWon)) return;
+        reopenCompletedGame();
         const action = redoStack.pop();
         undoStack.push(action);
+
+        if (action.kind === 'notes') {
+            applyNotesSnapshot(action.after);
+            clearHintNudge();
+            resetCheckButton();
+            debounceSave();
+            return;
+        }
 
         inputs[action.idx].value = action.newVal;
         cellNotes[action.idx] = new Set(action.newNotes);
         renderNotes(action.idx);
+        restoreMovePeers(action, true);
         wrappers[action.idx].classList.remove('user-error', 'correct-check');
         recheckAllConflicts();
         updateNumpadCompletion();
@@ -836,6 +986,7 @@ function loadBank() {
             inputs[action.idx].focus();
         }
         updateDigitHighlight();
+        checkWin();
         debounceSave();
     }
 
@@ -933,7 +1084,7 @@ function loadBank() {
         solveTimeEl.textContent = '';
         solveTimeEl.classList.remove('visible');
         setStatus('Click a cell and type a digit');
-        inputs[0].focus();
+        if (!isTouchDevice) inputs[0].focus({ preventScroll: true });
     }
 
     async function loadSolverExample() {
@@ -965,7 +1116,7 @@ function loadBank() {
     async function revealLeaderboardUi() {
         const available = await leaderboard.checkHealth();
         if (btnLeaderboard) btnLeaderboard.style.display = available ? 'inline-flex' : 'none';
-        if (winSubmit) winSubmit.style.display = available ? 'flex' : 'none';
+        if (winSubmit) winSubmit.style.display = available && isDifficulty(currentDifficulty) ? 'flex' : 'none';
     }
 
     // ── Dialogs ────────────────────────────────────────────────────────
@@ -976,18 +1127,63 @@ function loadBank() {
         document.querySelector('.mode-toggle'),
         document.getElementById('app'),
         document.querySelector('.shortcuts'),
-    ].filter(Boolean));
+    ].filter(Boolean), { onOpen: () => clearHintNudge() });
 
     // ── Import Modal ───────────────────────────────────────────────────
+    const importAnalysis = createAnalysisClient();
+    let assessedBoard = null;
+    let importAssessment = null;
+    let assessmentPromise = null;
+    let assessmentTimeout;
+    let importRevision = 0;
+    function cancelImportAnalysis() {
+        ++importRevision;
+        clearTimeout(assessmentTimeout);
+        importAnalysis.cancel();
+        assessedBoard = null;
+        importAssessment = null;
+        assessmentPromise = null;
+        document.getElementById('btn-modal-play').disabled = false;
+    }
     function openModal() {
+        cancelImportAnalysis();
         if (importError) importError.textContent = '';
+        document.getElementById('import-assessment').textContent = '';
         importText.value = '';
-        dialogs.open(modalOverlay, { initialFocus: importText });
+        dialogs.open(modalOverlay, { initialFocus: importText, onClose: cancelImportAnalysis });
     }
 
     function closeModal() { dialogs.close(modalOverlay); }
 
-    function doImport() {
+    async function inspectImport(board) {
+        if (board === assessedBoard && importAssessment) return importAssessment;
+        if (board === assessedBoard && assessmentPromise) return assessmentPromise;
+        cancelImportAnalysis();
+        const revision = importRevision;
+        assessedBoard = board;
+        const status = document.getElementById('import-assessment');
+        status.textContent = 'Checking uniqueness and explained techniques…';
+        assessmentPromise = importAnalysis.request('assess', { puzzle: board, prepare: true }).then(result => {
+            if (revision !== importRevision) return null;
+            importAssessment = result;
+            status.textContent = `${result.label}${result.solutions === 1 ? ' Observed technique coverage, not a bank difficulty tier.' : ''}`;
+            return result;
+        }).catch(error => {
+            if (revision === importRevision && error.name !== 'AbortError') status.textContent = error.message;
+            return null;
+        }).finally(() => { if (revision === importRevision) assessmentPromise = null; });
+        return assessmentPromise;
+    }
+    importText.addEventListener('input', () => {
+        cancelImportAnalysis();
+        document.getElementById('import-assessment').textContent = '';
+        assessmentTimeout = setTimeout(() => {
+            const board = parsePuzzleText(importText.value);
+            if (board && modalOverlay.classList.contains('active')) void inspectImport(board);
+        }, 250);
+    });
+
+    async function doImport(asPlay = false) {
         const raw = importText.value.trim();
         const board = parsePuzzleText(raw);
         if (!board) {
@@ -1004,12 +1200,48 @@ function loadBank() {
             return;
         }
         if (importError) importError.textContent = '';
+        if (asPlay) {
+            const pending = inspectImport(board);
+            const revision = importRevision;
+            document.getElementById('btn-modal-play').disabled = true;
+            const assessment = await pending;
+            if (revision !== importRevision || !modalOverlay.classList.contains('active') || parsePuzzleText(importText.value) !== board) return;
+            document.getElementById('btn-modal-play').disabled = false;
+            if (!assessment) return;
+            if (!assessment.playable) {
+                importError.textContent = assessment.label;
+                return;
+            }
+            closeModal();
+            startImportedPuzzle(board, assessment);
+            return;
+        }
+        closeModal();
+        switchMode('solver');
         writeGrid(board, true);
         solved = false;
         solveTimeEl.textContent = '';
         solveTimeEl.classList.remove('visible');
         setStatus('Puzzle imported');
-        closeModal();
+    }
+
+    async function startImportedPuzzle(board, assessment = null) {
+        const request = ++gameRequest;
+        if (!assessment) {
+            try { assessment = await importAnalysis.request('assess', { puzzle: board, prepare: true }); }
+            catch (error) { if (error.name !== 'AbortError') setStatus(error.message, 'error'); return false; }
+        }
+        if (request !== gameRequest || !assessment.playable) return false;
+        const solution = assessment.solution;
+        const state = store.validateGameState({ puzzle: board, userValues: board,
+            solution, difficulty: 'imported' }, { recomputeSolution: false });
+        if (!state) return false;
+        switchMode('play');
+        resumeGame(state);
+        store.recordStart('imported');
+        saveGame();
+        setStatus(`Imported puzzle — ${assessment.clues} clues · ${assessment.label}`);
+        return true;
     }
 
     // ── Quick Paste ────────────────────────────────────────────────────
@@ -1032,7 +1264,9 @@ function loadBank() {
     // Copies the board as text for other tools (a solver, a visualizer, a
     // forum post). In play mode the source picker chooses between the dealt
     // puzzle and the position as played; solver mode exports the grid as-is.
+    let exportOverride = null;
     function exportBoard() {
+        if (exportOverride) return exportOverride.puzzle;
         if (mode === 'play' && currentPuzzle && exportSource.value === 'original') {
             return currentPuzzle;
         }
@@ -1041,16 +1275,23 @@ function loadBank() {
 
     function renderExport() {
         exportText.value = formatPuzzle(exportBoard(), exportFormat.value);
+        exportHint.textContent = exportFormat.value === 'chat'
+            ? 'Emoji alignment varies by app. Save PNG image keeps the grid aligned when messaging.'
+            : exportFormat.value === 'grid' ? 'Use a monospace font to keep this grid aligned.'
+                : 'Plain text for solvers and puzzle tools. Dots and zeros both mean empty cells.';
     }
 
-    function openExportDialog() {
+    function openExportDialog(override = null) {
+        exportOverride = override?.puzzle ? override : null;
         // The source choice only means something mid-game.
-        const showSource = mode === 'play' && !!currentPuzzle;
+        const showSource = !exportOverride && mode === 'play' && !!currentPuzzle;
         exportSource.value = 'original';
         exportSource.style.display = showSource ? '' : 'none';
         exportSourceLabel.style.display = showSource ? '' : 'none';
         exportHint.textContent = '';
+        document.getElementById('print-difficulty').value = selectedDifficulty;
         renderExport();
+        updatePrintOptions();
         dialogs.open(exportOverlay, { initialFocus: exportFormat });
     }
 
@@ -1063,52 +1304,133 @@ function loadBank() {
         }
     }
 
+    const generatorDialog = createGeneratorDialog({ dialogs, onPlay: startImportedPuzzle,
+        onExport(puzzle, print) {
+            document.getElementById('print-source').value = 'current';
+            openExportDialog({ puzzle, title: 'Generated puzzle' });
+            if (print) {
+                exportOverlay.querySelector('.print-options').open = true;
+                document.getElementById('print-layout').focus();
+            }
+        } });
+    document.getElementById('btn-generate').addEventListener('click', () => generatorDialog.open());
+    document.getElementById('btn-export-image').addEventListener('click', async () => {
+        const board = exportBoard();
+        const title = exportOverride?.title || (mode === 'play' && currentPuzzle ? puzzleIdentity() : 'Sudoku');
+        try {
+            const { downloadPuzzleImage } = await import('./puzzle-image.js');
+            await downloadPuzzleImage(board, { title });
+            exportHint.textContent = 'PNG image saved. Share the image to preserve the grid layout.';
+        } catch (error) { exportHint.textContent = error.message || 'Image export failed.'; }
+    });
+
+    let printingWorksheet = false;
+    function printOptions() {
+        const fromBank = document.getElementById('print-source').value === 'bank';
+        const difficulty = document.getElementById('print-difficulty').value;
+        return {
+            fromBank, difficulty,
+            amount: fromBank ? Number(document.getElementById('print-count').value) : 1,
+            unit: fromBank ? document.getElementById('print-unit').value : 'puzzles',
+            perPage: Number(document.getElementById('print-layout').value),
+            order: fromBank ? document.getElementById('print-order').value : 'random',
+            start: Number(document.getElementById('print-start').value),
+            bankSize: fromBank && isDifficulty(difficulty) ? BANK_SIZES[difficulty] : 1,
+            answers: document.getElementById('print-answers').checked,
+        };
+    }
+
+    function updatePrintOptions() {
+        const options = printOptions();
+        document.getElementById('print-bank-options').hidden = !options.fromBank;
+        document.getElementById('print-start-row').hidden = options.order !== 'consecutive';
+        document.getElementById('print-start').max = String(options.bankSize);
+        const max = options.unit === 'pages' ? Math.floor(MAX_WORKSHEET_PUZZLES / options.perPage) : MAX_WORKSHEET_PUZZLES;
+        document.getElementById('print-count').max = String(max);
+        document.getElementById('print-count-label').textContent = `Number of ${options.unit === 'pages' ? 'puzzle pages' : 'puzzles'} (1–${max})`;
+        const summary = document.getElementById('print-summary');
+        const button = document.getElementById('btn-print');
+        try {
+            const plan = planWorksheet(options);
+            const countLabel = (count, label) => `${count} ${label}${count === 1 ? '' : 's'}`;
+            summary.textContent = `${countLabel(plan.count, 'puzzle')} · ${countLabel(plan.puzzlePages, 'puzzle page')}${plan.answerPages ? ` + ${countLabel(plan.answerPages, 'answer page')}` : ''} · ${countLabel(plan.totalPages, 'page')} total.`;
+            button.disabled = printingWorksheet;
+        } catch (error) {
+            summary.textContent = error.message;
+            button.disabled = true;
+        }
+    }
+
+    async function printExport() {
+        if (printingWorksheet) return;
+        printingWorksheet = true;
+        const button = document.getElementById('btn-print');
+        button.disabled = true;
+        try {
+            let puzzles;
+            const options = printOptions();
+            const { difficulty, perPage, answers, order, start } = options;
+            const { count } = planWorksheet(options);
+            if (options.fromBank) {
+                if (!isDifficulty(difficulty)) throw new Error('Choose a worksheet difficulty.');
+                const { PUZZLES } = await loadBank();
+                const pool = PUZZLES[difficulty].map((item, i) => ({ puzzle: item.puzzle, title: `${DIFFICULTY_LABELS[difficulty]} · Level ${i + 1}` }));
+                planWorksheet({ ...options, bankSize: pool.length });
+                if (order === 'random') {
+                    for (let i = pool.length - 1; i > 0; i--) {
+                        const j = Math.floor(Math.random() * (i + 1));
+                        [pool[i], pool[j]] = [pool[j], pool[i]];
+                    }
+                    puzzles = pool.slice(0, count);
+                } else {
+                    puzzles = pool.slice(start - 1, start - 1 + count);
+                }
+            } else {
+                puzzles = [{ puzzle: exportBoard(), title: exportOverride ? exportOverride.title : mode === 'play' && currentPuzzle ? `${puzzleIdentity()} · ${exportSource.value === 'original' ? 'Original puzzle' : 'Current position'}` : 'Custom puzzle' }];
+            }
+            if (answers) for (const item of puzzles) {
+                if (SudokuSolver.countSolutions(item.puzzle, 2) !== 1) throw new Error('Answer pages need a uniquely solvable grid. Use the original puzzle or omit answers.');
+                item.solution = SudokuSolver.solveSudoku(item.puzzle).solution;
+            }
+            renderWorksheet(document.getElementById('print-area'), puzzles, { perPage, answers });
+            window.print();
+            exportHint.textContent = 'Print dialog opened. You can print or save a PDF there.';
+        } catch (error) {
+            exportHint.textContent = error.message || 'Could not prepare the worksheet.';
+        } finally { printingWorksheet = false; updatePrintOptions(); }
+    }
+
     // ══════════════════════════════════════════════════════════════════
     //  PLAY MODE
     // ══════════════════════════════════════════════════════════════════
 
-    function startGame(difficulty, { daily = null } = {}) {
-        currentDaily = daily;
-        currentDifficulty = difficulty || currentDifficulty;
-        hintsUsed = 0;
-        mistakes = 0;
-        handedOff = false;
-        // Each game opts into auto-notes itself. Carrying the mode over from
-        // the last game marked the new one as assisted before a single move,
-        // which mostly caught players who forgot it was on.
-        if (autoNotes) setAutoNotes(false);
-        autoNotesUsed = false;
-        gameWon = false;
-        undoStack.length = 0;
-        redoStack.length = 0;
-        notesMode = false;
-        btnNotesToggle.setAttribute('aria-pressed', 'false');
-        btnNotesToggle.classList.remove('notes-active');
-
-        clearHintNudge();
-
-        resetCheckButton();
+    function startGame(difficulty, { daily = null, random = false } = {}) {
+        const targetDifficulty = difficulty || selectedDifficulty;
+        if (!isDifficulty(targetDifficulty) || mode !== 'play') return;
+        const reqLevel = random ? NaN : (levelInput ? parseInt(levelInput.value, 10) : NaN);
+        const request = ++gameRequest;
+        gameLoading = true;
         setStatus('Loading puzzle...');
 
         // Awaiting the bank also yields to the event loop, so the status above
         // paints before the solver runs.
-        loadBank().then(({ PUZZLES }) => {
+        return loadBank().then(({ PUZZLES }) => {
+            if (request !== gameRequest || mode !== 'play') return;
             let puzzle, solution;
 
             // ── PRIMARY: pick from pre-generated bank ────────────────────
-            const bankList = PUZZLES[currentDifficulty];
+            const bankList = PUZZLES[targetDifficulty];
             if (bankList && bankList.length > 0) {
                 // Track played puzzles to avoid repeats
-                let played = store.getPlayed(currentDifficulty);
+                let played = store.getPlayed(targetDifficulty);
 
                 // If all puzzles played, reset the tracking
                 if (played.length >= bankList.length) {
                     played = [];
-                    store.clearPlayed(currentDifficulty);
+                    store.clearPlayed(targetDifficulty);
                 }
 
                 // Check for user-specified level
-                const reqLevel = levelInput ? parseInt(levelInput.value, 10) : NaN;
                 let pick;
 
                 // Load specified level if valid
@@ -1119,17 +1441,15 @@ function loadBank() {
                     const unplayed = bankList.filter(p => !played.includes(p.id));
                     pick = unplayed[Math.floor(Math.random() * unplayed.length)];
 
-                    store.markPlayed(currentDifficulty, pick.id);
+                    store.markPlayed(targetDifficulty, pick.id);
                 }
 
                 puzzle = pick.puzzle;
 
-                // Update level input to show the randomly chosen level
+                // Keep random mode blank; show the chosen board in the status.
                 const actualIndex = bankList.findIndex(p => p.id === pick.id);
                 currentLevel = actualIndex !== -1 ? actualIndex + 1 : null;
-                if (levelInput && currentLevel !== null) {
-                    levelInput.value = currentLevel;
-                }
+                if (levelInput) levelInput.value = Number.isNaN(reqLevel) ? '' : String(currentLevel);
 
                 // Solve to get solution
                 const solveResult = SudokuSolver.solveSudoku(puzzle);
@@ -1138,10 +1458,10 @@ function loadBank() {
 
             // ── FALLBACK: generator (Easy–Evil only, never Nightmare) ────
             // A generated puzzle has no bank level, so scores carry none.
-            if (!puzzle && currentDifficulty !== 'nightmare') {
+            if (!puzzle && targetDifficulty !== 'nightmare') {
                 currentLevel = null;
                 try {
-                    const result = SudokuGenerator.generate(currentDifficulty);
+                    const result = SudokuGenerator.generate(targetDifficulty);
                     if (result && result.puzzle && result.solution) {
                         puzzle = result.puzzle;
                         solution = result.solution;
@@ -1154,6 +1474,27 @@ function loadBank() {
                 return;
             }
 
+            currentDifficulty = targetDifficulty;
+            currentDaily = daily;
+            document.querySelector('.resume-banner')?.remove();
+            if (winTimeout) clearTimeout(winTimeout);
+            hintsUsed = 0;
+            mistakes = 0;
+            handedOff = false;
+            // Each game opts into auto-notes itself. Carrying the mode over from
+            // the last game marked the new one as assisted before a single move,
+            // which mostly caught players who forgot it was on.
+            if (autoNotes) setAutoNotes(false, { record: false });
+            autoNotesUsed = false;
+            completion = null;
+            gameWon = false;
+            undoStack.length = 0;
+            redoStack.length = 0;
+            setNotesMode(false);
+
+            clearHintNudge();
+
+            resetCheckButton();
             currentPuzzle = puzzle;
             currentSolution = solution;
 
@@ -1174,8 +1515,8 @@ function loadBank() {
             // Set here rather than by the caller: the bank loads asynchronously,
             // so anything set before this point is overwritten.
             setStatus(currentDaily
-                ? `Daily puzzle — ${formatDay(currentDaily)} · ${label}`
-                : `${label} — ${clueCount} clues`);
+                ? `Daily puzzle — ${formatDay(currentDaily)} · ${label} #${currentLevel}`
+                : `${label}${currentLevel ? ` #${currentLevel}` : ''} — ${clueCount} clues`);
 
             // Select first empty cell
             for (let i = 0; i < 81; i++) {
@@ -1197,7 +1538,9 @@ function loadBank() {
             debounceSave();
             updateNumpadCompletion();
         }).catch(() => {
-            setStatus('Could not load puzzles', 'error');
+            if (request === gameRequest) setStatus('Could not load puzzles — try again', 'error');
+        }).finally(() => {
+            if (request === gameRequest) gameLoading = false;
         });
     }
 
@@ -1230,13 +1573,13 @@ function loadBank() {
      * the board itself for a hand-entered puzzle.
      */
     async function shareCurrentPuzzle() {
-        const board = readGrid();
+        const board = mode === 'play' && currentPuzzle ? currentPuzzle : readGrid();
         let link;
 
         if (mode === 'play' && currentLevel) {
             link = bankLink(window.location.href, currentDifficulty, currentLevel);
         } else if (board !== '0'.repeat(81)) {
-            link = puzzleLink(window.location.href, board);
+            link = puzzleLink(window.location.href, board, { play: mode === 'play' && currentDifficulty === 'imported' });
         } else {
             setStatus('Nothing to share yet', 'error');
             return;
@@ -1252,6 +1595,8 @@ function loadBank() {
     }
 
     function showLinkDialog(link, { title, hint }) {
+        pendingHandoff = null;
+        handoffConfirm.style.display = 'none';
         if (!shareText || !shareOverlay) return;
         if (shareTitle) shareTitle.textContent = title;
         if (shareHint) shareHint.textContent = hint;
@@ -1281,7 +1626,7 @@ function loadBank() {
      * Act on a puzzle named in the URL. Applied after the initial switchMode so
      * a raw-board link can land in solver mode without being switched back.
      */
-    function applySharedPuzzle(shared) {
+    async function applySharedPuzzle(shared) {
         if (!shared) return;
 
         if (shared.kind === 'daily') {
@@ -1294,14 +1639,28 @@ function loadBank() {
             startGame(shared.difficulty);
             return;
         }
-        // A raw board goes to the solver, which is what it is for.
+        if (shared.play) {
+            const before = gameRequest;
+            if (await startImportedPuzzle(shared.puzzle)) {
+                window.history.replaceState(null, '', window.location.pathname);
+                return;
+            }
+            // A newer user action must not be replaced by this old link's fallback.
+            if (gameRequest !== before + 1) return;
+        }
+        // Legacy raw-board links and ambiguous boards remain available in Solver.
         switchMode('solver');
         writeGrid(shared.puzzle, true);
         setStatus('Puzzle loaded from link');
     }
 
     function resetGame() {
-        if (!currentPuzzle) return;
+        if (!currentPuzzle || gameLoading) return;
+        if (completion) store.recordStart(currentDifficulty);
+        completion = null;
+        gameActive = true;
+        if (winTimeout) clearTimeout(winTimeout);
+        dialogs.close(winOverlay);
         gameWon = false;
         hintsUsed = 0;
         mistakes = 0;
@@ -1346,7 +1705,20 @@ function loadBank() {
     function findHintCell(board) {
         const trustworthy = (idx, digit) => digit === currentSolution[idx];
 
-        const step = nextStep(board);
+        // A correct output digit alone cannot validate reasoning based on a
+        // mistaken entry. Offer an explicit correction instead of a false proof.
+        const wrong = [...board].findIndex((digit, idx) => digit !== '0' && !trustworthy(idx, digit));
+        if (wrong !== -1) return {
+            idx: wrong,
+            digit: currentSolution[wrong],
+            reason: 'verified answer correcting an earlier entry',
+            answerBased: true,
+            nudge: 'An earlier entry prevents reliable reasoning. The highlighted cell can be corrected from the verified answer.',
+            evidence: [],
+        };
+
+        const visible = candidateGrid(board);
+        const step = findNakedSingle(visible) || findHiddenSingle(visible);
         if (step && trustworthy(step.idx, step.digit)) return step;
 
         // Nothing the technique engine knows can crack this position, so fall
@@ -1362,9 +1734,10 @@ function loadBank() {
         return {
             idx: best.idx,
             digit: currentSolution[best.idx],
-            reason: `narrowed to ${best.size} candidates`,
+            reason: 'verified answer; no supported deduction found',
+            answerBased: true,
             nudge: `${cellName(best.idx)} is down to ${[...best.set].sort().join(', ')} — `
-                + 'the most constrained cell on the board.',
+                + 'the most constrained cell on the board. No supported deduction was found; revealing uses the verified answer.',
             evidence: peersOf(best.idx).filter((i) => board[i] !== '0'),
         };
     }
@@ -1375,14 +1748,31 @@ function loadBank() {
      * the deduction may no longer hold.
      */
     let pendingHint = null;
+    let hintContinuation = null;
+    let hintRevision = 0;
+    let hintWorking = false;
+    const hintAnalysis = createAnalysisClient();
+    const hintDetails = document.getElementById('hint-details');
+    const hintSteps = document.getElementById('hint-steps');
 
     function clearHintNudge() {
+        ++hintRevision;
+        hintAnalysis.cancel();
+        hintContinuation = null;
+        hintWorking = false;
+        btnHint.removeAttribute('aria-busy');
+        btnHint.textContent = 'Hint (free)';
+        hintDetails.hidden = true;
+        hintSteps.replaceChildren();
         if (!pendingHint) return;
         for (const i of pendingHint.evidence) wrappers[i].classList.remove('hint-evidence');
         wrappers[pendingHint.idx].classList.remove('hint-target');
         gridEl.classList.remove('hint-explaining');
         pendingHint = null;
-        if (btnHint) btnHint.textContent = 'Hint';
+        if (btnHint) {
+            btnHint.textContent = 'Hint (free)';
+            btnHint.title = 'Preview an explanation or answer offer for free (H)';
+        }
     }
 
     /** Show the reasoning without filling anything in. Costs nothing. */
@@ -1395,13 +1785,54 @@ function loadBank() {
         wrappers[candidate.idx].classList.add('hint-target');
         for (const i of candidate.evidence) wrappers[i].classList.add('hint-evidence');
 
-        if (btnHint) btnHint.textContent = 'Reveal';
-        setStatus(`${candidate.nudge} Press again to reveal.`);
+        if (btnHint) {
+            btnHint.textContent = 'Reveal (+1 hint)';
+            btnHint.title = 'Fill the highlighted cell; adds one hint to this game (H)';
+        }
+        if (candidate.trace?.length) {
+            hintDetails.hidden = false;
+            hintDetails.open = false;
+            for (const step of candidate.trace) {
+                const li = document.createElement('li');
+                const description = document.createElement('p');
+                description.textContent = step.nudge || step.reason;
+                li.append(description);
+                if (step.removals) {
+                    const removals = document.createElement('p');
+                    removals.textContent = 'Exclude: ' + step.removals.map(({ cell, digit }) => `${digit} from ${cellName(cell)}`).join('; ') + '.';
+                    li.append(removals);
+                }
+                if (step.proof) {
+                    const branches = step.proof.branches || [step.proof];
+                    for (const [index, branch] of branches.entries()) {
+                        const details = document.createElement('details');
+                        const summary = document.createElement('summary');
+                        summary.textContent = branches.length > 1 ? `Alternative ${index + 1}: ${branch.nodes.length} implications` : `${branch.nodes.length} chain implications`;
+                        details.append(summary);
+                        const links = document.createElement('ol');
+                        const indices = new Map(branch.nodes.map((node, i) => [node.id, i + 1]));
+                        for (const node of branch.nodes) {
+                            const link = document.createElement('li');
+                            const parents = node.parents || (node.parent === null ? [] : [node.parent]);
+                            const prefix = node.cause === 'assumption' ? 'Assume: ' : parents.length ? `From ${parents.map(id => indices.get(id)).join(', ')}: ` : 'From the candidates: ';
+                            link.textContent = `${prefix}${cellName(node.cell)} ${node.on ? 'is' : 'is not'} ${node.digit} (${node.cause.replaceAll('-', ' ')}).`;
+                            links.append(link);
+                        }
+                        details.append(links);
+                        li.append(details);
+                    }
+                }
+                hintSteps.append(li);
+            }
+        }
+        const kind = candidate.answerBased ? 'Answer preview' : 'Explained hint';
+        setStatus(`${kind} — free. ${candidate.nudge} Press again to reveal (+1 hint).`);
     }
 
-    function giveHint() {
+    async function giveHint() {
         if (isPlayBlocked()) return;
         if (!gameActive || !currentSolution || gameWon) return;
+        if (hintWorking) { clearHintNudge(); setStatus('Hint search cancelled. No hint used.'); return; }
 
         const fixable = [];
         for (let i = 0; i < 81; i++) {
@@ -1417,12 +1848,14 @@ function loadBank() {
 
         // Second press on a standing nudge reveals it.
         if (pendingHint && fixable.includes(pendingHint.idx)) {
-            const { idx, reason } = pendingHint;
+            const { idx, reason, continuation } = pendingHint;
             clearHintNudge();
             resetCheckButton();
             revealHint(idx, reason);
+            if (continuation?.board === readGrid()) hintContinuation = continuation;
             return;
         }
+        const continuation = hintContinuation;
         clearHintNudge();
         resetCheckButton();
 
@@ -1433,13 +1866,45 @@ function loadBank() {
             ? focusedIdx
             : (isTouchDevice ? lastTouchedIdx : -1);
 
-        // Pointing at a specific cell asks for the answer there, not a lesson.
+        const board = readGrid();
+        let found = findHintCell(board);
+        // Simple singles share the same detectors as the full engine. Larger
+        // proofs run off the UI thread; an earlier wrong entry always wins.
+        if ((!found || found.answerBased && !found.reason.includes('correcting')) || continuation) {
+            const revision = hintRevision;
+            hintWorking = true;
+            btnHint.textContent = 'Cancel hint search';
+            btnHint.setAttribute('aria-busy', 'true');
+            setStatus('Looking for an explained hint… No hint used.');
+            try {
+                const path = await hintAnalysis.request('hint', { puzzle: board, continuation }, { timeoutMs: 12000 });
+                if (revision !== hintRevision || readGrid() !== board || isPlayBlocked()) return;
+                const step = path.trace.at(-1);
+                const sound = path.trace.every(item => item.kind === 'placement' ? item.digit === currentSolution[item.idx]
+                    : item.removals.every(({ cell, digit }) => digit !== currentSolution[cell]));
+                if (path.status === 'placement' && step && sound) found = { ...step, trace: path.trace,
+                    continuation: path.continuation, evidence: [...new Set(path.trace.flatMap(item => item.evidence))],
+                    nudge: path.trace.length > 1 ? `${path.trace.length} deductions lead to ${cellName(step.idx)}. Open the explanation to follow the candidate exclusions.` : step.nudge };
+            } catch (error) {
+                if (revision !== hintRevision || error.name === 'AbortError') return;
+                // A worker limit/failure still permits an explicitly labelled answer offer.
+                if (found) found = { ...found, nudge: `The explanation search could not finish. ${found.nudge}` };
+            }
+            if (revision !== hintRevision || readGrid() !== board || isPlayBlocked()) return;
+            hintWorking = false;
+            btnHint.removeAttribute('aria-busy');
+        }
+        // A selected cell still gets a free preview before an answer is filled.
+        // Use the explanation if it targets that cell; otherwise label the offer.
         if (selected >= 0 && fixable.includes(selected)) {
-            revealHint(selected, '');
+            showHintNudge(found?.idx === selected ? found : {
+                idx: selected, evidence: [], answerBased: true,
+                reason: 'verified answer for the selected cell',
+                nudge: `${cellName(selected)}: this offers the verified answer for your selected cell, without a deduction explanation.`,
+            });
             return;
         }
 
-        const found = findHintCell(readGrid());
         if (found) {
             showHintNudge(found);
             return;
@@ -1447,7 +1912,9 @@ function loadBank() {
 
         // Deduction is unreliable, which means something on the board is wrong;
         // fall back to any cell that still needs fixing.
-        revealHint(fixable[Math.floor(Math.random() * fixable.length)], '');
+        const idx = fixable[0];
+        showHintNudge({ idx, evidence: [], answerBased: true, reason: 'verified answer',
+            nudge: `${cellName(idx)}: no supported deduction was found. Revealing uses the verified answer.` });
     }
 
     /** Fill in a hinted cell. This is the step that counts against you. */
@@ -1457,13 +1924,14 @@ function loadBank() {
 
         inputs[hintIdx].value = currentSolution[hintIdx];
         clearCellNotes(hintIdx);
-        clearPeerNotes(hintIdx, currentSolution[hintIdx]);
+        const peerNotes = clearPeerNotes(hintIdx, currentSolution[hintIdx]);
+        const hint = { wasHint: wrappers[hintIdx].classList.contains('hint'), wasLocked: wrappers[hintIdx].classList.contains('locked') };
         wrappers[hintIdx].classList.remove('user-error', 'correct-check', 'conflict');
         wrappers[hintIdx].classList.add('hint', 'hint-anim', 'locked');
         inputs[hintIdx].readOnly = true;
         hintsUsed++;
 
-        pushUndo(hintIdx, prevVal, currentSolution[hintIdx], prevNotes, new Set());
+        pushUndo(hintIdx, prevVal, currentSolution[hintIdx], prevNotes, new Set(), peerNotes, hint);
 
         const because = reason ? ` — ${reason}` : '';
         setStatus(`Hint: ${cellName(hintIdx)}${because} (${hintsUsed} used)`);
@@ -1559,6 +2027,39 @@ function loadBank() {
         }
     }
 
+    function puzzleIdentity() {
+        if (currentDifficulty === 'imported') return 'Imported puzzle';
+        const label = GAME_LABELS[currentDifficulty];
+        return `${label}${currentLevel ? ` · Level ${currentLevel}` : ' · Generated puzzle'}${currentDaily ? ` · Daily ${currentDaily}` : ''}`;
+    }
+
+    function renderCompletion() {
+        if (!completion) return;
+        document.getElementById('win-puzzle').textContent = puzzleIdentity();
+        const clues = [...currentPuzzle].filter(digit => digit !== '0').length;
+        const hintText = completion.hints ? `${completion.hints} hint${completion.hints === 1 ? '' : 's'} used` : 'No hints used';
+        const mistakeText = completion.mistakes ? `${completion.mistakes} mistake${completion.mistakes === 1 ? '' : 's'}` : 'no mistakes';
+        winDetails.textContent = `Time: ${formatTime(completion.time)} — ${hintText} — ${mistakeText} — ${clues} clues — ${completion.autoNotes ? 'generated notes used' : 'no generated notes'}`;
+        document.getElementById('win-review-hint').textContent = 'Review or undo freely. Your original completion time and statistics stay recorded.';
+        if (btnWinSubmit) {
+            if (winSubmit) winSubmit.style.display = leaderboard.isAvailable() && isDifficulty(currentDifficulty) ? 'flex' : 'none';
+            btnWinSubmit.disabled = completion.submitted;
+            btnWinSubmit.textContent = completion.submitted ? 'Score submitted' : 'Submit Score';
+        }
+    }
+
+    function reopenCompletedGame() {
+        if (!completion) return;
+        if (winTimeout) clearTimeout(winTimeout);
+        dialogs.close(winOverlay);
+        if (!gameWon) return;
+        gameWon = false;
+        gameActive = true;
+        for (const wrapper of wrappers) wrapper.classList.remove('win-anim');
+        setStatus('Reviewing completed puzzle — original result kept');
+        refreshLayout();
+    }
+
     // ── Win Detection ──────────────────────────────────────────────────
     function checkWin() {
         if (!gameActive || !currentSolution || gameWon) return;
@@ -1576,19 +2077,17 @@ function loadBank() {
 
             // The game is over; offering setup again is what the player wants.
             setupOpen = true;
+
+            const firstCompletion = !completion;
+            if (firstCompletion) completion = { time: timerSeconds, hints: hintsUsed, mistakes, autoNotes: autoNotesUsed, submitted: false };
+            renderCompletion();
             refreshLayout();
 
-            const timeStr = formatTime(timerSeconds);
-            const hintStr = hintsUsed > 0 ? `${hintsUsed} hint${hintsUsed > 1 ? 's' : ''} used` : 'No hints used';
-            const mistakeStr = mistakes > 0 ? `${mistakes} mistake${mistakes > 1 ? 's' : ''}` : 'no mistakes';
-            const assistStr = autoNotesUsed ? ' — auto-notes used' : '';
-            winDetails.textContent = `Time: ${timeStr} — ${hintStr} — ${mistakeStr}${assistStr}`;
-
-            setTimeout(() => dialogs.open(winOverlay), 600);
+            winTimeout = setTimeout(() => { if (gameWon && mode === 'play') dialogs.open(winOverlay); }, 600);
             setStatus('Puzzle complete!', 'success');
 
             // Update stats
-            store.recordWin(currentDifficulty, timerSeconds, hintsUsed, autoNotesUsed, new Date(), mistakes);
+            if (firstCompletion) store.recordWin(currentDifficulty, timerSeconds, hintsUsed, autoNotesUsed, new Date(), mistakes);
             if (currentDaily) {
                 store.markDailyDone(currentDaily);
                 updateDailyButton();
@@ -1669,7 +2168,7 @@ function loadBank() {
             suspendTimer();
             setStatus('Paused');
         } else {
-            timerSegmentStart = Date.now();
+            timerSegmentStart = completion ? 0 : Date.now();
             setStatus('');
         }
     }
@@ -1689,25 +2188,40 @@ function loadBank() {
      * move made here resumes saving.
      */
     async function handOffGame() {
-        if (!gameActive || gameWon) return;
+        if (!gameActive || gameWon || gameLoading || completion) return;
         setPaused(true);
-
-        const link = gameLink(window.location.href, buildSaveState());
-        handedOff = true;
-        if (saveTimeout) {
-            clearTimeout(saveTimeout);
-            saveTimeout = null;
-        }
-        store.deleteSavedGame();
-
-        if (await copyToClipboard(link)) {
-            setStatus('Link copied — open it on the other device to continue', 'success');
+        saveGame();
+        const snapshot = buildSaveState();
+        const request = gameRequest;
+        let link;
+        try {
+            link = gameLink(window.location.href, snapshot);
+            if (!parseGameLink(new URL(link).search)) throw new Error('Invalid game link');
+        } catch (e) {
+            setStatus('Could not create a continuation link. Your game is still saved here.', 'error');
             return;
         }
+        const finish = () => {
+            if (request !== gameRequest || !timerPaused || readGrid() !== snapshot.userValues) return;
+            handedOff = true;
+            if (saveTimeout) clearTimeout(saveTimeout);
+            saveTimeout = null;
+            store.deleteSavedGame();
+            pendingHandoff = null;
+            handoffConfirm.style.display = 'none';
+            setStatus('Link ready — open it on the other device. Progress does not sync.', 'success');
+        };
+        if (await copyToClipboard(link)) {
+            finish();
+            return;
+        }
+        if (request !== gameRequest || !timerPaused) return;
         showLinkDialog(link, {
             title: 'Continue on another device',
-            hint: 'Open this link on the other device to pick up where you left off.',
+            hint: 'Copy this snapshot link, then confirm below. Until then your game stays saved here. Progress does not sync.',
         });
+        pendingHandoff = finish;
+        handoffConfirm.style.display = '';
     }
 
     // ══════════════════════════════════════════════════════════════════
@@ -1736,6 +2250,7 @@ function loadBank() {
             daily: currentDaily,
             autoNotes,
             autoNotesUsed,
+            completion,
             lockedCells: Array.from({ length: 81 }, (_, i) => wrappers[i].classList.contains('locked')),
             hintCells: Array.from({ length: 81 }, (_, i) => wrappers[i].classList.contains('hint')),
             timestamp: Date.now(),
@@ -1750,18 +2265,27 @@ function loadBank() {
     }
 
     function resumeGame(state) {
+        gameRequest++;
+        gameLoading = false;
+        handedOff = false;
+        clearHintNudge();
+        resetCheckButton();
+        if (winTimeout) clearTimeout(winTimeout);
+        if (autoNotes) setAutoNotes(false, { record: false });
+        completion = state.completion || null;
         currentPuzzle = state.puzzle;
         currentSolution = state.solution;
         currentDifficulty = state.difficulty;
         currentLevel = state.level ?? null;
         currentDaily = state.daily ?? null;
-        autoNotesUsed = state.autoNotesUsed || false;
+        autoNotesUsed = state.autoNotesUsed || state.autoNotes || false;
         timerSeconds = state.timerSeconds || 0;
         hintsUsed = state.hintsUsed || 0;
         mistakes = state.mistakes || 0;
         gameWon = false;
         undoStack.length = 0;
         redoStack.length = 0;
+        setNotesMode(false);
 
         // Select difficulty button
         selectDifficulty(currentDifficulty);
@@ -1795,20 +2319,20 @@ function loadBank() {
         gameActive = true;
         setupOpen = false;
         runTimer(state.timerSeconds || 0);
+        if (completion) stopTimer();
 
         recheckAllConflicts();
         updateNumpadCompletion();
 
         if (state.autoNotes) {
-            setAutoNotes(true);
+            setAutoNotes(true, { record: false });
         }
         // setAutoNotes stamps the flag; the saved value is the truth.
-        autoNotesUsed = state.autoNotesUsed || false;
+        autoNotesUsed = state.autoNotesUsed || state.autoNotes || false;
 
         refreshLayout();
 
-        const label = DIFFICULTY_LABELS[currentDifficulty];
-        setStatus(`Resumed: ${label} — ${formatTime(timerSeconds)}`);
+        setStatus(`Resumed: ${puzzleIdentity()} — ${formatTime(timerSeconds)}`);
 
         // Remove resume banner if it exists
         const banner = document.querySelector('.resume-banner');
@@ -1819,7 +2343,7 @@ function loadBank() {
         const existing = document.querySelector('.resume-banner');
         if (existing) existing.remove();
 
-        const diff = DIFFICULTY_LABELS[state.difficulty] || state.difficulty;
+        const diff = escapeHtml(GAME_LABELS[state.difficulty] || 'Unknown');
         const time = formatTime(state.timerSeconds || 0);
 
         const banner = document.createElement('div');
@@ -1856,7 +2380,7 @@ function loadBank() {
     function renderStats() {
         const stats = store.getStats();
         const summary = store.getSummary();
-        const diffs = ['easy', 'medium', 'hard', 'expert', 'evil', 'nightmare'];
+        const diffs = Object.keys(GAME_LABELS);
 
         if (summary.started === 0) {
             statsContent.innerHTML =
@@ -1884,7 +2408,7 @@ function loadBank() {
             const avg = s.won ? Math.round(s.totalTime / s.won) : 0;
             const rate = started ? Math.round((s.won / started) * 100) : 0;
             html += `<tr>
-        <td>${DIFFICULTY_LABELS[d]}</td>
+        <td>${GAME_LABELS[d]}</td>
         <td>${s.won}</td>
         <td>${rate}%</td>
         <td>${s.won ? formatTime(s.bestTime) : '—'}</td>
@@ -1900,6 +2424,7 @@ function loadBank() {
     }
 
     function openStats() {
+        document.getElementById('backup-status').textContent = '';
         renderStats();
         dialogs.open(statsOverlay);
     }
@@ -1917,6 +2442,10 @@ function loadBank() {
 
     function switchMode(newMode) {
         if (newMode === mode) return;
+        clearHintNudge();
+        gameRequest++;
+        gameLoading = false;
+        if (winTimeout) clearTimeout(winTimeout);
 
         // Capture grid state before clearing (for Play → Solver puzzle retention)
         let gridSnapshot = null;
@@ -1934,12 +2463,13 @@ function loadBank() {
         gameWon = false;
         currentPuzzle = null;
         currentSolution = null;
-        notesMode = false;
-        btnNotesToggle.setAttribute('aria-pressed', 'false');
-        btnNotesToggle.classList.remove('notes-active');
+        completion = null;
+        setNotesMode(false);
 
         tabSolver.classList.toggle('active', mode === 'solver');
         tabPlay.classList.toggle('active', mode === 'play');
+        tabPlay.setAttribute('aria-pressed', String(mode === 'play'));
+        tabSolver.setAttribute('aria-pressed', String(mode === 'solver'));
         modeIndicator.classList.toggle('solver', mode === 'solver');
 
         solverControls.style.display = mode === 'solver' ? 'flex' : 'none';
@@ -1978,9 +2508,12 @@ function loadBank() {
     }
 
     function selectDifficulty(diff) {
-        currentDifficulty = diff;
+        if (!isDifficulty(diff)) return;
+        selectedDifficulty = diff;
+        if (!currentPuzzle) currentDifficulty = diff;
         diffSelector.querySelectorAll('.diff-btn').forEach(btn => {
             btn.classList.toggle('active', btn.dataset.diff === diff);
+            btn.setAttribute('aria-pressed', String(btn.dataset.diff === diff));
         });
 
         if (levelInput && levelMaxDisplay) {
@@ -2002,11 +2535,24 @@ function loadBank() {
     }
 
     document.addEventListener('keydown', (e) => {
-        if (e.ctrlKey && e.key === 'i') {
+        const formField = e.target.closest?.('input:not(.cell-input), textarea, select, [contenteditable="true"]');
+        if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && !e.isComposing && e.key.toLowerCase() === 'i' && !formField && !dialogs.isOpen()) {
             e.preventDefault();
-            // Never stack a second dialog on top of an open one.
-            if (mode === 'solver' && !dialogs.isOpen()) openModal();
+            openModal();
         }
+    });
+
+    const shortcuts = document.querySelector('.shortcuts');
+    shortcuts.open = store.getShortcutsOpen(!isTouchDevice);
+    let shortcutsWereOpen = shortcuts.open;
+    const renderShortcutSummary = () => { shortcuts.querySelector('summary').textContent = `${shortcuts.open ? 'Hide' : 'Show'} keyboard shortcuts`; };
+    renderShortcutSummary();
+    shortcuts.addEventListener('toggle', () => {
+        if (shortcuts.open === shortcutsWereOpen) return;
+        renderShortcutSummary();
+        store.setShortcutsOpen(shortcuts.open);
+        shortcutsWereOpen = shortcuts.open;
+        scheduleFit();
     });
 
     // ══════════════════════════════════════════════════════════════════
@@ -2022,7 +2568,22 @@ function loadBank() {
     btnClear.addEventListener('click', clearGrid);
 
     if (btnExport) btnExport.addEventListener('click', openExportDialog);
+    document.getElementById('btn-print').addEventListener('click', printExport);
+    document.querySelector('.print-options').addEventListener('input', updatePrintOptions);
+    document.querySelector('.print-options').addEventListener('change', updatePrintOptions);
     if (btnPauseExport) btnPauseExport.addEventListener('click', openExportDialog);
+    document.getElementById('btn-win-export').addEventListener('click', openExportDialog);
+    document.getElementById('btn-win-share').addEventListener('click', async () => {
+        dialogs.close(winOverlay);
+        await shareCurrentPuzzle();
+    });
+    document.getElementById('btn-win-review').addEventListener('click', reopenCompletedGame);
+    document.getElementById('btn-results').addEventListener('click', () => {
+        renderCompletion();
+        dialogs.open(winOverlay);
+    });
+    document.getElementById('btn-fill-notes').addEventListener('click', fillNotesOnce);
+    document.getElementById('btn-fill-notes').addEventListener('mousedown', event => event.preventDefault());
     if (exportFormat) exportFormat.addEventListener('change', renderExport);
     if (exportSource) exportSource.addEventListener('change', renderExport);
     if (btnExportCopy) btnExportCopy.addEventListener('click', copyExport);
@@ -2034,6 +2595,11 @@ function loadBank() {
     }
 
     btnNewGame.addEventListener('click', () => startGame());
+    document.getElementById('btn-random').addEventListener('click', () => startGame(undefined, { random: true }));
+    handoffConfirm.addEventListener('click', () => {
+        pendingHandoff?.();
+        dialogs.close(shareOverlay);
+    });
     if (btnShare) {
         btnShare.addEventListener('click', shareCurrentPuzzle);
         btnShare.addEventListener('mousedown', (e) => e.preventDefault());
@@ -2099,13 +2665,62 @@ function loadBank() {
         if (btn) btn.addEventListener('mousedown', (e) => e.preventDefault());
     });
 
+    const backupStatus = document.getElementById('backup-status');
+    const backupFile = document.getElementById('backup-file');
+    document.getElementById('btn-backup').addEventListener('click', () => {
+        if (gameActive && !handedOff && !store.saveGameState(buildSaveState())) {
+            backupStatus.textContent = 'Could not save your current game. Free some storage and try again.';
+            return;
+        }
+        let json;
+        try { json = store.exportBackup(); } catch (e) {
+            backupStatus.textContent = e.message;
+            return;
+        }
+        const blob = new Blob([json], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `sudoku-backup-${store.dayKey()}.json`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+        backupStatus.textContent = 'Backup downloaded. Keep it somewhere safe.';
+    });
+    document.getElementById('btn-restore').addEventListener('click', () => backupFile.click());
+    backupFile.addEventListener('change', async () => {
+        const file = backupFile.files?.[0];
+        backupFile.value = '';
+        if (!file) return;
+        if (file.size > 1024 * 1024) {
+            backupStatus.textContent = 'That file is too large for a Sudoku backup.';
+            return;
+        }
+        if (!window.confirm('Replace your saved game, statistics and settings with this backup?')) return;
+        try {
+            const result = store.restoreBackup(await file.text());
+            if (!result.success) {
+                backupStatus.textContent = result.error || 'Could not restore that backup.';
+                return;
+            }
+            if (saveTimeout) clearTimeout(saveTimeout);
+            saveTimeout = null;
+            gameActive = false;
+            stopTimer();
+            window.location.reload();
+        } catch (e) {
+            backupStatus.textContent = 'Could not read that backup file.';
+        }
+    });
+
     btnStats.addEventListener('click', openStats);
     btnStatsClose.addEventListener('click', closeStats);
     btnStatsReset.addEventListener('click', resetStats);
 
     btnWinNew.addEventListener('click', () => {
         dialogs.close(winOverlay);
-        startGame();
+        startGame(undefined, { random: true });
     });
 
     diffSelector.addEventListener('click', (e) => {
@@ -2114,7 +2729,9 @@ function loadBank() {
         }
     });
 
-    btnModalOk.addEventListener('click', doImport);
+    btnModalOk.addEventListener('click', () => doImport());
+    document.getElementById('btn-modal-play').addEventListener('click', () => doImport(true));
+    document.getElementById('btn-import-play').addEventListener('click', openModal);
     btnModalNo.addEventListener('click', closeModal);
     modalOverlay.addEventListener('click', (e) => { if (e.target === modalOverlay) closeModal(); });
     statsOverlay.addEventListener('click', (e) => { if (e.target === statsOverlay) closeStats(); });
@@ -2127,15 +2744,16 @@ function loadBank() {
     function handleNumpadInput(digit) {
         if (isPlayBlocked()) return;
         // Use lastTouchedIdx as fallback — focusedIdx is -1 after blur on mobile
-        const idx = focusedIdx >= 0 ? focusedIdx : lastTouchedIdx;
+        const idx = isTouchDevice ? lastTouchedIdx : (focusedIdx >= 0 ? focusedIdx : lastTouchedIdx);
         if (idx < 0) return;
         const isLocked = wrappers[idx].classList.contains('locked');
         if (isLocked) return;
+        reopenCompletedGame();
 
         if (digit === '0') {
             // Erase
             if (mode === 'play' && gameActive) {
-                if (cellNotes[idx].size > 0) {
+                if (cellNotes[idx].size > 0 && !autoNotes) {
                     pushUndo(idx, inputs[idx].value, '', new Set(cellNotes[idx]), new Set());
                     clearCellNotes(idx);
                     updateNumpadCompletion();
@@ -2153,6 +2771,10 @@ function loadBank() {
                 wrappers[idx].classList.remove('given', 'solved', 'error', 'solve-anim');
                 if (solved) clearSolution();
             }
+            refreshAutoNotes();
+            clearHintNudge();
+            resetCheckButton();
+            updateNumpadCompletion();
             updateDigitHighlight();
             return;
         }
@@ -2168,9 +2790,9 @@ function loadBank() {
             const prevNotes = new Set(cellNotes[idx]);
             inputs[idx].value = digit;
             clearCellNotes(idx);
-            clearPeerNotes(idx, digit);
+            const peerNotes = clearPeerNotes(idx, digit);
             wrappers[idx].classList.remove('user-error', 'correct-check');
-            pushUndo(idx, prevVal, digit, prevNotes, new Set());
+            pushUndo(idx, prevVal, digit, prevNotes, new Set(), peerNotes);
             noteMistake(idx, digit);
             highlightConflicts(idx);
             refreshAutoNotes();
@@ -2199,7 +2821,6 @@ function loadBank() {
 
             if (btn.id === 'numpad-notes') {
                 toggleNotesMode();
-                btn.classList.toggle('notes-active', notesMode);
                 return;
             }
 
@@ -2229,19 +2850,35 @@ function loadBank() {
     themeToggle.addEventListener('click', (e) => {
         e.stopPropagation();
         themeDropdown.classList.toggle('open');
+        themeToggle.setAttribute('aria-expanded', String(themeDropdown.classList.contains('open')));
     });
 
     themeDropdown.addEventListener('click', (e) => {
         const opt = e.target.closest('.theme-option');
         if (!opt) return;
         e.stopPropagation();
-        applyTheme(opt.dataset.theme);
+        applyTheme(opt.dataset.theme, { dropdown: themeDropdown });
+        themeToggle.setAttribute('aria-expanded', 'false');
         themeDropdown.classList.remove('open');
     });
 
     // Close dropdown when clicking elsewhere
     document.addEventListener('click', () => {
+        themeToggle.setAttribute('aria-expanded', 'false');
         themeDropdown.classList.remove('open');
+    });
+
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && themeDropdown.classList.contains('open')) {
+            themeDropdown.classList.remove('open');
+            themeToggle.setAttribute('aria-expanded', 'false');
+            themeToggle.focus();
+        }
+    });
+    window.matchMedia?.('(prefers-color-scheme: dark)')?.addEventListener?.('change', () => {
+        if (!Object.hasOwn(THEME_COLORS, store.getTheme(null))) {
+            applyTheme('system', { dropdown: themeDropdown, persist: false });
+        }
     });
 
     // Restore saved theme
@@ -2282,9 +2919,11 @@ function loadBank() {
         lbContent.innerHTML = html;
     }
 
+    let leaderboardRequest = 0;
     async function openLeaderboard(diff) {
         if (!lbOverlay) return;
-        currentLbDiff = diff || currentDifficulty;
+        const currentLbDiff = diff || (isDifficulty(currentDifficulty) ? currentDifficulty : selectedDifficulty);
+        const request = ++leaderboardRequest;
         lbContent.innerHTML = '<p class="lb-empty">Loading...</p>';
         // Only opened once; re-opening on a tab switch would steal focus back
         // to the first tab on every click.
@@ -2295,7 +2934,7 @@ function loadBank() {
             );
         }
         const entries = await leaderboard.fetchLeaderboard(currentLbDiff);
-        renderLeaderboard(entries);
+        if (request === leaderboardRequest) renderLeaderboard(entries);
     }
 
     function closeLeaderboard() {
@@ -2328,6 +2967,8 @@ function loadBank() {
     // Win submit
     if (btnWinSubmit) {
         btnWinSubmit.addEventListener('click', async () => {
+            const resultSnapshot = completion;
+            if (!resultSnapshot || resultSnapshot.submitted || !isDifficulty(currentDifficulty)) return;
             const name = winNameInput ? winNameInput.value.trim() : '';
             if (!name) {
                 winNameInput.style.borderColor = 'var(--text-error)';
@@ -2340,23 +2981,25 @@ function loadBank() {
             const result = await leaderboard.submitScore({
                 name,
                 difficulty: currentDifficulty,
-                time: timerSeconds,
-                hints: hintsUsed,
-                mistakes,
+                time: resultSnapshot.time,
+                hints: resultSnapshot.hints,
+                mistakes: resultSnapshot.mistakes,
                 level: currentLevel,
-                autoNotes: autoNotesUsed,
+                autoNotes: resultSnapshot.autoNotes,
             });
 
-            if (result && result.rank) {
-                btnWinSubmit.textContent = `Rank #${result.rank}!`;
+            if (completion !== resultSnapshot) return;
+            if (result?.success) {
+                resultSnapshot.submitted = true;
+                saveGame();
+                btnWinSubmit.textContent = result.rank ? `Rank #${result.rank}!` : 'Submitted — outside top 100';
                 // Save name for next time
                 store.setPlayerName(name);
             } else {
                 btnWinSubmit.textContent = 'Error';
             }
             setTimeout(() => {
-                btnWinSubmit.disabled = false;
-                btnWinSubmit.textContent = 'Submit Score';
+                if (completion === resultSnapshot) renderCompletion();
             }, 3000);
         });
     }
@@ -2413,6 +3056,8 @@ function loadBank() {
      * be a loss for no gain — the board is already at its maximum size.
      */
     function refreshLayout() {
+        document.getElementById('btn-results').style.display = completion ? '' : 'none';
+        if (btnHandoff) btnHandoff.style.display = completion ? 'none' : '';
         const playing = mode === 'play' && gameActive && !gameWon && !setupOpen;
 
         if (!playing) {
@@ -2423,14 +3068,17 @@ function loadBank() {
 
         setSetupFolded(false);
         const open = fitBoardSettled();
-        if (open.atMax) return; // already as large as the stylesheet allows
+        const viewport = window.visualViewport?.height || window.innerHeight;
+        const openOverflow = document.body.scrollHeight - viewport;
+        if (open.atMax && openOverflow <= 1) return;
 
         setSetupFolded(true);
         const folded = fitBoardSettled();
+        const reducesOverflow = openOverflow > 1 && document.body.scrollHeight - viewport < openOverflow;
 
         // Only stay folded if it actually bought something. Hiding the
         // difficulty buttons to gain a pixel is a straight loss.
-        if (folded.size - open.size < MEANINGFUL_GAIN) {
+        if (folded.size - open.size < MEANINGFUL_GAIN && !reducesOverflow) {
             setSetupFolded(false);
             fitBoardSettled();
         }
@@ -2528,6 +3176,7 @@ function loadBank() {
     // ══════════════════════════════════════════════════════════════════
 
     buildGrid();
+    diffSelector.querySelectorAll('.diff-btn').forEach(btn => btn.setAttribute('aria-pressed', String(btn.classList.contains('active'))));
     updateDailyButton();
 
     // Parsed before the first switchMode so the resume offer can be suppressed,
@@ -2543,12 +3192,28 @@ function loadBank() {
 
     // Once the real layout exists, size the board to whatever room is left.
     refreshLayout();
+    document.getElementById('app').setAttribute('aria-busy', 'false');
+    document.getElementById('loading-status').remove();
+    document.body.classList.remove('is-loading');
 
     // ── Offline support ────────────────────────────────────────────────
     // Registered only over http(s): service workers are unavailable on file://,
     // and the dev server intentionally ships none, so failure here is normal and
     // must never affect gameplay.
     if ('serviceWorker' in navigator && window.location.protocol.startsWith('http')) {
+        let hadController = Boolean(navigator.serviceWorker.controller);
+        const updateButton = document.getElementById('btn-update');
+        navigator.serviceWorker.addEventListener?.('controllerchange', () => {
+            if (hadController) updateButton.style.display = '';
+            hadController = true;
+        });
+        updateButton.addEventListener('click', () => {
+            if (gameActive && !handedOff && !store.saveGameState(buildSaveState())) {
+                setStatus('Cannot save progress. Free storage before updating.', 'error');
+                return;
+            }
+            window.location.reload();
+        });
         window.addEventListener('load', () => {
             navigator.serviceWorker
                 .register(new URL('sw.js', window.location.href), { scope: './' })

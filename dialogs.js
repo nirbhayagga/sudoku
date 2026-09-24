@@ -16,7 +16,7 @@ const FOCUSABLE = 'a[href], button, input, select, textarea, [tabindex]:not([tab
 /**
  * Visible in the sense that matters for focus.
  *
- * Deliberately checks inline `display:none` up the ancestor chain rather than
+ * Deliberately checks `hidden` and inline `display:none` up the ancestor chain rather than
  * offsetParent or getClientRects: that is how this app hides things (the win
  * screen's submit block, for one), and it works without layout — which jsdom
  * does not have, so the usual checks would report everything as hidden there.
@@ -24,7 +24,7 @@ const FOCUSABLE = 'a[href], button, input, select, textarea, [tabindex]:not([tab
 function isFocusVisible(el) {
     if (el.disabled || el.hidden) return false;
     for (let node = el; node && node !== document.body; node = node.parentElement) {
-        if (node.style && node.style.display === 'none') return false;
+        if (node.hidden || (node.style && node.style.display === 'none')) return false;
     }
     return true;
 }
@@ -37,13 +37,14 @@ function focusableIn(root) {
  * @param {Element[]} pageRegions Regions to hide from assistive tech while a
  *   dialog is open.
  */
-export function createDialogs(pageRegions = []) {
+export function createDialogs(pageRegions = [], { onOpen = () => {} } = {}) {
     let active = null;
 
-    function open(overlay, { initialFocus } = {}) {
+    function open(overlay, { initialFocus, onClose = () => {} } = {}) {
         if (active && active.overlay !== overlay) close(active.overlay);
 
-        active = { overlay, returnFocusTo: document.activeElement };
+        onOpen();
+        active = { overlay, returnFocusTo: document.activeElement, onClose };
         overlay.classList.add('active');
         for (const region of pageRegions) region.setAttribute('aria-hidden', 'true');
 
@@ -56,8 +57,9 @@ export function createDialogs(pageRegions = []) {
         for (const region of pageRegions) region.removeAttribute('aria-hidden');
 
         if (active && active.overlay === overlay) {
-            const { returnFocusTo } = active;
+            const { returnFocusTo, onClose } = active;
             active = null;
+            onClose();
             // Put focus back where it came from, rather than dropping a
             // keyboard user at the top of the document.
             if (returnFocusTo && document.contains(returnFocusTo) && isFocusVisible(returnFocusTo)) {
@@ -73,9 +75,8 @@ export function createDialogs(pageRegions = []) {
 
         if (e.key === 'Escape') {
             e.preventDefault();
-            // Escape also resets the puzzle from the cell handler, so the
-            // dialog has to win. Registered in the capture phase for the same
-            // reason.
+            // Close the dialog before board-level Escape can cancel a preview
+            // or deselect a cell. Capture keeps focus restoration predictable.
             e.stopPropagation();
             close(active.overlay);
             return;
