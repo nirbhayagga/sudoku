@@ -22,7 +22,7 @@ services:
     container_name: sudoku-leaderboard
     restart: unless-stopped
     environment:
-      CORS_ORIGIN: "*"
+      CORS_ORIGIN: "${CORS_ORIGIN:-}"
       # Proxy hops in front of the API (nginx only), so rate limiting
       # sees the real client address rather than the proxy's.
       TRUST_PROXY: "1"

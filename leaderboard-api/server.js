@@ -9,7 +9,8 @@ const PORT = process.env.PORT || 3001;
 const DATA_FILE = process.env.DATA_FILE || path.join(__dirname, 'data', 'leaderboard.json');
 
 app.use(cors({
-    origin: process.env.CORS_ORIGIN || '*',
+    // Same-origin deployments need no CORS headers. Cross-origin clients must opt in.
+    origin: process.env.CORS_ORIGIN || false,
 }));
 // A score submission is well under 1 kB; anything bigger is not a score.
 app.use(express.json({ limit: '10kb' }));
@@ -67,12 +68,16 @@ if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
 function loadData() {
     if (!fs.existsSync(DATA_FILE)) return {};
     try {
-        return JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
+        return validateData(JSON.parse(fs.readFileSync(DATA_FILE, 'utf8')));
     } catch (e) {
+        if (!(e instanceof SyntaxError) && !(e instanceof TypeError)) throw e;
         console.error('Error loading data:', e.message);
         try {
             fs.renameSync(DATA_FILE, `${DATA_FILE}.corrupt-${Date.now()}`);
-        } catch (moveError) { console.error('Could not set aside corrupt data:', moveError.message); }
+        } catch (moveError) {
+            console.error('Could not set aside corrupt data:', moveError.message);
+            throw moveError;
+        }
         return {};
     }
 }
@@ -92,6 +97,7 @@ function saveData(data) {
     } catch (e) {
         console.error('Error saving data:', e.message);
         try { fs.rmSync(tmp, { force: true }); } catch (cleanupError) { /* nothing left to do */ }
+        throw e;
     }
 }
 
@@ -99,6 +105,9 @@ function saveData(data) {
 // Returns top 50 scores for a difficulty, sorted by time ascending
 app.get('/api/leaderboard/:difficulty', (req, res) => {
     const { difficulty } = req.params;
+    if (!VALID_DIFFICULTIES.includes(difficulty)) {
+        return res.status(400).json({ error: 'Invalid difficulty' });
+    }
     const data = loadData();
     const entries = data[difficulty] || [];
     res.json(entries.slice(0, 50));
@@ -116,11 +125,12 @@ app.get('/api/leaderboard', (req, res) => {
 });
 
 // POST /api/leaderboard
-// Body: { name, difficulty, time, hints, level }
+// Body: { name, difficulty, time, hints, level, mistakes, autoNotes }
 const VALID_DIFFICULTIES = ['easy', 'medium', 'hard', 'expert', 'evil', 'nightmare'];
-const MAX_TIME_SECONDS = 24 * 60 * 60; // a day; anything beyond is bogus
-const MAX_HINTS = 81;
-const MAX_MISTAKES = 999;
+const MAX_TIME_SECONDS = 24 * 60 * 60; // Leaderboard policy: only accept games lasting at most 24 hours.
+// Cumulative counts can exceed the cell count after undoing and replaying moves.
+const MAX_HINTS = Number.MAX_SAFE_INTEGER;
+const MAX_MISTAKES = Number.MAX_SAFE_INTEGER;
 
 /**
  * Puzzles per tier — a level is a 1-based position in that tier's bank, so
@@ -137,7 +147,53 @@ const LEVEL_LIMITS = {
     easy: 500, medium: 500, hard: 500, expert: 500, evil: 500, nightmare: 3000,
 };
 
+// Extract plain text in one pass; never emit angle brackets, including from
+// malformed/nested tags. Output still must be escaped by HTML consumers.
+function cleanPlayerName(value) {
+    let text = '';
+    let inTag = false;
+    for (const char of String(value)) {
+        if (char === '<') inTag = true;
+        else if (char === '>') inTag = false;
+        else if (!inTag) text += char;
+    }
+    return text.trim().slice(0, 20);
+}
+
+function validateData(data) {
+    const fail = () => { throw new TypeError('Invalid leaderboard data'); };
+    const integer = (value, max) => Number.isInteger(value) && value >= 0 && value <= max;
+    if (!data || typeof data !== 'object' || Array.isArray(data)) fail();
+    const validated = {};
+    for (const [difficulty, entries] of Object.entries(data)) {
+        if (!VALID_DIFFICULTIES.includes(difficulty) || !Array.isArray(entries)) fail();
+        validated[difficulty] = entries.map(entry => {
+            if (!entry || typeof entry !== 'object' || Array.isArray(entry)
+                || entry.difficulty !== difficulty
+                || typeof entry.name !== 'string' || !entry.name
+                || entry.name.length > 20 || !entry.name.trim()
+                || entry.name.includes('<') || entry.name.includes('>')
+                || !integer(entry.time, MAX_TIME_SECONDS)
+                || !integer(entry.hints, MAX_HINTS)
+                || (entry.level != null && (!integer(entry.level, LEVEL_LIMITS[difficulty]) || entry.level === 0))
+                || (entry.mistakes != null && !integer(entry.mistakes, MAX_MISTAKES))
+                || (entry.autoNotes !== undefined && typeof entry.autoNotes !== 'boolean')
+                || typeof entry.date !== 'string' || !Number.isFinite(Date.parse(entry.date))) fail();
+            // Older clients did not record assistance or mistakes. Copy known fields only.
+            return {
+                name: entry.name, difficulty, time: entry.time, hints: entry.hints,
+                level: entry.level ?? null, mistakes: entry.mistakes ?? null,
+                autoNotes: entry.autoNotes ?? false, date: entry.date,
+            };
+        }).sort((a, b) => a.time - b.time).slice(0, 100);
+    }
+    return validated;
+}
+
 app.post('/api/leaderboard', rateLimit, (req, res) => {
+    if (!req.body || typeof req.body !== 'object' || Array.isArray(req.body)) {
+        return res.status(400).json({ error: 'Invalid request body' });
+    }
     const { name, difficulty, time, hints, level, autoNotes, mistakes } = req.body;
 
     if (!name || !difficulty || time === undefined) {
@@ -149,7 +205,7 @@ app.post('/api/leaderboard', rateLimit, (req, res) => {
     }
 
     // Sanitize name (max 20 chars, strip HTML)
-    const cleanName = String(name).replace(/<[^>]*>/g, '').trim().slice(0, 20);
+    const cleanName = cleanPlayerName(name);
     if (!cleanName) {
         return res.status(400).json({ error: 'Invalid name' });
     }
@@ -171,7 +227,7 @@ app.post('/api/leaderboard', rateLimit, (req, res) => {
     // Null, not zero, when absent: a client that predates the field made an
     // unknown number of mistakes, not none.
     const parsedMistakes = Number(mistakes);
-    const cleanMistakes = mistakes === undefined || !Number.isFinite(parsedMistakes)
+    const cleanMistakes = mistakes == null || !Number.isFinite(parsedMistakes)
         ? null
         : Math.min(MAX_MISTAKES, Math.max(0, Math.round(parsedMistakes)));
 
@@ -203,11 +259,9 @@ app.post('/api/leaderboard', rateLimit, (req, res) => {
 
     saveData(data);
 
-    const rank = data[difficulty].findIndex(e =>
-        e.name === entry.name && e.time === entry.time && e.date === entry.date
-    ) + 1;
-
-    res.json({ success: true, rank, entry });
+    const index = data[difficulty].indexOf(entry);
+    // Accepted scores outside retention are successful, but have no stored rank.
+    res.json({ success: true, ranked: index !== -1, rank: index === -1 ? null : index + 1, entry });
 });
 
 // Health check
@@ -215,11 +269,52 @@ app.get('/api/health', (req, res) => {
     res.json({ status: 'ok' });
 });
 
+// Express's default error page includes HTML (and development stacks).
+app.use((err, req, res, next) => {
+    if (res.headersSent) return next(err);
+    if (err.type === 'entity.too.large') {
+        return res.status(413).json({ error: 'Request body too large' });
+    }
+    if (err.status >= 400 && err.status < 500) {
+        return res.status(err.status).json({ error: 'Invalid request body' });
+    }
+    console.error('Leaderboard request failed:', err.message);
+    res.status(500).json({ error: 'Unable to access leaderboard' });
+});
+
 // Only listen when run directly — tests import the app and bind their own port.
 if (require.main === module) {
-    app.listen(PORT, () => {
-        console.log(`Leaderboard API running on port ${PORT}`);
+    const server = app.listen(PORT, () => {
+        console.log(`Leaderboard API running on port ${server.address().port}`);
     });
+    let shuttingDown = false;
+    server.on('request', (req, res) => {
+        res.once('finish', () => {
+            // Requests active at close() can become idle keep-alive sockets
+            // afterwards; close those too once their response has been sent.
+            if (shuttingDown) server.closeIdleConnections();
+        });
+    });
+    const shutdown = signal => {
+        if (shuttingDown) return;
+        shuttingDown = true;
+        console.log(`Received ${signal}; closing leaderboard API`);
+        // Stop accepting connections and let active requests finish. A stalled
+        // upload must not hold container shutdown open indefinitely.
+        const deadline = setTimeout(() => {
+            console.error('Leaderboard shutdown timed out');
+            process.exit(1);
+        }, 5000);
+        deadline.unref();
+        server.close(error => {
+            clearTimeout(deadline);
+            if (error) console.error('Error closing leaderboard API:', error.message);
+            process.exitCode = error ? 1 : 0;
+        });
+    };
+    // PID 1 needs explicit handlers; imports must not install process listeners.
+    process.on('SIGTERM', () => shutdown('SIGTERM'));
+    process.on('SIGINT', () => shutdown('SIGINT'));
 }
 
 module.exports = app;

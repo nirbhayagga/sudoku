@@ -2,6 +2,10 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { spawn } from 'node:child_process';
+import { once } from 'node:events';
+import http from 'node:http';
+import { fileURLToPath } from 'node:url';
 import { BANK_SIZES } from '../difficulties.js';
 
 /**
@@ -14,12 +18,19 @@ async function startServer(env = {}) {
 
     vi.resetModules();
     const previous = { ...process.env };
-    Object.assign(process.env, { DATA_FILE: dataFile, RATE_LIMIT_MAX: '1000', ...env });
+    Object.assign(process.env, { DATA_FILE: dataFile, RATE_LIMIT_MAX: '1000', CORS_ORIGIN: '', ...env });
 
     const { default: app } = await import('../leaderboard-api/server.js');
-    const server = await new Promise((resolve) => {
-        const s = app.listen(0, '127.0.0.1', () => resolve(s));
-    });
+    let server;
+    try {
+        server = await new Promise((resolve, reject) => {
+            const s = app.listen(0, '127.0.0.1', error => error ? reject(error) : resolve(s));
+        });
+    } catch (error) {
+        fs.rmSync(dir, { recursive: true, force: true });
+        process.env = previous;
+        throw error;
+    }
     const base = `http://127.0.0.1:${server.address().port}`;
 
     return {
@@ -45,10 +56,11 @@ const validScore = { name: 'Nirb', difficulty: 'easy', time: 120, hints: 0, leve
 
 let server;
 beforeEach(async () => {
+    server = undefined;
     server = await startServer();
 });
 afterEach(async () => {
-    await server.close();
+    await server?.close();
 });
 
 describe('GET /api/health', () => {
@@ -63,6 +75,7 @@ describe('POST /api/leaderboard', () => {
     it('refuses oversized bodies — a score is under 1 kB', async () => {
         const resp = await post(server.base, { ...validScore, name: 'x'.repeat(20000) });
         expect(resp.status).toBe(413);
+        expect(await resp.json()).toEqual({ error: 'Request body too large' });
     });
 
     it('accepts a valid score and returns its rank', async () => {
@@ -74,6 +87,12 @@ describe('POST /api/leaderboard', () => {
         expect(body.rank).toBe(1);
         expect(body.entry).toMatchObject({ name: 'Nirb', difficulty: 'easy', time: 120, level: 7 });
         expect(body.entry.date).toBeTruthy();
+    });
+
+    it('can reload a name truncated at whitespace', async () => {
+        await post(server.base, { ...validScore, name: 'x'.repeat(19) + ' more' });
+        const response = await fetch(`${server.base}/api/leaderboard/easy`);
+        expect((await response.json())[0].name).toBe('x'.repeat(19) + ' ');
     });
 
     it('persists the score to disk', async () => {
@@ -196,8 +215,10 @@ describe('GET /api/leaderboard/:difficulty', () => {
         expect(await (await fetch(`${server.base}/api/leaderboard/evil`)).json()).toEqual([]);
     });
 
-    it('returns an empty array for an unknown difficulty', async () => {
-        expect(await (await fetch(`${server.base}/api/leaderboard/nonsense`)).json()).toEqual([]);
+    it.each(['nonsense', 'constructor', '__proto__', 'toString'])('rejects invalid difficulty %s', async (difficulty) => {
+        const response = await fetch(`${server.base}/api/leaderboard/${difficulty}`);
+        expect(response.status).toBe(400);
+        expect(await response.json()).toEqual({ error: 'Invalid difficulty' });
     });
 
     it('caps the response at 50 entries', async () => {
@@ -230,7 +251,7 @@ describe('mistakes', () => {
     it('records a bounded mistake count', async () => {
         expect((await (await post(server.base, { ...validScore, mistakes: 3 })).json()).entry.mistakes).toBe(3);
         expect((await (await post(server.base, { ...validScore, mistakes: -4 })).json()).entry.mistakes).toBe(0);
-        expect((await (await post(server.base, { ...validScore, mistakes: 5000 })).json()).entry.mistakes).toBe(999);
+        expect((await (await post(server.base, { ...validScore, mistakes: 5000 })).json()).entry.mistakes).toBe(5000);
     });
 
     // A client from before the field is an unknown, not a perfect game.
@@ -382,6 +403,30 @@ describe('data file handling', () => {
 });
 
 describe('numeric field hardening', () => {
+    it.each([82, 1000, Number.MAX_SAFE_INTEGER])('persists and reloads cumulative safe-integer counters: %s', async count => {
+        const response = await post(server.base, { ...validScore, hints: count, mistakes: count });
+        expect(response.status).toBe(200);
+        expect((await response.json()).entry).toMatchObject({ hints: count, mistakes: count });
+        expect(server.readData().easy[0]).toMatchObject({ hints: count, mistakes: count });
+        const entries = await (await fetch(`${server.base}/api/leaderboard/easy`)).json();
+        expect(entries[0]).toMatchObject({ hints: count, mistakes: count });
+    });
+
+    it('bounds counters above the safe-integer range', async () => {
+        const response = await post(server.base, {
+            ...validScore, hints: Number.MAX_SAFE_INTEGER + 1, mistakes: Number.MAX_SAFE_INTEGER + 1,
+        });
+        expect(response.status).toBe(200);
+        expect((await response.json()).entry).toMatchObject({
+            hints: Number.MAX_SAFE_INTEGER, mistakes: Number.MAX_SAFE_INTEGER,
+        });
+    });
+
+    it('retains the 24-hour leaderboard eligibility boundary', async () => {
+        expect((await post(server.base, { ...validScore, time: 86400 })).status).toBe(200);
+        expect((await post(server.base, { ...validScore, time: 86401 })).status).toBe(400);
+    });
+
     // hints and level are rendered by the frontend. Unvalidated they were a
     // stored XSS vector: only `name` was ever sanitised.
     it('coerces a markup payload in hints to a number', async () => {
@@ -420,9 +465,9 @@ describe('numeric field hardening', () => {
         expect((await post(server.base, { ...validScore, time: 1e12 })).status).toBe(400);
     });
 
-    it('clamps hints to the number of cells', async () => {
+    it('preserves cumulative hints beyond the number of cells', async () => {
         const resp = await post(server.base, { ...validScore, hints: 99999 });
-        expect((await resp.json()).entry.hints).toBe(81);
+        expect((await resp.json()).entry.hints).toBe(99999);
     });
 
     it('floors a negative hint count at zero', async () => {
@@ -459,5 +504,235 @@ describe('auto-notes flag', () => {
     it('persists the flag', async () => {
         await post(server.base, { ...validScore, autoNotes: true });
         expect(server.readData().easy[0].autoNotes).toBe(true);
+    });
+});
+
+
+describe('audit regressions', () => {
+    it('persists assistance and mistakes through the real client-to-API contract', async () => {
+        vi.stubGlobal('window', {
+            SUDOKU_API_BASE: server.base,
+            location: { protocol: 'http:', href: `${server.base}/` },
+        });
+        try {
+            const client = await import('../leaderboard-client.js');
+            expect(await client.checkHealth()).toBe(true);
+            const result = await client.submitScore({ ...validScore, mistakes: 7, autoNotes: true });
+            expect(result).toMatchObject({ success: true, ranked: true, rank: 1 });
+            expect(server.readData().easy[0]).toMatchObject({ mistakes: 7, autoNotes: true });
+            expect((await client.fetchLeaderboard('easy'))[0]).toMatchObject({ mistakes: 7, autoNotes: true });
+        } finally { vi.unstubAllGlobals(); }
+    });
+
+    it('propagates rename failure and cleans the temporary file without altering stored scores', async () => {
+        await post(server.base, validScore);
+        const original = fs.readFileSync(server.dataFile, 'utf8');
+        const rename = vi.spyOn(fs, 'renameSync').mockImplementation(() => { throw new Error('disk failure'); });
+        try {
+            const response = await post(server.base, { ...validScore, name: 'Lost' });
+            expect(response.status).toBe(500);
+            expect(await response.json()).toEqual({ error: 'Unable to access leaderboard' });
+            expect(fs.readFileSync(server.dataFile, 'utf8')).toBe(original);
+            expect(fs.existsSync(`${server.dataFile}.tmp`)).toBe(false);
+        } finally { rename.mockRestore(); }
+    });
+
+    it('never overwrites malformed data when backing it up fails', async () => {
+        fs.writeFileSync(server.dataFile, '{broken');
+        const rename = vi.spyOn(fs, 'renameSync').mockImplementation(() => { throw new Error('backup failure'); });
+        try {
+            const response = await post(server.base, validScore);
+            expect(response.status).toBe(500);
+            expect(await response.json()).toEqual({ error: 'Unable to access leaderboard' });
+            expect(fs.readFileSync(server.dataFile, 'utf8')).toBe('{broken');
+        } finally { rename.mockRestore(); }
+    });
+
+    it('returns an explicit successful unranked result beyond the top 100', async () => {
+        const entry = (await (await post(server.base, validScore)).json()).entry;
+        fs.writeFileSync(server.dataFile, JSON.stringify({
+            easy: Array.from({ length: 100 }, (_, i) => ({ ...entry, time: i, name: `P${i}` })),
+        }));
+        const response = await post(server.base, { ...validScore, time: 500 });
+        expect(response.status).toBe(200);
+        expect(await response.json()).toMatchObject({ success: true, ranked: false, rank: null });
+        expect(server.readData().easy).toHaveLength(100);
+        expect(server.readData().easy.some(e => e.time === 500)).toBe(false);
+    });
+
+    it('ranks duplicate submissions by identity rather than matching fields', async () => {
+        const first = await (await post(server.base, validScore)).json();
+        const second = await (await post(server.base, validScore)).json();
+        expect(first.rank).toBe(1);
+        expect(second.rank).toBe(2);
+        expect(second.ranked).toBe(true);
+    });
+
+    it('propagates a failed atomic write and preserves the previous file', async () => {
+        await post(server.base, validScore);
+        const original = fs.readFileSync(server.dataFile, 'utf8');
+        fs.mkdirSync(`${server.dataFile}.tmp`);
+        const response = await post(server.base, { ...validScore, name: 'Lost' });
+        expect(response.status).toBe(500);
+        expect(await response.json()).toEqual({ error: 'Unable to access leaderboard' });
+        expect(fs.readFileSync(server.dataFile, 'utf8')).toBe(original);
+    });
+
+    it.each(['{broken secret', 'null', '[]', '42'])('returns generic JSON for invalid body %s', async body => {
+        const response = await fetch(`${server.base}/api/leaderboard`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body,
+        });
+        expect(response.status).toBe(400);
+        expect(await response.json()).toEqual({ error: 'Invalid request body' });
+    });
+
+    it.each(['<<b>Bob</b>>', '<b title=">">Bob</b>', 'Bob<unfinished', '<'.repeat(9000) + 'Bob'])('never leaves angle brackets in extracted names (%#)', async name => {
+        const response = await post(server.base, { ...validScore, name });
+        const body = await response.json();
+        if (response.status === 200) expect(body.entry.name).not.toMatch(/[<>]/);
+        else expect(response.status).toBe(400);
+    });
+
+    it('preserves explicitly unknown mistakes as null', async () => {
+        const body = await (await post(server.base, { ...validScore, mistakes: null })).json();
+        expect(body.entry.mistakes).toBeNull();
+    });
+
+    it.each([null, [], 42, { easy: {} }, { constructor: [] }, { easy: [null] },
+        { easy: [{ ...validScore, date: 'today', time: 'fast' }] },
+    ])('backs up invalid persisted schema (%#)', async data => {
+        const original = JSON.stringify(data);
+        fs.writeFileSync(server.dataFile, original);
+        const response = await fetch(`${server.base}/api/leaderboard`);
+        expect(response.status).toBe(200);
+        expect(await response.json()).toEqual({});
+        const backup = fs.readdirSync(path.dirname(server.dataFile)).find(f => f.includes('.corrupt-'));
+        expect(backup).toBeTruthy();
+        expect(fs.readFileSync(path.join(path.dirname(server.dataFile), backup), 'utf8')).toBe(original);
+        expect((await post(server.base, validScore)).status).toBe(200);
+    });
+
+    it.each([
+        { time: -1 }, { hints: '<b>1</b>' }, { name: '<b>Bob</b>' },
+        { difficulty: 'evil' }, { level: 501 }, { mistakes: Number.MAX_SAFE_INTEGER + 1 },
+        { hints: Number.MAX_SAFE_INTEGER + 1 },
+        { autoNotes: 'true' }, { date: null },
+    ])('rejects invalid persisted entry fields (%#)', async fields => {
+        const entry = (await (await post(server.base, validScore)).json()).entry;
+        fs.writeFileSync(server.dataFile, JSON.stringify({ easy: [{ ...entry, ...fields }] }));
+        const response = await fetch(`${server.base}/api/leaderboard/easy`);
+        expect(response.status).toBe(200);
+        expect(await response.json()).toEqual([]);
+        expect(fs.existsSync(server.dataFile)).toBe(false);
+    });
+
+    it('loads and sorts legacy entries with unknown mistakes and no auto-notes', async () => {
+        const old = { ...validScore, date: '2026-09-19T00:00:00.000Z' };
+        fs.writeFileSync(server.dataFile, JSON.stringify({ easy: [old, { ...old, time: 10 }] }));
+        const entries = await (await fetch(`${server.base}/api/leaderboard/easy`)).json();
+        expect(entries.map(e => e.time)).toEqual([10, 120]);
+        expect(entries[0]).toMatchObject({ mistakes: null, autoNotes: false });
+    });
+});
+
+describe('CORS configuration', () => {
+    it('does not grant cross-origin access by default', async () => {
+        const response = await fetch(`${server.base}/api/health`, { headers: { Origin: 'https://other.example' } });
+        expect(response.status).toBe(200);
+        expect(response.headers.get('access-control-allow-origin')).toBeNull();
+    });
+
+    it.each(['https://sudoku.example', '*', 'null'])('honors explicit CORS_ORIGIN %s', async origin => {
+        const configured = await startServer({ CORS_ORIGIN: origin });
+        try {
+            const response = await fetch(`${configured.base}/api/leaderboard`, {
+                method: 'OPTIONS', headers: { Origin: origin, 'Access-Control-Request-Method': 'POST' },
+            });
+            expect(response.status).toBe(204);
+            expect(response.headers.get('access-control-allow-origin')).toBe(origin);
+        } finally { await configured.close(); }
+    });
+});
+
+
+describe('direct-run process shutdown', () => {
+    async function launch() {
+        const child = spawn(process.execPath, [fileURLToPath(new URL('../leaderboard-api/server.js', import.meta.url))], {
+            env: { ...process.env, PORT: '0', DATA_FILE: server.dataFile },
+            stdio: ['ignore', 'pipe', 'pipe'],
+        });
+        let output = '';
+        child.stdout.on('data', chunk => { output += chunk; });
+        child.stderr.on('data', chunk => { output += chunk; });
+        const closed = once(child, 'close');
+        const cleanup = async () => {
+            if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
+            await closed;
+        };
+        try {
+            await vi.waitFor(() => {
+                expect(child.exitCode, output).toBeNull();
+                expect(output).toMatch(/running on port (\d+)/);
+            }, { timeout: 5000, interval: 10 });
+            const port = Number(output.match(/running on port (\d+)/)[1]);
+            return { child, closed, cleanup, port, output: () => output };
+        } catch (error) {
+            await cleanup();
+            throw error;
+        }
+    }
+
+    // Expect: 100-continue establishes that Express is reading an active body
+    // before the signal, so this tests draining rather than just idle shutdown.
+    async function beginUpload(port) {
+        const body = JSON.stringify(validScore);
+        const request = http.request({
+            hostname: '127.0.0.1', port, path: '/api/leaderboard', method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body), Expect: '100-continue' },
+        });
+        request.on('error', () => {}); // Forced shutdown deliberately closes the socket.
+        const continued = once(request, 'continue');
+        request.flushHeaders();
+        await continued;
+        return { request, body };
+    }
+
+    it.each(['SIGTERM', 'SIGINT'])('drains active requests, saves the score and exits cleanly on %s', async signal => {
+        const process = await launch();
+        let upload;
+        try {
+            upload = await beginUpload(process.port);
+            expect(process.child.kill(signal)).toBe(true);
+            await vi.waitFor(() => expect(process.output()).toContain(`Received ${signal}`), { timeout: 2000 });
+            // A second signal is harmless while the first shutdown is draining.
+            process.child.kill(signal);
+            const response = once(upload.request, 'response');
+            upload.request.end(upload.body);
+            const [res] = await response;
+            res.resume();
+            expect(res.statusCode).toBe(200);
+            await vi.waitFor(() => expect(process.child.exitCode).toBe(0), { timeout: 3000 });
+            expect(await process.closed).toEqual([0, null]);
+            expect(server.readData().easy[0]).toMatchObject(validScore);
+        } finally {
+            upload?.request.destroy();
+            await process.cleanup();
+        }
+    });
+
+    it('forces a bounded exit when an active upload never completes', async () => {
+        const process = await launch();
+        let upload;
+        try {
+            upload = await beginUpload(process.port);
+            process.child.kill('SIGTERM');
+            await vi.waitFor(() => expect(process.child.exitCode).toBe(1), { timeout: 8000, interval: 20 });
+            expect(await process.closed).toEqual([1, null]);
+            expect(process.output()).toContain('Leaderboard shutdown timed out');
+            expect(server.readData()).toEqual({});
+        } finally {
+            upload?.request.destroy();
+            await process.cleanup();
+        }
     });
 });

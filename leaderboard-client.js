@@ -27,7 +27,30 @@ export const API_BASE = (() => {
     return new URL('.', window.location.href).href.replace(/\/$/, '');
 })();
 
-const HEALTH_TIMEOUT_MS = 2000;
+const REQUEST_TIMEOUT_MS = 2000;
+
+// Cover both response headers and JSON body consumption, and release the timer.
+async function requestJSON(url, options = {}) {
+    const controller = new AbortController();
+    let timer;
+    try {
+        return await Promise.race([
+            (async () => {
+                const response = await fetch(url, { ...options, signal: controller.signal });
+                if (!response.ok) throw new Error('Leaderboard request failed');
+                return await response.json();
+            })(),
+            new Promise((resolve, reject) => {
+                timer = setTimeout(() => {
+                    controller.abort();
+                    reject(new Error('Leaderboard request timed out'));
+                }, REQUEST_TIMEOUT_MS);
+            }),
+        ]);
+    } finally {
+        clearTimeout(timer);
+    }
+}
 
 let available = false;
 
@@ -39,10 +62,8 @@ export const isAvailable = () => available;
  */
 export async function checkHealth() {
     try {
-        const resp = await fetch(`${API_BASE}/api/health`, {
-            signal: AbortSignal.timeout(HEALTH_TIMEOUT_MS),
-        });
-        available = resp.ok;
+        const body = await requestJSON(`${API_BASE}/api/health`);
+        available = body !== null && typeof body === 'object' && !Array.isArray(body) && body.status === 'ok';
     } catch (e) {
         // No backend, no network, or no fetch at all (file://, jsdom).
         available = false;
@@ -54,22 +75,23 @@ export async function checkHealth() {
 export async function fetchLeaderboard(difficulty) {
     if (!available) return [];
     try {
-        const resp = await fetch(`${API_BASE}/api/leaderboard/${encodeURIComponent(difficulty)}`);
-        if (resp.ok) return await resp.json();
+        const body = await requestJSON(`${API_BASE}/api/leaderboard/${encodeURIComponent(difficulty)}`);
+        return Array.isArray(body) ? body : [];
     } catch (e) { /* fall through to the empty list */ }
     return [];
 }
 
-/** Submit a score; null if it could not be recorded. */
-export async function submitScore({ name, difficulty, time, hints, level }) {
+/** Submit a score; null on failure. Success may be unranked (ranked: false, rank: null). */
+export async function submitScore({ name, difficulty, time, hints, level, mistakes, autoNotes }) {
     if (!available) return null;
     try {
-        const resp = await fetch(`${API_BASE}/api/leaderboard`, {
+        const body = await requestJSON(`${API_BASE}/api/leaderboard`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name, difficulty, time, hints, level }),
+            body: JSON.stringify({ name, difficulty, time, hints, level, mistakes, autoNotes }),
         });
-        if (resp.ok) return await resp.json();
+        if (body?.success === true && (Number.isInteger(body.rank) && body.rank > 0
+            || body.ranked === false && body.rank === null)) return body;
     } catch (e) { /* fall through to null */ }
     return null;
 }
