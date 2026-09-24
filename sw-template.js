@@ -19,7 +19,10 @@
  *   - /api/ is never cached. Leaderboard responses must not be replayed, and a
  *     cached health check would misreport the backend as available.
  */
-const CACHE = '__CACHE_VERSION__';
+const CACHE_PREFIX = `sudoku-v2:${encodeURIComponent(self.registration.scope)}:`;
+const CACHE = CACHE_PREFIX + '__CACHE_VERSION__';
+const ENTRY = '__ENTRY_ASSET__';
+const ENTRY_TYPE = '__ENTRY_TYPE__';
 const PRECACHE = __PRECACHE_MANIFEST__;
 
 /**
@@ -58,48 +61,50 @@ function isUsable(response) {
     return response.ok && response.type === 'basic';
 }
 
-/**
- * The hashed assets this worker actually holds, as they appear in a document.
- *
- * PRECACHE entries are root-relative ("./assets/index.DLHzd0x1.js") while the
- * markup may name them any number of ways, so both sides are reduced to the
- * "assets/<file>" tail that the content hash makes unique anyway.
- */
-const PRECACHED_ASSETS = new Set(
-    PRECACHE.filter((p) => p.includes('assets/'))
-        .map((p) => p.slice(p.indexOf('assets/')))
-);
+/** Resolve whole URLs: matching only an assets/ tail accepts other origins/paths. */
+const PRECACHED_URLS = new Set(PRECACHE.map((p) => new URL(p, self.registration.scope).href));
+const ENTRY_URL = new URL(ENTRY, self.registration.scope).href;
 
 /**
- * Whether this worker can actually back the document it is about to serve.
- *
- * The document and its assets ship as one build but are cached as separate
- * entries, and network-first opens a seam between them: from a deploy until the
- * new worker finishes installing, the network hands back the *new* index.html
- * while this worker still holds only the *old* build's assets. Every hashed
- * filename in it then misses the cache and goes to the network — and on the
- * connection that made us race in the first place, that is a blank screen with
- * no way back.
- *
- * PRECACHE is the exact asset list of this worker's own build, so the question
- * is just whether the document names anything missing from it. If it does, the
- * build it belongs to has a worker already installing; serving the cached page
- * for one more load lets that install finish and swap document and assets
- * together, which is the only way they were ever safe to swap.
- *
- * Note this only has to cover what the *markup* names. The entry script is one
- * of those, and a cached entry script can only ever import the chunk hashes it
- * was built with — which are precached alongside it.
+ * Conservative validation of our generated shell, not a general HTML parser.
+ * Require the executable entry tag and reject resource URLs outside this build.
+ * Comments and inline script text cannot stand in for a real entry tag. A base
+ * element would change browser URL resolution, so it is never accepted.
  */
-function isBackedByPrecache(html) {
-    const referenced = html.match(/assets\/[A-Za-z0-9._-]+/g) || [];
-    return referenced.every((name) => PRECACHED_ASSETS.has(name));
+function isBackedByPrecache(html, documentUrl) {
+    const markup = html.replace(/<!--[\s\S]*?-->/g, '')
+        .replace(/<(template|textarea|title|style|noscript)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, '')
+        .replace(/(<script\b[^>]*>)[\s\S]*?<\/script\s*>/gi, '$1</script>');
+    if (/<base\b/i.test(markup)) return false;
+    let hasEntry = false;
+    for (const match of markup.matchAll(/<(script|link|img|source)\b([^>]*)>/gi)) {
+        const tag = match[1].toLowerCase();
+        const attrs = new Map();
+        const attributes = /([^\s=/>]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+)))?/g;
+        for (const attr of match[2].matchAll(attributes)) {
+            const name = attr[1].toLowerCase();
+            if (attrs.has(name)) return false;
+            attrs.set(name, attr[2] ?? attr[3] ?? attr[4] ?? '');
+        }
+        // Canonical and other metadata links do not fetch app resources.
+        if (tag === 'link' && !(attrs.get('rel') || '').toLowerCase().split(/\s+/)
+            .some((rel) => ['stylesheet', 'modulepreload', 'preload', 'icon', 'apple-touch-icon', 'manifest'].includes(rel))) continue;
+        // This build emits no responsive source lists; do not silently skip one.
+        if (attrs.has('srcset')) return false;
+        const source = attrs.get(tag === 'link' ? 'href' : 'src');
+        if (source === undefined) continue;
+        let url;
+        try { url = new URL(source, documentUrl).href; } catch { return false; }
+        if (!PRECACHED_URLS.has(url)) return false;
+        if (tag === 'script' && (attrs.get('type') || '') === ENTRY_TYPE && !attrs.has('nomodule') && url === ENTRY_URL) hasEntry = true;
+    }
+    return hasEntry;
 }
 
 /** Store a response, ignoring a cache that refuses it (opaque, over quota). */
 function cacheResponse(request, response) {
     const copy = response.clone();
-    caches.open(CACHE)
+    return caches.open(CACHE)
         .then((cache) => cache.put(request, copy))
         .catch(() => { /* the response is still served; only the copy is lost */ });
 }
@@ -110,16 +115,17 @@ function cacheResponse(request, response) {
  * The network request is never cancelled — if it lands after losing the race it
  * still refreshes the cached document, so the next launch is current.
  */
-function navigationResponse(request) {
+function navigationResponse(request, event) {
     const network = fetch(request);
 
     // The losing branch is deliberately left running; swallow its rejection so
     // it cannot surface as an unhandled one.
     network.catch(() => {});
 
-    const cached = () => caches.match(request, MATCH_OPTIONS).then(
-        (hit) => hit || caches.match(PRECACHE[0], MATCH_OPTIONS)
+    const cached = () => caches.open(CACHE).then(async (cache) =>
+        await cache.match(request, MATCH_OPTIONS) || await cache.match(PRECACHE[0], MATCH_OPTIONS)
     );
+    let write = Promise.resolve();
 
     /**
      * Whether the answer is worth showing — which is what the race waits on,
@@ -131,14 +137,16 @@ function navigationResponse(request) {
         if (!isUsable(response)) return 'failed';
         return response.clone().text().then(
             (html) => {
-                if (!isBackedByPrecache(html)) return 'unbacked';
-                cacheResponse(request, response);
+                if (!isBackedByPrecache(html, response.url || request.url)) return 'unbacked';
+                write = cacheResponse(request, response);
                 return 'network';
             },
-            // A body we cannot read is not evidence of a bad document.
-            () => { cacheResponse(request, response); return 'network'; }
+            () => 'failed'
         );
-    }, () => 'failed');
+    }, () => 'failed').catch(() => 'failed');
+
+    // Registered synchronously, retaining both a late response and its write.
+    event.waitUntil(verdict.then(() => write));
 
     const expired = new Promise((resolve) => {
         setTimeout(() => resolve('timeout'), NAV_TIMEOUT_MS);
@@ -147,28 +155,44 @@ function navigationResponse(request) {
     return Promise.race([verdict, expired]).then((outcome) => {
         if (outcome === 'network') return network;
         // Failed, unbacked, rejected or too slow. Serve the cached page if
-        // there is one; with nothing cached — a first visit — there is nothing
-        // better to offer than whatever the network says, and the assets it
-        // names are then fetched over the same working connection.
-        return cached().then((hit) => hit || network);
+        // there is one. Without one, never serve an unverified 200 document.
+        return cached().then((hit) => hit || verdict.then((result) =>
+            result === 'network' ? network : Response.error()
+        ));
     });
 }
 
 self.addEventListener('install', (event) => {
-    event.waitUntil(
-        caches.open(CACHE)
-            .then((cache) => cache.addAll(PRECACHE))
-            // Take over promptly; navigations are network-first, so an outdated
-            // controller cannot pin anyone to a stale build.
-            .then(() => self.skipWaiting())
-    );
+    event.waitUntil((async () => {
+        const existed = (await caches.keys()).includes(CACHE);
+        try {
+            const cache = await caches.open(CACHE);
+            // A worker-only update can reuse an active cache. Never overwrite
+            // or delete that cache while the replacement is still installing.
+            if (!existed) await cache.addAll(PRECACHE);
+            const shell = await cache.match(PRECACHE[0], MATCH_OPTIONS);
+            if (!shell || !isUsable(shell) || !isBackedByPrecache(
+                await shell.text(), shell.url || self.registration.scope
+            )) throw new Error('Invalid precached app shell');
+            for (const asset of PRECACHE.slice(1)) {
+                const response = await cache.match(asset, MATCH_OPTIONS);
+                if (!response || !isUsable(response)) throw new Error('Missing precached app asset');
+            }
+        } catch (error) {
+            if (!existed) await caches.delete(CACHE);
+            throw error;
+        }
+        await self.skipWaiting();
+    })());
 });
 
 self.addEventListener('activate', (event) => {
     event.waitUntil(
         caches.keys()
             .then((keys) => Promise.all(
-                keys.filter((key) => key !== CACHE).map((key) => caches.delete(key))
+                // Unscoped legacy sudoku-* caches have no reliable owner. Leave
+                // them intact during migration and never read from them.
+                keys.filter((key) => key.startsWith(CACHE_PREFIX) && key !== CACHE).map((key) => caches.delete(key))
             ))
             .then(() => self.clients.claim())
     );
@@ -181,24 +205,24 @@ self.addEventListener('fetch', (event) => {
     if (request.method !== 'GET') return;
 
     const url = new URL(request.url);
-    if (url.origin !== self.location.origin) return;
+    if (url.origin !== self.location.origin || !url.href.startsWith(self.registration.scope)) return;
 
     // Leaderboard traffic always goes to the network.
     if (url.pathname.includes('/api/')) return;
 
     if (request.mode === 'navigate') {
-        event.respondWith(navigationResponse(request));
+        event.respondWith(navigationResponse(request, event));
         return;
     }
 
-    event.respondWith(
-        caches.match(request, MATCH_OPTIONS).then((cached) => {
-            if (cached) return cached;
-            return fetch(request).then((response) => {
-                // Only store complete, same-origin successes.
-                if (isUsable(response)) cacheResponse(request, response);
-                return response;
-            });
-        })
-    );
+    let write = Promise.resolve();
+    const response = caches.open(CACHE).then((cache) => cache.match(request, MATCH_OPTIONS)).then((cached) => {
+        if (cached) return cached;
+        return fetch(request).then((response) => {
+            if (isUsable(response)) write = cacheResponse(request, response);
+            return response;
+        });
+    });
+    event.waitUntil(response.then(() => write).catch(() => {}));
+    event.respondWith(response);
 });

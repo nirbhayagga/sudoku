@@ -1,13 +1,46 @@
-import { test, expect } from '@playwright/test';
+import { test as base, expect } from '@playwright/test';
+import { offlineHost } from './offline-host.js';
+
+const test = base.extend({
+    offlineSite: async ({ browserName, context }, use) => {
+        if (browserName !== 'webkit') {
+            await use({ url: '/', disconnect: () => context.setOffline(true), reconnect: () => context.setOffline(false) });
+            return;
+        }
+        // On WebKit 26.5, setOffline(true) prevents a service-worker-backed
+        // document reload entirely. Test genuine connection loss instead; the
+        // old Window and a browser HTTP-cache hit cannot satisfy these tests.
+        const host = await offlineHost();
+        try {
+            await use({
+                ...host,
+                disconnect: async () => {
+                    await host.disconnect();
+                    await expect(fetch(new URL('uncached-network-probe', host.url), { signal: AbortSignal.timeout(2000) })).rejects.toThrow();
+                },
+            });
+        } finally { await host.close(); }
+    },
+});
 
 /** Enter a digit the way this platform actually allows. */
-async function enterDigit(page, projectName, cell, digit) {
+async function enterDigit(page, isMobile, cell, digit) {
     await cell.click();
-    if (projectName === 'mobile') {
+    if (isMobile) {
         await page.locator(`.numpad-btn[data-digit="${digit}"]`).click();
     } else {
         await page.keyboard.press(digit);
     }
+}
+
+/** Require a new document and a functioning app, never an old page left on
+ * screen after a failed navigation. No navigation errors are ignored.
+ */
+async function reloadOffline(page) {
+    await page.evaluate(() => { window.__beforeOfflineReload = true; });
+    await page.reload();
+    expect(await page.evaluate(() => Object.hasOwn(window, '__beforeOfflineReload'))).toBe(false);
+    await expect(page.locator('.cell-wrapper')).toHaveCount(81);
 }
 
 /**
@@ -63,18 +96,26 @@ test.describe('service worker', () => {
     });
 });
 
-test.describe('offline', () => {
+test.describe('network unavailable', () => {
+    test.beforeEach(({ browserName }, testInfo) => {
+        testInfo.annotations.push({
+            type: 'network-failure',
+            description: browserName === 'webkit'
+                ? 'Real connection refusal: private static listener closed after precaching; browser stays online.'
+                : 'Browser context offline emulation.',
+        });
+    });
     // The reason the PWA exists: play on a plane, on the underground, anywhere.
-    test('loads and plays a full game with the network cut', async ({ page, context }, testInfo) => {
-        await page.goto('/');
+    test('loads a puzzle and accepts input with the network cut', async ({ page, offlineSite }, testInfo) => {
+        await page.goto(offlineSite.url);
         await waitForServiceWorker(page);
 
         // Pull the bank into the cache before going offline.
         await page.locator('#btn-new-game').click();
         await expect(page.locator('.cell-wrapper.locked').first()).toBeVisible();
 
-        await context.setOffline(true);
-        await page.reload();
+        await offlineSite.disconnect();
+        await reloadOffline(page);
 
         await expect(page.locator('.cell-wrapper')).toHaveCount(81);
 
@@ -84,25 +125,25 @@ test.describe('offline', () => {
         await expect(page.locator('.cell-wrapper.locked').first()).toBeVisible();
 
         const empty = page.locator('.cell-wrapper:not(.locked) .cell-input').first();
-        await enterDigit(page, testInfo.project.name, empty, '5');
+        await enterDigit(page, testInfo.project.use.isMobile, empty, '5');
         await expect(empty).toHaveValue('5');
 
-        await context.setOffline(false);
+        await offlineSite.reconnect();
     });
 
-    test('hides the leaderboard rather than hanging when the API is unreachable', async ({ page, context }) => {
-        await page.goto('/');
+    test('hides the leaderboard rather than hanging when the API is unreachable', async ({ page, offlineSite }) => {
+        await page.goto(offlineSite.url);
         await waitForServiceWorker(page);
-        await context.setOffline(true);
-        await page.reload();
+        await offlineSite.disconnect();
+        await reloadOffline(page);
 
         await expect(page.locator('.cell-wrapper')).toHaveCount(81);
         await expect(page.locator('#btn-leaderboard')).toBeHidden();
-        await context.setOffline(false);
+        await offlineSite.reconnect();
     });
 
-    test('keeps a saved game across an offline reload', async ({ page, context }, testInfo) => {
-        await page.goto('/');
+    test('keeps a saved game across an offline reload', async ({ page, offlineSite }, testInfo) => {
+        await page.goto(offlineSite.url);
         await waitForServiceWorker(page);
 
         await page.locator('.diff-btn[data-diff="easy"]').click();
@@ -111,16 +152,21 @@ test.describe('offline', () => {
         await expect(page.locator('.cell-wrapper.locked').first()).toBeVisible();
 
         const empty = page.locator('.cell-wrapper:not(.locked) .cell-input').first();
-        await enterDigit(page, testInfo.project.name, empty, '6');
+        await enterDigit(page, testInfo.project.use.isMobile, empty, '6');
 
         // visibilitychange flushes the debounced save.
         await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
         await page.waitForTimeout(300);
 
-        await context.setOffline(true);
-        await page.reload();
+        await offlineSite.disconnect();
+        await reloadOffline(page);
         await expect(page.locator('.resume-banner')).toBeVisible();
-        await context.setOffline(false);
+        await page.locator('#btn-resume-yes').click();
+        await expect(empty).toHaveValue('6');
+        const next = page.locator('.cell-wrapper:not(.locked) .cell-input').nth(1);
+        await enterDigit(page, testInfo.project.use.isMobile, next, '5');
+        await expect(next).toHaveValue('5');
+        await offlineSite.reconnect();
     });
 });
 

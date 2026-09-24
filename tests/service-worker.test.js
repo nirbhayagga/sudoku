@@ -16,6 +16,8 @@ let swSource;
 let precache;
 let cacheName;
 let indexHtml;
+let standaloneSource;
+let standaloneHtml;
 
 beforeAll(() => {
     const dist = fs.mkdtempSync(path.join(os.tmpdir(), 'sudoku-sw-'));
@@ -26,9 +28,22 @@ beforeAll(() => {
     );
     swSource = fs.readFileSync(path.join(dist, 'sw.js'), 'utf8');
     precache = JSON.parse(swSource.match(/const PRECACHE = (\[[\s\S]*?\]);/)[1]);
-    cacheName = swSource.match(/const CACHE = '(.*?)'/)[1];
+    cacheName = `sudoku-v2:${encodeURIComponent('https://sudoku.example.com/')}:${swSource.match(/const CACHE = CACHE_PREFIX \+ '(.*?)'/)[1]}`;
     indexHtml = fs.readFileSync(path.join(dist, 'index.html'), 'utf8');
     fs.rmSync(dist, { recursive: true, force: true });
+}, 120_000);
+
+beforeAll(() => {
+    const dist = fs.mkdtempSync(path.join(os.tmpdir(), 'sudoku-sw-standalone-'));
+    try {
+        execFileSync(process.execPath,
+            [path.join(repoRoot, 'node_modules/vite/bin/vite.js'), 'build', '--mode', 'standalone', '--outDir', dist, '--emptyOutDir'],
+            { cwd: repoRoot, stdio: 'pipe' });
+        standaloneSource = fs.readFileSync(path.join(dist, 'sw.js'), 'utf8');
+        standaloneHtml = fs.readFileSync(path.join(dist, 'index.html'), 'utf8');
+    } finally {
+        fs.rmSync(dist, { recursive: true, force: true });
+    }
 }, 120_000);
 
 /** Minimal Cache Storage that records what happened. */
@@ -39,7 +54,7 @@ function makeCaches(store = new Map()) {
             if (!store.has(name)) store.set(name, new Map());
             const entries = store.get(name);
             return {
-                addAll: async (urls) => urls.forEach((u) => entries.set(u, { url: u, cached: true })),
+                addAll: async (urls) => urls.forEach((u) => entries.set(u, page(u, indexHtml))),
                 put: async (req, res) => entries.set(req.url ?? req, res),
                 match: async (req) => entries.get(req.url ?? req),
             };
@@ -58,10 +73,12 @@ function makeCaches(store = new Map()) {
 }
 
 /** Load the worker into a stub global scope and capture its listeners. */
-function loadWorker({ fetchImpl, caches, setTimeoutImpl } = {}) {
+function loadWorker({ fetchImpl, caches, setTimeoutImpl, scopeUrl = 'https://sudoku.example.com/', source = swSource } = {}) {
     const listeners = {};
     const scope = {
         location: { origin: 'https://sudoku.example.com' },
+        registration: { scope: scopeUrl },
+        Response,
         caches: caches || makeCaches(),
         clients: { claim: async () => {} },
         skipWaiting: async () => {},
@@ -77,14 +94,14 @@ function loadWorker({ fetchImpl, caches, setTimeoutImpl } = {}) {
     };
     scope.self = scope;
     vm.createContext(scope);
-    vm.runInContext(swSource, scope);
+    vm.runInContext(source, scope);
     return { scope, listeners };
 }
 
 /** Run a fetch handler and return what it chose to respond with, if anything. */
-async function handleFetch(listeners, request) {
+async function handleFetch(listeners, request, work = []) {
     let responded;
-    const event = { request, respondWith: (p) => { responded = p; } };
+    const event = { request, waitUntil: (p) => work.push(p), respondWith: (p) => { responded = p; } };
     listeners.fetch(event);
     return responded === undefined ? undefined : await responded;
 }
@@ -104,7 +121,7 @@ function page(body, html) {
 /** Markup naming exactly the assets this build precached — the good case. */
 const backedHtml = () => precache
     .filter((p) => p.includes('assets/'))
-    .map((p) => `<script src="${p}"></script>`)
+    .map((p) => `<script type="module" src="${p}"></script>`)
     .join('');
 
 /** Markup from a later build, whose hashes this worker has never seen. */
@@ -150,8 +167,8 @@ describe('cache matching', () => {
     });
 
     it('uses the option on every cache lookup', () => {
-        const lookups = swSource.match(/caches\.match\(/g) || [];
-        const withOptions = swSource.match(/caches\.match\([^)]*MATCH_OPTIONS/g) || [];
+        const lookups = swSource.match(/cache\.match\(/g) || [];
+        const withOptions = swSource.match(/cache\.match\([^)]*MATCH_OPTIONS/g) || [];
         expect(withOptions.length).toBe(lookups.length);
     });
 });
@@ -165,27 +182,99 @@ describe('install', () => {
         await listeners.install({ waitUntil: (p) => { work = p; } });
         await work;
 
-        const cacheName = swSource.match(/const CACHE = '([^']+)'/)[1];
         expect([...scope.caches.store.get(cacheName).keys()].sort()).toEqual([...precache].sort());
+    });
+
+    it.each(['200 error', 'unreadable', 'unknown asset', 'partial addAll'])('rejects %s during install and removes only the new cache', async (failure) => {
+        const oldName = cacheName + '-previous';
+        const caches = makeCaches(new Map([[oldName, new Map()], ['other-app', new Map()]]));
+        const open = caches.open;
+        caches.open = async (name) => {
+            const cache = await open(name);
+            const addAll = cache.addAll;
+            cache.addAll = async (urls) => {
+                await addAll(urls);
+                if (failure === 'partial addAll') throw new Error('download failed');
+                const response = page('bad', failure === 'unknown asset' ? unbackedHtml : '<html><body>Service unavailable</body></html>');
+                if (failure === 'unreadable') response.text = async () => { throw new Error('body failed'); };
+                await cache.put('./', response);
+            };
+            return cache;
+        };
+        const { listeners, scope } = loadWorker({ caches });
+        let activated = false;
+        scope.skipWaiting = async () => { activated = true; };
+        let work;
+        listeners.install({ waitUntil: (p) => { work = p; } });
+        await expect(work).rejects.toThrow();
+        expect(activated).toBe(false);
+        expect([...caches.store.keys()]).toEqual([oldName, 'other-app']);
+    });
+
+    it('does not delete an existing active cache when revalidation fails', async () => {
+        const caches = makeCaches(new Map([[cacheName, new Map([['./', page('old', '<h1>Error</h1>')]])]]));
+        const { listeners } = loadWorker({ caches });
+        let work;
+        listeners.install({ waitUntil: (p) => { work = p; } });
+        await expect(work).rejects.toThrow('Invalid precached app shell');
+        expect(caches.store.get(cacheName).get('./').body).toBe('old');
+    });
+
+});
+
+describe.each(['modular', 'standalone'])('%s HTTP worker', (target) => {
+    it('installs and serves the emitted shell under a subpath', async () => {
+        const source = target === 'modular' ? swSource : standaloneSource;
+        const html = target === 'modular' ? indexHtml : standaloneHtml;
+        const caches = makeCaches();
+        const open = caches.open;
+        caches.open = async (name) => ({ ...await open(name),
+            addAll: async (urls) => {
+                const cache = await open(name);
+                for (const url of urls) await cache.put(url, page('app', html));
+            },
+        });
+        const { listeners, scope } = loadWorker({ source, caches,
+            scopeUrl: 'https://sudoku.example.com/sudoku/', fetchImpl: async () => page('app', html) });
+        let activated = false;
+        scope.skipWaiting = async () => { activated = true; };
+        let work;
+        listeners.install({ waitUntil: (p) => { work = p; } });
+        await work;
+        expect(activated).toBe(true);
+        const request = req('https://sudoku.example.com/sudoku/', { mode: 'navigate' });
+        expect((await handleFetch(listeners, request)).body).toBe('app');
+        // The opposite script type must not qualify as this build's entry.
+        const wrongHtml = target === 'modular'
+            ? html.replace('type="module"', 'type="text/plain"')
+            : html.replace(/<script([^>]*src=)/, '<script type="module"$1');
+        const invalid = loadWorker({ source, scopeUrl: 'https://sudoku.example.com/sudoku/',
+            fetchImpl: async () => page('wrong type', wrongHtml) });
+        expect((await handleFetch(invalid.listeners, request)).type).toBe('error');
     });
 });
 
 describe('activate', () => {
-    it('deletes caches from previous builds', async () => {
+    it('deletes only previous builds in this scope and preserves ambiguous legacy caches', async () => {
         const store = new Map([
-            ['sudoku-oldbuild', new Map()],
+            [cacheName.replace(/:[^:]+$/, ':oldbuild'), new Map()],
+            ['sudoku-0123456789ab', new Map()],
+            [`sudoku-v2:${encodeURIComponent('https://sudoku.example.com/other/')}:oldbuild`, new Map()],
             ['unrelated-cache', new Map()],
         ]);
         const caches = makeCaches(store);
         const { listeners } = loadWorker({ caches });
-        const cacheName = swSource.match(/const CACHE = '([^']+)'/)[1];
         store.set(cacheName, new Map());
 
         let work;
         await listeners.activate({ waitUntil: (p) => { work = p; } });
         await work;
 
-        expect([...store.keys()]).toEqual([cacheName]);
+        expect([...store.keys()]).toEqual([
+            'sudoku-0123456789ab',
+            `sudoku-v2:${encodeURIComponent('https://sudoku.example.com/other/')}:oldbuild`,
+            'unrelated-cache', cacheName,
+        ]);
     });
 });
 
@@ -221,7 +310,7 @@ describe('fetch strategy', () => {
     });
 
     it('serves assets from cache without touching the network', async () => {
-        const caches = makeCaches(new Map([['c', new Map([['https://sudoku.example.com/assets/app.js', { body: 'cached' }]])]]));
+        const caches = makeCaches(new Map([[cacheName, new Map([['https://sudoku.example.com/assets/app.js', { body: 'cached' }]])]]));
         const worker = loadWorker({
             caches,
             fetchImpl: async () => { throw new Error('should not reach the network'); },
@@ -238,7 +327,7 @@ describe('fetch strategy', () => {
 
     // Serving a stale document would pin clients to old asset hashes for good.
     it('goes to the network first for navigations', async () => {
-        const caches = makeCaches(new Map([['c', new Map([['https://sudoku.example.com/', { body: 'stale page' }]])]]));
+        const caches = makeCaches(new Map([[cacheName, new Map([['https://sudoku.example.com/', { body: 'stale page' }]])]]));
         const worker = loadWorker({
             caches,
             fetchImpl: async () => page('fresh page', backedHtml()),
@@ -248,7 +337,7 @@ describe('fetch strategy', () => {
     });
 
     it('serves the cached page when the network is unavailable', async () => {
-        const caches = makeCaches(new Map([['c', new Map([['https://sudoku.example.com/', { body: 'offline page' }]])]]));
+        const caches = makeCaches(new Map([[cacheName, new Map([['https://sudoku.example.com/', { body: 'offline page' }]])]]));
         const worker = loadWorker({
             caches,
             fetchImpl: async () => { throw new Error('offline'); },
@@ -352,8 +441,8 @@ describe('fetch strategy', () => {
         expect(caches.store.get(cacheName).get('https://sudoku.example.com/').body).toBe('cached page');
     });
 
-    // With nothing to fall back to, the server's own answer is the honest one.
-    it('returns the network error when no page is cached', async () => {
+    // An installed worker must not serve an unverified navigation.
+    it('returns a network failure when no page is cached', async () => {
         const worker = loadWorker({
             caches: makeCaches(),
             fetchImpl: async () => ({
@@ -362,7 +451,7 @@ describe('fetch strategy', () => {
             }),
         });
         const response = await handleFetch(worker.listeners, req('https://sudoku.example.com/', { mode: 'navigate' }));
-        expect(response.body).toBe('edge error');
+        expect(response.type).toBe('error');
     });
 
     /**
@@ -400,15 +489,13 @@ describe('fetch strategy', () => {
         expect(caches.store.get(cacheName).get('https://sudoku.example.com/').body).toBe('cached page');
     });
 
-    // A first visit has nothing to fall back to, and the connection that just
-    // delivered the document can deliver its assets too.
-    it('serves a document it cannot supply when nothing is cached', async () => {
+    it('rejects a document it cannot supply even when nothing is cached', async () => {
         const worker = loadWorker({
             caches: makeCaches(),
             fetchImpl: async () => page('next build', unbackedHtml),
         });
         const response = await handleFetch(worker.listeners, req('https://sudoku.example.com/', { mode: 'navigate' }));
-        expect(response.body).toBe('next build');
+        expect(response.type).toBe('error');
     });
 
     /**
@@ -428,6 +515,109 @@ describe('fetch strategy', () => {
         });
         const response = await handleFetch(worker.listeners, req('https://sudoku.example.com/', { mode: 'navigate' }));
         expect(response.body).toBe('this build');
+    });
+
+    it.each([
+        ['same-origin 200 error', () => '<html><body>Service unavailable</body></html>'],
+        ['stylesheet without entry', () => `<link rel="stylesheet" href="${precache.find((p) => p.endsWith('.css'))}">`],
+        ['entry in a template', () => `<template>${backedHtml()}</template>`],
+        ['responsive source list', () => `${backedHtml()}<img srcset="./missing.png 2x">`],
+        ['multiple link relations', () => `${backedHtml()}<link rel="alternate stylesheet" href="./missing.css">`],
+        ['entry in a comment', () => `<!--${backedHtml()}-->`],
+        ['entry as inline text', () => `<script>const example = '${backedHtml().replaceAll('</script>', '')}';</script>`],
+        ['foreign asset origin', () => backedHtml().replace('./assets/', 'https://other.example.com/assets/')],
+        ['wrong asset directory', () => backedHtml().replace('./assets/', './other/assets/')],
+        ['unknown stylesheet', () => `${backedHtml()}<link rel="stylesheet" href="./missing.css">`],
+        ['unknown script', () => `${backedHtml()}<script src="./missing.js"></script>`],
+        ['base URL override', () => `<base href="https://other.example.com/">${backedHtml()}`],
+    ])('rejects %s without poisoning the cache', async (_label, html) => {
+        const url = 'https://sudoku.example.com/';
+        const caches = makeCaches(new Map([[cacheName, new Map([[url, { body: 'cached page' }]])]]));
+        const worker = loadWorker({ caches, fetchImpl: async () => page('bad page', html()) });
+        const work = [];
+        expect((await handleFetch(worker.listeners, req(url, { mode: 'navigate' }), work)).body).toBe('cached page');
+        await Promise.all(work);
+        expect(caches.store.get(cacheName).get(url).body).toBe('cached page');
+    });
+
+    it('rejects an unreadable document body', async () => {
+        const response = page('unreadable', '');
+        response.text = async () => { throw new Error('body failed'); };
+        const worker = loadWorker({ fetchImpl: async () => response });
+        const work = [];
+        const result = await handleFetch(worker.listeners, req('https://sudoku.example.com/', { mode: 'navigate' }), work);
+        await Promise.all(work);
+        expect(result.type).toBe('error');
+        expect(worker.scope.caches.store.get(cacheName).size).toBe(0);
+    });
+
+    it('accepts the emitted shell under a subpath and ignores sibling requests', async () => {
+        const worker = loadWorker({ scopeUrl: 'https://sudoku.example.com/game/', fetchImpl: async () => page('app', indexHtml) });
+        expect((await handleFetch(worker.listeners, req('https://sudoku.example.com/game/?daily=2026-09-19', { mode: 'navigate' }))).body).toBe('app');
+        expect(await handleFetch(worker.listeners, req('https://sudoku.example.com/other/'))).toBeUndefined();
+    });
+
+    it('never reads another cache during migration', async () => {
+        const url = 'https://sudoku.example.com/';
+        const caches = makeCaches(new Map([['sudoku-0123456789ab', new Map([[url, { body: 'legacy' }]])]]));
+        const worker = loadWorker({ caches, fetchImpl: async () => page('error', '<h1>Error</h1>') });
+        expect((await handleFetch(worker.listeners, req(url, { mode: 'navigate' }))).type).toBe('error');
+    });
+
+    it.each(['navigate', 'no-cors'])('waitUntil retains delayed %s writes without delaying the response', async (mode) => {
+        let finishWrite;
+        const gate = new Promise((resolve) => { finishWrite = resolve; });
+        const caches = makeCaches();
+        const open = caches.open;
+        caches.open = async (name) => {
+            const cache = await open(name);
+            const put = cache.put;
+            cache.put = async (...args) => { await gate; return put(...args); };
+            return cache;
+        };
+        const worker = loadWorker({ caches, fetchImpl: async () => page('app', indexHtml) });
+        const work = [];
+        const url = 'https://sudoku.example.com/';
+        expect((await handleFetch(worker.listeners, req(url, { mode }), work)).body).toBe('app');
+        expect(work).toHaveLength(1);
+        let settled = false;
+        const completed = Promise.all(work).then(() => { settled = true; });
+        await Promise.resolve();
+        expect(settled).toBe(false);
+        expect(caches.store.get(cacheName).has(url)).toBe(false);
+        finishWrite();
+        await completed;
+        expect(caches.store.get(cacheName).get(url).body).toBe('app');
+    });
+
+    it('cache write failure leaves the verified response usable and lifetime promise fulfilled', async () => {
+        const caches = makeCaches();
+        const open = caches.open;
+        caches.open = async (name) => ({ ...await open(name), put: async () => { throw new Error('quota'); } });
+        const worker = loadWorker({ caches, fetchImpl: async () => page('app', indexHtml) });
+        const work = [];
+        expect((await handleFetch(worker.listeners, req('https://sudoku.example.com/', { mode: 'navigate' }), work)).body).toBe('app');
+        await expect(Promise.all(work)).resolves.toEqual([undefined]);
+    });
+
+    it.each([true, false])('waitUntil retains late navigation and only caches valid replies (%s)', async (valid) => {
+        const url = 'https://sudoku.example.com/';
+        const caches = makeCaches(new Map([[cacheName, new Map([[url, { body: 'cached page' }]])]]));
+        let finishNetwork;
+        const worker = loadWorker({ caches,
+            fetchImpl: () => new Promise((resolve) => { finishNetwork = resolve; }),
+            setTimeoutImpl: (fn) => setTimeout(fn, 0),
+        });
+        const work = [];
+        expect((await handleFetch(worker.listeners, req(url, { mode: 'navigate' }), work)).body).toBe('cached page');
+        expect(work).toHaveLength(1);
+        let settled = false;
+        const completed = Promise.all(work).then(() => { settled = true; });
+        await Promise.resolve();
+        expect(settled).toBe(false);
+        finishNetwork(page('late app', valid ? indexHtml : '<h1>Error</h1>'));
+        await completed;
+        expect(caches.store.get(cacheName).get(url).body).toBe(valid ? 'late app' : 'cached page');
     });
 
     it('does not cache failed or opaque responses', async () => {
