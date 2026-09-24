@@ -4,7 +4,6 @@ on:
   push:
   pull_request:
 
-# Read-only by default; the publish job widens its own token to push packages.
 permissions:
   contents: read
 
@@ -28,8 +27,6 @@ jobs:
       - name: Lint
         run: npm run lint
 
-      # FULL_BANK_CHECK verifies uniqueness for all 5,500 puzzles rather than a
-      # sample — a few seconds here, but it catches a bad bank before deploy.
       - name: Test
         run: npm test
         env:
@@ -56,11 +53,9 @@ jobs:
 
       - run: npm ci
 
-      - name: Install Playwright browser
-        run: npx playwright install --with-deps chromium
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium webkit
 
-      # Covers what jsdom cannot: real layout, real touch, and the service
-      # worker. Runs against the production build, which the config starts.
       - name: Run end-to-end tests
         run: npm run test:e2e
 
@@ -68,7 +63,9 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: playwright-report
-          path: playwright-report/
+          path: |
+            test-results/
+            playwright-report/
           retention-days: 7
 
   docker:
@@ -83,8 +80,6 @@ jobs:
       - name: Build leaderboard image
         run: docker build -t sudoku-leaderboard:ci ./leaderboard-api
 
-      # The frontend must come up with no leaderboard present — nginx resolves
-      # the upstream per request precisely so this works.
       - name: Frontend starts standalone
         run: |
           docker run -d --name sudoku-ci -p 8080:80 sudoku:ci
@@ -96,9 +91,62 @@ jobs:
           test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/api/health)" = "502"
           docker rm -f sudoku-ci
 
-  # Publishes only from main or a version tag, and only once the tests and the
-  # container check above have passed. A pull request builds its images but
-  # never pushes them.
+      - name: Leaderboard persists scores in a named volume
+        shell: bash
+        run: |
+          set -euo pipefail
+          container="sudoku-api-ci-$(date +%s)-$$"
+          volume="${container}-data"
+          cleanup() {
+            status=$?
+            if [ "$status" -ne 0 ]; then docker logs "$container" || true; fi
+            docker rm -f "$container" >/dev/null 2>&1 || true
+            docker volume rm "$volume" >/dev/null 2>&1 || true
+            exit "$status"
+          }
+          trap cleanup EXIT
+          docker volume create "$volume"
+          start_api() {
+            docker run -d --name "$container" \
+              --mount "type=volume,source=$volume,target=/app/data" sudoku-leaderboard:ci
+            for i in $(seq 1 30); do
+              if docker exec "$container" node -e '
+                fetch("http://127.0.0.1:3001/api/health", {signal: AbortSignal.timeout(2000)})
+                  .then(async r => { if (!r.ok || (await r.json()).status !== "ok") process.exit(1); })
+                  .catch(() => process.exit(1));
+              '; then return 0; fi
+              sleep 1
+            done
+            return 1
+          }
+          start_api
+          docker exec "$container" node -e '
+            const assert = require("node:assert/strict");
+            const fs = require("node:fs");
+            assert.notEqual(process.getuid(), 0, "API must run unprivileged");
+            assert.equal(fs.statSync("/app/data").uid, process.getuid(), "fresh volume ownership");
+            (async () => {
+              const r = await fetch("http://127.0.0.1:3001/api/leaderboard", {
+                signal: AbortSignal.timeout(5000), method: "POST", headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({name: "CI smoke", difficulty: "easy", time: 123, hints: 0, level: 1})
+              });
+              assert.equal(r.ok, true);
+              assert.equal((await r.json()).success, true);
+              const saved = JSON.parse(fs.readFileSync("/app/data/leaderboard.json", "utf8"));
+              assert(saved.easy.some(e => e.name === "CI smoke" && e.time === 123 && e.level === 1));
+            })().catch(e => { console.error(e); process.exit(1); });
+          '
+          docker rm -f "$container"
+          start_api
+          docker exec "$container" node -e '
+            const assert = require("node:assert/strict");
+            (async () => {
+              const r = await fetch("http://127.0.0.1:3001/api/leaderboard/easy", {signal: AbortSignal.timeout(5000)});
+              assert.equal(r.ok, true);
+              assert((await r.json()).some(e => e.name === "CI smoke" && e.time === 123 && e.level === 1));
+            })().catch(e => { console.error(e); process.exit(1); });
+          '
+
   publish:
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
     runs-on: ubuntu-latest
@@ -116,22 +164,18 @@ jobs:
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
-          # Provided automatically; no secret to create or rotate.
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # A push to main tags latest and the commit SHA: latest is what a server
-      # pulls day to day, the SHA is what you pin to when rolling back. A
-      # `v1.2.3` tag adds 1.2.3, 1.2 and 1, so a server tracking `:1` picks up
-      # fixes without surprises. A pre-release (v1.2.3-rc.1) gets only its own
-      # tag — neither latest nor a major ever moves to something unfinished.
       - name: Frontend image tags
         id: frontend
         uses: docker/metadata-action@v5
         with:
           images: ghcr.io/${{ github.repository_owner }}/sudoku
+          flavor: |
+            latest=false
           tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=sha,format=long,enable={{is_default_branch}}
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+            type=sha,format=long,enable=${{ github.ref == 'refs/heads/main' }}
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
@@ -151,9 +195,11 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ghcr.io/${{ github.repository_owner }}/sudoku-leaderboard
+          flavor: |
+            latest=false
           tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=sha,format=long,enable={{is_default_branch}}
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+            type=sha,format=long,enable=${{ github.ref == 'refs/heads/main' }}
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}

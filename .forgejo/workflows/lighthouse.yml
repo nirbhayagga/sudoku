@@ -18,9 +18,7 @@ jobs:
       - run: npm ci
       - run: npm run build
 
-      # The GitHub marketplace action is not available here, so the CLI is
-      # installed directly. Needs a runner image with Chrome available.
       - name: Run Lighthouse CI
         run: |
           npm install -g @lhci/cli@0.14.x
-          lhci autorun --config=./lighthouserc.json || echo "Lighthouse needs Chrome on the runner"
+          lhci autorun --config=./lighthouserc.json

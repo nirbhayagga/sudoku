@@ -20,11 +20,14 @@ leaderboard-api/data/
 *.log
 
 *.txt
+!public/licenses/*.txt
 # Build output
 dist/
 coverage/
 
 # Agent scratch
+AGENTS.md
+.lighthouseci/
 CLAUDE.md
 
 # Local deployment settings

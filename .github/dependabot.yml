@@ -1,33 +1,7 @@
-# Version updates are OFF: every ecosystem below is pinned to
-# open-pull-requests-limit: 0.
-#
-# This repo lives on Forgejo and is push-mirrored to GitHub. A push mirror is a
-# `git push --mirror`, so it prunes any ref that does not exist upstream —
-# including `dependabot/*` branches, which only ever exist on GitHub. Deleting a
-# PR's head branch makes GitHub auto-close it, so every Dependabot PR was opened,
-# pruned on the next sync (push-triggered *or* on the mirror's own interval), and
-# reopened on the next run. Thirteen PRs died that way without anyone touching
-# them.
-#
-# Dependency updates still happen, by hand, in batches — which turned out to be
-# the better shape anyway: the peer-locked toolchain needs vite, vitest,
-# @vitest/coverage-v8 and jsdom to move in one commit, and Dependabot split them
-# into four PRs that could never install individually.
-#
-# Not controlled by this file, and worth knowing:
-#   - Dependabot *alerts* are a repo setting. They are not branches, so the
-#     mirror cannot touch them. Leave them on — that is the actual signal.
-#   - Dependabot *security updates* are also a repo setting, and their PRs are
-#     NOT bounded by open-pull-requests-limit. They are branches, so they get
-#     pruned like any other. Turn them off under Settings → Code security if you
-#     want zero branches ever; the alert still names the fixed version.
-#
-# The groups and ignores below are kept deliberately. Re-enabling any ecosystem
-# is one line, and the reasoning is worth not having to rediscover.
+# Version-update PRs are disabled; security alerts and security-update PRs use repository settings.
 version: 2
 
 updates:
-  # Frontend dev tooling (vite, vitest, eslint, jsdom).
   - package-ecosystem: npm
     directory: /
     schedule:
@@ -35,21 +9,15 @@ updates:
       day: monday
     open-pull-requests-limit: 0
     groups:
-      # One PR for routine bumps instead of five.
       dev-dependencies:
         patterns: ['*']
         update-types: [minor, patch]
-      # And one for majors, because the test toolchain is peer-locked: vite,
-      # vitest and @vitest/coverage-v8 must move together or npm refuses to
-      # install. Separate PRs for those can never pass CI individually.
       toolchain-majors:
         patterns: ['vite', 'vitest', '@vitest/*', 'jsdom']
         update-types: [major]
     commit-message:
       prefix: 'deps'
 
-  # The leaderboard API. This one actually ships, so its advisories matter most —
-  # and express/cors are the only runtime dependencies in the whole project.
   - package-ecosystem: npm
     directory: /leaderboard-api
     schedule:
@@ -63,12 +31,6 @@ updates:
     commit-message:
       prefix: 'deps(api)'
 
-  # Base images: node:24-alpine and nginx:alpine.
-  #
-  # Majors are ignored deliberately. Node's even majors become LTS months after
-  # release, so an automatic bump lands you on Current — and it would silently
-  # diverge from the node-version pinned in the workflows. Move both together,
-  # by hand, when a release reaches LTS.
   - package-ecosystem: docker
     directories:
       - /
@@ -83,8 +45,6 @@ updates:
     commit-message:
       prefix: 'deps(docker)'
 
-  # actions/checkout, actions/setup-node and friends. Grouped: they are all
-  # first-party and bumping them one PR at a time is pure noise.
   - package-ecosystem: github-actions
     directory: /
     schedule:

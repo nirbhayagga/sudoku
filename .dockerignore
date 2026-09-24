@@ -13,7 +13,9 @@ leaderboard-api
 scripts
 *.md
 *.txt
+!public/licenses/*.txt
 .env
+.env.*
 .env.example
 docker-compose*.yml
 Dockerfile
@@ -23,3 +25,10 @@ Dockerfile
 eslint.config.js
 vitest.config.js
 LICENSE
+e2e
+e2e-results
+test-results
+playwright-report
+.lighthouseci
+*.log
+*.zip
