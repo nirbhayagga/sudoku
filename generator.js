@@ -24,10 +24,10 @@ export const SudokuGenerator = (() => {
      *
      * The ranges are calibrated against what digging can actually achieve.
      * Removing a clue can only ever increase the solution count, so a cell that
-     * fails removal once can never be removed later — a single dig always ends
-     * at a minimal puzzle for its removal order, and the only way lower is a
-     * different board entirely. Measured floors are ~23 clues for expert and
-     * ~22 for evil, so targets below that would never be met.
+     * fails removal once can never be removed later. A pass exhausted without
+     * reaching its clue target is minimal for those attempted removals; a pass
+     * that stops at its target need not be minimal. Observed clue floors are
+     * characteristics of this generator, not mathematical lower bounds.
      */
     const CLUE_TARGETS = {
         easy: { min: 36, max: 40, minNodes: 0 },
@@ -44,9 +44,9 @@ export const SudokuGenerator = (() => {
     };
 
     /** Shuffle an array in place (Fisher-Yates) */
-    function shuffle(arr) {
+    function shuffle(arr, random = Math.random) {
         for (let i = arr.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
+            const j = Math.floor(random() * (i + 1));
             [arr[i], arr[j]] = [arr[j], arr[i]];
         }
         return arr;
@@ -56,7 +56,7 @@ export const SudokuGenerator = (() => {
      * Generate a random complete (solved) board.
      * Fills the board using the solver with randomized digit ordering.
      */
-    function generateSolvedBoard() {
+    function generateSolvedBoard(random = Math.random) {
         // Candidates are 9-bit masks, one Uint16 per cell — see solver.js.
         const values = new Uint16Array(81).fill(ALL);
 
@@ -72,7 +72,7 @@ export const SudokuGenerator = (() => {
             const digits = [];
             for (let d = 0; d < 9; d++) if (mask & (1 << d)) digits.push(d);
 
-            for (const d of shuffle(digits)) {
+            for (const d of shuffle(digits, random)) {
                 const result = randomSearch(assign(copyValues(vals), cell, d));
                 if (result) return result;
             }
@@ -88,21 +88,23 @@ export const SudokuGenerator = (() => {
      * One pass over a shuffled index order; see CLUE_TARGETS on why repeating
      * passes over the same board cannot remove anything further.
      */
-    function dig(solution, targetClues) {
+    function dig(solution, targetClues, random = Math.random, symmetry = 'none') {
         const board = solution.split('');
-        const indices = shuffle([...Array(81).keys()]);
+        const indices = shuffle([...Array(81).keys()], random);
         let clues = 81;
 
         for (const idx of indices) {
             if (clues <= targetClues) break;
 
-            const saved = board[idx];
-            board[idx] = '0';
+            const cells = [...new Set(symmetry === 'rotate180' ? [idx, 80 - idx] : [idx])].filter(i => board[i] !== '0');
+            if (!cells.length || clues - cells.length < targetClues) continue;
+            const saved = cells.map(i => board[i]);
+            for (const cell of cells) board[cell] = '0';
 
             if (SudokuSolver.countSolutions(board.join(''), 2) !== 1) {
-                board[idx] = saved; // removing it would allow multiple solutions
+                cells.forEach((cell, i) => { board[cell] = saved[i]; });
             } else {
-                clues--;
+                clues -= cells.length;
             }
         }
 
@@ -169,5 +171,5 @@ export const SudokuGenerator = (() => {
         };
     }
 
-    return { generate, CLUE_TARGETS };
+    return { generate, generateSolvedBoard, dig, CLUE_TARGETS };
 })();

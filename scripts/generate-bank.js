@@ -17,35 +17,42 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import vm from 'node:vm';
 import { fileURLToPath } from 'node:url';
+import { SudokuSolver } from '../solver.js';
+import { SudokuGenerator } from '../generator.js';
+import { PUZZLES } from '../puzzle-bank.js';
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 
-function parseArgs(argv) {
+export function parseArgs(argv) {
     const args = {
         difficulty: 'evil', count: 500, pool: 4000,
-        write: false, reorder: false, import: null,
+        write: false, reorder: false, import: null, out: null, maxAttempts: null,
     };
     for (let i = 0; i < argv.length; i++) {
         const arg = argv[i];
         if (arg === '--write') args.write = true;
         else if (arg === '--reorder') args.reorder = true;
-        else if (arg === '--import') args.import = argv[++i];
-        else if (arg === '--difficulty') args.difficulty = argv[++i];
-        else if (arg === '--count') args.count = Number(argv[++i]);
-        else if (arg === '--pool') args.pool = Number(argv[++i]);
+        else if (['--import', '--difficulty', '--count', '--pool', '--out', '--max-attempts'].includes(arg)) {
+            const value = argv[++i];
+            if (!value || value.startsWith('--')) throw new Error(`Missing value for ${arg}`);
+            const key = arg === '--max-attempts' ? 'maxAttempts' : arg.slice(2);
+            args[key] = ['count', 'pool', 'maxAttempts'].includes(key) ? Number(value) : value;
+        } else throw new Error(`Unknown option: ${arg}`);
     }
+    if (!Object.hasOwn(PUZZLES, args.difficulty)) throw new Error('Unknown difficulty');
+    for (const key of ['count', 'pool']) {
+        if (!Number.isSafeInteger(args[key]) || args[key] < 1 || args[key] > 100000) throw new Error(`Invalid ${key}`);
+    }
+    if (args.import && args.reorder) throw new Error('Choose import or reorder, not both');
+    if (args.write && args.out) throw new Error('--out is only for a dry run');
+    if (!args.import && !args.reorder && args.pool < args.count) throw new Error('Pool must contain at least count puzzles');
+    if (args.write && !args.reorder && args.count !== PUZZLES[args.difficulty].length) {
+        throw new Error('Changing tier size requires a separate BANK_SIZES migration');
+    }
+    args.maxAttempts ??= args.pool * 50;
+    if (!Number.isSafeInteger(args.maxAttempts) || args.maxAttempts < 1 || args.maxAttempts > 5000000) throw new Error('Invalid max-attempts');
     return args;
-}
-
-/** Load the frontend scripts, which are globals rather than modules. */
-function loadEngine() {
-    const context = vm.createContext({ performance, console, Math, Date, JSON });
-    for (const file of ['solver.js', 'generator.js', 'puzzle-bank.js']) {
-        vm.runInContext(fs.readFileSync(path.join(root, file), 'utf8'), context, { filename: file });
-    }
-    return vm.runInContext('({ SudokuSolver, SudokuGenerator, PUZZLES })', context);
 }
 
 /**
@@ -62,7 +69,9 @@ function idFormat(existing) {
 
 function main() {
     const args = parseArgs(process.argv.slice(2));
-    const { SudokuSolver, SudokuGenerator, PUZZLES } = loadEngine();
+    // Fail before expensive generation when a dry-run destination already exists.
+    const output = args.out || (!args.reorder ? `${args.difficulty}-${args.import ? 'imported' : 'regenerated'}.json` : null);
+    if (!args.write && output && fs.existsSync(path.resolve(output))) throw new Error('EEXIST: output already exists');
 
     const existing = PUZZLES[args.difficulty];
     if (!existing) {
@@ -86,7 +95,8 @@ function main() {
     const candidates = [];
     const started = Date.now();
 
-    while (candidates.length < args.pool) {
+    let attempts = 0;
+    while (candidates.length < args.pool && attempts++ < args.maxAttempts) {
         const result = SudokuGenerator.generate(args.difficulty, { maxAttempts: 1 });
         if (!result || seen.has(result.puzzle)) continue;
         seen.add(result.puzzle);
@@ -103,6 +113,7 @@ function main() {
             process.stdout.write(`  ${candidates.length}/${args.pool}  (~${left}s remaining)\n`);
         }
     }
+    if (candidates.length < args.pool) throw new Error(`Attempt limit reached: found ${candidates.length}/${args.pool} distinct puzzles`);
 
     // Hardest first by search effort, tie-broken by fewer clues.
     candidates.sort((a, b) => b.nodes - a.nodes || a.clues - b.clues);
@@ -132,8 +143,8 @@ function main() {
     const entries = chosen.map((c, i) => ({ id: makeId(i + 1), puzzle: c.puzzle }));
 
     if (!args.write) {
-        const out = path.join(root, `${args.difficulty}-regenerated.json`);
-        fs.writeFileSync(out, JSON.stringify(entries, null, 2));
+        const out = path.resolve(args.out || `${args.difficulty}-regenerated.json`);
+        fs.writeFileSync(out, JSON.stringify(entries, null, 2) + '\n', { flag: 'wx' });
         console.log(`\nDry run. Wrote ${out}\nRe-run with --write to patch puzzle-bank.js.`);
         return;
     }
@@ -147,7 +158,7 @@ function main() {
  * Build a tier from an external list of puzzles — one per line, 81 characters,
  * `0` or `.` for empty. Intended for catalogues that cannot be generated at
  * runtime, above all the published 17-clue set: digging to 17 clues by random
- * removal is computationally hopeless, so those puzzles can only be imported.
+ * removal is impractical for ordinary runtime budgets, so catalogue import is preferred.
  *
  * The hardest `count` of the file are kept, which is the whole point of feeding
  * in a large source: selecting the top slice of a big catalogue produces a far
@@ -226,8 +237,8 @@ function importTier(args, SudokuSolver, existing) {
     const entries = chosen.map((c, i) => ({ id: makeId(i + 1), puzzle: c.puzzle }));
 
     if (!args.write) {
-        const out = path.join(root, `${args.difficulty}-imported.json`);
-        fs.writeFileSync(out, JSON.stringify(entries, null, 2));
+        const out = path.resolve(args.out || `${args.difficulty}-imported.json`);
+        fs.writeFileSync(out, JSON.stringify(entries, null, 2) + '\n', { flag: 'wx' });
         console.log(`\nDry run. Wrote ${out}\nRe-run with --write to patch puzzle-bank.js.`);
         return;
     }
@@ -238,14 +249,15 @@ function importTier(args, SudokuSolver, existing) {
 
 /**
  * Sort an existing tier by measured difficulty instead of generating new
- * puzzles — keeps exactly the same puzzles, so nothing has to be re-verified,
- * but makes the level number track difficulty. Useful for the nightmare tier,
+ * puzzles — keeps exactly the same puzzles and rechecks unique solvability,
+ * then makes the level number track this search metric. Useful for the nightmare tier,
  * whose 17-clue puzzles come from a published catalogue in arbitrary order and
  * range from trivial-for-a-solver to genuinely brutal.
  */
 function reorderTier(args, SudokuSolver, existing) {
     console.log(`Reordering "${args.difficulty}" (${existing.length} puzzles) by measured difficulty\n`);
 
+    if (existing.some(entry => SudokuSolver.countSolutions(entry.puzzle, 2) !== 1)) throw new Error('Tier contains a puzzle without a unique solution');
     const rated = existing
         .map((entry) => ({ ...entry, nodes: SudokuSolver.rateDifficulty(entry.puzzle) }))
         .sort((a, b) => a.nodes - b.nodes);
@@ -258,6 +270,7 @@ function reorderTier(args, SudokuSolver, existing) {
     const entries = rated.map((entry, i) => ({ id: makeId(i + 1), puzzle: entry.puzzle }));
 
     if (!args.write) {
+        if (args.out) fs.writeFileSync(path.resolve(args.out), JSON.stringify(entries, null, 2) + '\n', { flag: 'wx' });
         console.log('\nDry run. Re-run with --write to patch puzzle-bank.js.');
         return;
     }
@@ -267,8 +280,13 @@ function reorderTier(args, SudokuSolver, existing) {
 }
 
 /** Replace one difficulty's array in puzzle-bank.js, leaving the rest byte-identical. */
-function patchBank(difficulty, entries) {
-    const file = path.join(root, 'puzzle-bank.js');
+export function patchBank(difficulty, entries, file = path.join(root, 'puzzle-bank.js')) {
+    if (!Object.hasOwn(PUZZLES, difficulty) || !entries.length) throw new Error('Invalid tier');
+    const seen = new Set();
+    for (const entry of entries) {
+        if (!/^[0-9]{81}$/.test(entry.puzzle) || seen.has(entry.puzzle) || SudokuSolver.countSolutions(entry.puzzle, 2) !== 1) throw new Error('Invalid, repeated or non-unique puzzle');
+        seen.add(entry.puzzle);
+    }
     const source = fs.readFileSync(file, 'utf8');
 
     const startMarker = `    ${difficulty}: [`;
@@ -284,7 +302,13 @@ function patchBank(difficulty, entries) {
         .join('\n');
 
     const replaced = `${startMarker}\n${body}\n    ],\n`;
-    fs.writeFileSync(file, source.slice(0, start) + replaced + source.slice(end + '\n    ],\n'.length));
+    const temporary = `${file}.${process.pid}.tmp`;
+    fs.writeFileSync(temporary, source.slice(0, start) + replaced + source.slice(end + '\n    ],\n'.length), { flag: 'wx' });
+    try { fs.renameSync(temporary, file); } finally {
+        if (fs.existsSync(temporary)) fs.unlinkSync(temporary);
+    }
 }
 
-main();
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+    try { main(); } catch (error) { console.error(error.message); process.exitCode = 1; }
+}

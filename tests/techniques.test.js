@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
     candidatesFor, candidateGrid, peersOf, cellName, UNITS,
     findNakedSingle, findHiddenSingle, findNakedPair, findPointingPair,
-    findNakedTriple, findXWing, applyRemovals, nextStep,
+    findNakedTriple, findXWing, findClaimingPair, findHiddenPair, findXYWing, applyRemovals, nextStep,
 } from '../techniques.js';
 import { SudokuSolver } from '../solver.js';
 import { PUZZLES } from '../puzzle-bank.js';
@@ -321,7 +321,7 @@ describe('nextStep', () => {
                 const solution = SudokuSolver.solveSudoku(p.puzzle).solution;
                 const grid = candidateGrid(p.puzzle);
 
-                for (const find of [findNakedPair, findPointingPair, findNakedTriple, findXWing]) {
+                for (const find of [findNakedPair, findPointingPair, findClaimingPair, findHiddenPair, findNakedTriple, findXWing, findXYWing]) {
                     const elimination = find(grid);
                     if (!elimination) continue;
                     for (const { cell, digit } of elimination.removals) {
@@ -347,5 +347,231 @@ describe('nextStep', () => {
 
         expect(code).not.toMatch(/solution/i);
         expect(code).not.toMatch(/solveSudoku|SudokuSolver/);
+    });
+});
+
+describe('claiming pair/triple', () => {
+    it.each([
+        ['row', [0, 1], [9, 10, 11, 18, 19, 20]],
+        ['row', [0, 1, 2], [9, 10, 11, 18, 19, 20]],
+        ['column', [0, 9], [1, 2, 10, 11, 19, 20]],
+        ['column', [0, 9, 18], [1, 2, 10, 11, 19, 20]],
+    ])('claims a %s with homes %j', (kind, homes, targets) => {
+        const grid = candidateGrid(EMPTY);
+        const unit = UNITS.find(unit => unit.kind === kind && unit.index === 0);
+        for (const cell of unit.cells) if (!homes.includes(cell)) grid[cell].delete('5');
+        const before = grid.map(set => [...set]);
+        const step = findClaimingPair(grid);
+        expect(step).toMatchObject({ type: homes.length === 2 ? 'claiming-pair' : 'claiming-triple', cells: homes, digits: ['5'] });
+        expect(step.removals).toEqual(targets.map(cell => ({ cell, digit: '5' })));
+        expect(step.reason).toContain(`${kind} 1`);
+        expect(step.nudge).toContain('box 1');
+        expect(step.evidence).toEqual(expect.arrayContaining([...homes, ...targets]));
+        expect(grid.map(set => [...set])).toEqual(before);
+    });
+
+    it('does not claim when homes straddle boxes', () => {
+        const grid = candidateGrid(EMPTY);
+        for (let cell = 0; cell < 9; cell++) if (![0, 3].includes(cell)) grid[cell].delete('5');
+        expect(findClaimingPair(grid)).toBeNull();
+    });
+
+    it('leaves a single home to the hidden-single technique', () => {
+        const grid = candidateGrid(EMPTY);
+        for (let cell = 1; cell < 9; cell++) grid[cell].delete('5');
+        expect(findClaimingPair(grid)).toBeNull();
+    });
+
+    it('returns nothing when the box has no removable candidates', () => {
+        const grid = candidateGrid(EMPTY);
+        for (const cell of [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 18, 19, 20]) grid[cell].delete('5');
+        expect(findClaimingPair(grid)).toBeNull();
+    });
+});
+
+describe('hidden pair', () => {
+    it.each([
+        ['row', [0, 4]], ['column', [0, 36]], ['box', [0, 10]],
+    ])('restricts two reserved cells in a %s', (kind, cells) => {
+        const grid = candidateGrid(EMPTY);
+        const unit = UNITS.find(unit => unit.kind === kind && unit.index === 0);
+        for (const cell of unit.cells) {
+            if (!cells.includes(cell)) { grid[cell].delete('3'); grid[cell].delete('7'); }
+        }
+        const step = findHiddenPair(grid);
+        expect(step).toMatchObject({ type: 'hidden-pair', cells, digits: ['3', '7'] });
+        expect(step.removals).toHaveLength(14);
+        expect(step.removals.every(({ cell, digit }) => cells.includes(cell) && !['3', '7'].includes(digit))).toBe(true);
+        expect(step.evidence).toEqual(unit.cells);
+        applyRemovals(grid, step.removals);
+        for (const cell of cells) expect([...grid[cell]]).toEqual(['3', '7']);
+    });
+
+    it('requires both digits to have exactly the same two homes', () => {
+        const grid = candidateGrid(EMPTY);
+        for (let cell = 0; cell < 9; cell++) {
+            if (![0, 4].includes(cell)) grid[cell].delete('3');
+            if (![0, 5].includes(cell)) grid[cell].delete('7');
+        }
+        expect(findHiddenPair(grid)).toBeNull();
+    });
+
+    it('rejects a third home for either digit', () => {
+        const grid = candidateGrid(EMPTY);
+        for (let cell = 0; cell < 9; cell++) {
+            if (![0, 4].includes(cell)) grid[cell].delete('3');
+            if (![0, 4, 5].includes(cell)) grid[cell].delete('7');
+        }
+        expect(findHiddenPair(grid)).toBeNull();
+    });
+
+    it('does not return a pair with nothing to remove', () => {
+        const grid = candidateGrid(EMPTY);
+        grid[0] = new Set(['3', '7']);
+        grid[4] = new Set(['3', '7']);
+        for (const cell of [1, 2, 3, 5, 6, 7, 8]) { grid[cell].delete('3'); grid[cell].delete('7'); }
+        expect(findHiddenPair(grid)).toBeNull();
+    });
+});
+
+describe('XY-Wing', () => {
+    const wingGrid = () => {
+        const grid = candidateGrid(EMPTY);
+        grid[0] = new Set(['1', '2']);
+        grid[4] = new Set(['1', '3']);
+        grid[36] = new Set(['2', '3']);
+        return grid;
+    };
+
+    it('removes the shared wing digit only from cells seeing both wings', () => {
+        const grid = wingGrid();
+        const before = grid.map(set => [...set]);
+        const step = findXYWing(grid);
+        expect(step).toMatchObject({ type: 'xy-wing', cells: [0, 4, 36], digits: ['1', '2', '3'] });
+        expect(step.removals).toEqual([{ cell: 40, digit: '3' }]);
+        expect(step.nudge).toContain('If it is 1, R1C5 must be 3');
+        expect(step.nudge).toContain('if it is 2, R5C1 must be 3');
+        expect(step.evidence).toEqual([0, 4, 36, 40]);
+        expect(grid[1].has('3')).toBe(true); // sees pivot and one wing, not both
+        expect(grid.map(set => [...set])).toEqual(before);
+    });
+
+    it('works with the pivot digits/wings swapped', () => {
+        const grid = wingGrid();
+        grid[4] = new Set(['2', '3']);
+        grid[36] = new Set(['1', '3']);
+        expect(findXYWing(grid).removals).toEqual([{ cell: 40, digit: '3' }]);
+    });
+
+    it('uses box visibility as well as rows and columns', () => {
+        const grid = candidateGrid(EMPTY);
+        grid[0] = new Set(['1', '2']);
+        grid[10] = new Set(['1', '3']);
+        grid[4] = new Set(['2', '3']);
+        const step = findXYWing(grid);
+        expect(step.cells).toEqual([0, 10, 4]);
+        expect(step.removals).toEqual(expect.arrayContaining([{ cell: 1, digit: '3' }, { cell: 13, digit: '3' }]));
+        for (const { cell } of step.removals) {
+            expect(peersOf(10)).toContain(cell);
+            expect(peersOf(4)).toContain(cell);
+        }
+    });
+
+    it.each([
+        [0, ['1', '2', '4']], // pivot is not bivalue
+        [4, ['1', '3', '4']], // wing is not bivalue
+        [36, ['2', '4']], // wings do not share Z
+        [36, ['1', '3']], // wings both depend on the same pivot digit
+        [40, ['1', '2', '4', '5', '6', '7', '8', '9']], // nothing to remove
+    ])('rejects a broken pattern after changing cell %s', (cell, digits) => {
+        const grid = wingGrid();
+        grid[cell] = new Set(digits);
+        expect(findXYWing(grid)).toBeNull();
+    });
+
+    it('requires the pivot to see both wings', () => {
+        const grid = wingGrid();
+        grid[80] = grid[36];
+        grid[36] = new Set(['1', '2', '3', '4', '5', '6', '7', '8', '9']);
+        expect(findXYWing(grid)).toBeNull();
+    });
+});
+
+describe('complete elimination explanations', () => {
+    const board = '800420753007006204400370106080700062040032879000000001004900008900100007008247915';
+
+    it('keeps every elimination, in order, including the earlier prerequisite evidence', () => {
+        const step = nextStep(board);
+        expect(step.via).toEqual(['naked-pair', 'naked-pair']);
+        expect(step.eliminations.map(e => e.type)).toEqual(step.via);
+        let last = -1;
+        for (const elimination of step.eliminations) {
+            const position = step.nudge.indexOf(elimination.nudge);
+            expect(position).toBeGreaterThan(last);
+            last = position;
+            expect(step.reason).toContain(elimination.reason);
+            expect(step.evidence).toEqual(expect.arrayContaining(elimination.evidence));
+        }
+        // The first pair changes R8C2/R8C3, creating the second pair.
+        const grid = candidateGrid(board);
+        expect(grid[64].size).toBeGreaterThan(2);
+        applyRemovals(grid, step.eliminations[0].removals);
+        expect([...grid[64]]).toEqual(['2', '5']);
+        expect([...grid[65]]).toEqual(['2', '5']);
+        applyRemovals(grid, step.eliminations[1].removals);
+        expect(findHiddenSingle(grid)).toMatchObject({ idx: step.idx, digit: step.digit });
+    });
+
+    it('explains a hidden single as the only home in a unit, not a one-candidate cell', () => {
+        const step = nextStep(board);
+        const grid = candidateGrid(board);
+        for (const elimination of step.eliminations) applyRemovals(grid, elimination.removals);
+        expect(grid[step.idx].size).toBe(2);
+        expect(step.nudge).toContain('R7C8 is then the only place for 2 in column 8.');
+        expect(step.nudge).not.toContain('with one option');
+    });
+
+    it('respects the elimination budget without pretending a partial chain is a placement', () => {
+        expect(nextStep(board, 0)).toBeNull();
+        expect(nextStep(board, 1)).toBeNull();
+        expect(nextStep(board, 2)).not.toBeNull();
+    });
+});
+
+describe('real-bank soundness throughout play', () => {
+    it('audits every technique and every chain against the actual answer across all tiers', () => {
+        const finders = [findNakedPair, findPointingPair, findClaimingPair, findHiddenPair, findNakedTriple, findXWing, findXYWing];
+        const failures = [];
+        const hits = new Set();
+        let positions = 0;
+        const audit = (elimination, answer, id) => {
+            if (!elimination) return;
+            hits.add(elimination.type);
+            for (const { cell, digit } of elimination.removals) {
+                if (answer[cell] === digit) failures.push(`${id}: ${elimination.type} removed ${digit} from ${cellName(cell)}`);
+            }
+        };
+        for (const [tier, puzzles] of Object.entries(PUZZLES)) {
+            for (let sample = 0; sample < 12; sample++) {
+                const puzzle = puzzles[Math.floor(sample * (puzzles.length - 1) / 11)];
+                const answer = SudokuSolver.solveSudoku(puzzle.puzzle).solution;
+                let board = puzzle.puzzle;
+                while (board.includes('0')) {
+                    positions++;
+                    const grid = candidateGrid(board);
+                    for (const find of finders) audit(find(grid), answer, `${tier}/${puzzle.id}`);
+                    const step = nextStep(board);
+                    for (const elimination of step?.eliminations || []) audit(elimination, answer, `${tier}/${puzzle.id}`);
+                    if (step && (board[step.idx] !== '0' || step.digit !== answer[step.idx])) failures.push(`${tier}/${puzzle.id}: bad placement`);
+                    // A stalled position receives one oracle entry in this TEST
+                    // only, so the audit also covers later-game candidate grids.
+                    const idx = step?.idx ?? board.indexOf('0');
+                    board = board.slice(0, idx) + answer[idx] + board.slice(idx + 1);
+                }
+            }
+        }
+        expect(failures).toEqual([]);
+        expect(positions).toBeGreaterThan(3000);
+        for (const type of ['claiming-pair', 'claiming-triple', 'hidden-pair', 'xy-wing']) expect(hits.has(type), type).toBe(true);
     });
 });

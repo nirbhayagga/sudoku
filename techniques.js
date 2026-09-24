@@ -103,6 +103,7 @@ export function findHiddenSingle(grid) {
                     type: 'hidden-single',
                     idx,
                     digit,
+                    unit: { kind: unit.kind, index: unit.index },
                     reason: `the only place for ${digit} in this ${unit.kind}`,
                     nudge: `In the highlighted ${unit.kind}, ${digit} has only one cell left.`,
                     evidence: unit.cells.filter((i) => i !== idx),
@@ -190,6 +191,65 @@ export function findPointingPair(grid) {
                     nudge: `Inside the highlighted box, ${digit} can only sit in one ${axis}. `
                         + `It must go there, so ${digit} leaves the rest of that ${axis}.`,
                     evidence: [...homes, ...removals.map((r) => r.cell)],
+                };
+            }
+        }
+    }
+    return null;
+}
+
+/**
+ * Claiming pair/triple: all two or three homes of a digit in a row/column
+ * fall in one box. That line must use the digit inside the box, excluding it
+ * from the other rows/columns of the box (the converse of pointing).
+ */
+export function findClaimingPair(grid) {
+    for (const unit of UNITS.slice(0, 18)) {
+        for (const digit of DIGITS) {
+            const homes = unit.cells.filter(i => grid[i]?.has(digit));
+            if (homes.length < 2 || homes.length > 3) continue;
+            const box = boxOf(homes[0]);
+            if (!homes.every(i => boxOf(i) === box)) continue;
+            const removals = boxCells(box)
+                .filter(cell => !unit.cells.includes(cell) && grid[cell]?.has(digit))
+                .map(cell => ({ cell, digit }));
+            if (!removals.length) continue;
+            const line = `${unit.kind} ${unit.index + 1}`;
+            return {
+                type: homes.length === 2 ? 'claiming-pair' : 'claiming-triple',
+                cells: homes,
+                digits: [digit],
+                removals,
+                reason: `${digit} in ${line} is confined to box ${box + 1}`,
+                nudge: `In ${line}, ${digit} can only go in ${homes.map(cellName).join(' or ')}. `
+                    + `Those cells are all in box ${box + 1}, so ${digit} leaves the other cells of that box.`,
+                evidence: [...new Set([...unit.cells, ...removals.map(r => r.cell)])],
+            };
+        }
+    }
+    return null;
+}
+
+/** Two digits with exactly the same two homes in a unit reserve those cells. */
+export function findHiddenPair(grid) {
+    for (const unit of UNITS) {
+        const homes = DIGITS.map(digit => unit.cells.filter(i => grid[i]?.has(digit)));
+        for (let a = 0; a < DIGITS.length; a++) {
+            if (homes[a].length !== 2) continue;
+            for (let b = a + 1; b < DIGITS.length; b++) {
+                if (homes[b].length !== 2 || !homes[a].every((cell, i) => cell === homes[b][i])) continue;
+                const cells = homes[a];
+                const digits = [DIGITS[a], DIGITS[b]];
+                const removals = cells.flatMap(cell => [...grid[cell]]
+                    .filter(digit => !digits.includes(digit)).map(digit => ({ cell, digit })));
+                if (!removals.length) continue;
+                const line = `${unit.kind} ${unit.index + 1}`;
+                return {
+                    type: 'hidden-pair', cells, digits, removals,
+                    reason: `${digits.join(' and ')} in ${line} have only ${cells.map(cellName).join(' and ')} available`,
+                    nudge: `In ${line}, only ${cells.map(cellName).join(' and ')} can hold ${digits.join(' and ')}. `
+                        + 'Those two digits must occupy those two cells, so all other candidates leave them.',
+                    evidence: [...unit.cells],
                 };
             }
         }
@@ -298,6 +358,42 @@ export function findXWing(grid) {
     return null;
 }
 
+// Fixed geometry, shared by XY-Wing checks without changing visible candidates.
+const PEER_SETS = Array.from({ length: 81 }, (_, idx) => new Set(peersOf(idx)));
+
+/**
+ * XY-Wing: a pivot {X,Y} sees wings {X,Z} and {Y,Z}. Whichever pivot value
+ * is chosen, one wing must be Z. Only cells seeing BOTH wings lose Z;
+ * seeing the pivot alone is not sufficient. No guess is placed on the board.
+ */
+export function findXYWing(grid) {
+    const bivalue = Array.from({ length: 81 }, (_, i) => i).filter(i => grid[i]?.size === 2);
+    for (const pivot of bivalue) {
+        const [x, y] = [...grid[pivot]].sort();
+        const wings = bivalue.filter(i => PEER_SETS[pivot].has(i));
+        for (const first of wings) {
+            if (!grid[first].has(x) || grid[first].has(y)) continue;
+            const z = [...grid[first]].find(digit => digit !== x);
+            for (const second of wings) {
+                if (first === second || !grid[second].has(y) || !grid[second].has(z)) continue;
+                const cells = [pivot, first, second];
+                const removals = [...PEER_SETS[first]]
+                    .filter(cell => !cells.includes(cell) && PEER_SETS[second].has(cell) && grid[cell]?.has(z))
+                    .map(cell => ({ cell, digit: z }));
+                if (!removals.length) continue;
+                return {
+                    type: 'xy-wing', cells, digits: [x, y, z], removals,
+                    reason: `${cellName(pivot)} forces one of ${cellName(first)} and ${cellName(second)} to be ${z}`,
+                    nudge: `${cellName(pivot)} has only ${x} or ${y}. If it is ${x}, ${cellName(first)} must be ${z}; `
+                        + `if it is ${y}, ${cellName(second)} must be ${z}. Either way, a cell seeing both wings cannot be ${z}.`,
+                    evidence: [...cells, ...removals.map(r => r.cell)],
+                };
+            }
+        }
+    }
+    return null;
+}
+
 /** Apply an elimination to the grid. */
 export function applyRemovals(grid, removals) {
     for (const { cell, digit } of removals) {
@@ -312,7 +408,10 @@ export function applyRemovals(grid, removals) {
 const PLACEMENTS = [findNakedSingle, findHiddenSingle];
 // Cheapest to explain first, so a hint never reaches for X-Wing when a pair
 // would do.
-const ELIMINATIONS = [findNakedPair, findPointingPair, findNakedTriple, findXWing];
+const ELIMINATIONS = [
+    findNakedPair, findPointingPair, findClaimingPair, findHiddenPair,
+    findNakedTriple, findXWing, findXYWing,
+];
 
 /**
  * The next step a person could take: a placement, reached directly or after the
@@ -325,6 +424,14 @@ const ELIMINATIONS = [findNakedPair, findPointingPair, findNakedTriple, findXWin
  * @param {number} [maxEliminations] guard against pathological chains
  */
 export function nextStep(board, maxEliminations = 4) {
+    // Preserve an established short deduction path. New eliminations can
+    // consume the chain budget before that path becomes visible; try them when
+    // the original set stalls instead of losing an explanation we already had.
+    return stepWithTechniques(board, maxEliminations, [findNakedPair, findPointingPair, findNakedTriple, findXWing])
+        || stepWithTechniques(board, maxEliminations, ELIMINATIONS);
+}
+
+function stepWithTechniques(board, maxEliminations, eliminations) {
     const grid = candidateGrid(board);
 
     for (const find of PLACEMENTS) {
@@ -338,7 +445,7 @@ export function nextStep(board, maxEliminations = 4) {
     for (let round = 0; round < maxEliminations; round++) {
         let progressed = false;
 
-        for (const find of ELIMINATIONS) {
+        for (const find of eliminations) {
             const elimination = find(grid);
             if (!elimination) continue;
 
@@ -350,15 +457,19 @@ export function nextStep(board, maxEliminations = 4) {
                 const step = findPlacement(grid);
                 if (!step) continue;
 
-                // Lead with the elimination that unlocked it — that is the part
-                // the player could not see.
+                // Keep the complete derivation: an earlier elimination may be
+                // essential even when the last one immediately unlocks a digit.
+                const conclusion = step.type === 'naked-single'
+                    ? `${cellName(step.idx)} then has only ${step.digit} left.`
+                    : `${cellName(step.idx)} is then the only place for ${step.digit} in ${step.unit.kind} ${step.unit.index + 1}.`;
                 return {
                     ...step,
                     type: `${elimination.type}+${step.type}`,
-                    via: applied.map((e) => e.type),
-                    reason: `${elimination.reason}, leaving ${step.reason}`,
-                    nudge: `${elimination.nudge} That leaves ${cellName(step.idx)} with one option.`,
-                    evidence: [...new Set([...elimination.evidence, ...step.evidence])],
+                    via: applied.map(e => e.type),
+                    eliminations: applied,
+                    reason: `${applied.map(e => e.reason).join('; then ')}. ${conclusion}`,
+                    nudge: `${applied.map((e, i) => `${i + 1}. ${e.nudge}`).join(' ')} ${conclusion}`,
+                    evidence: [...new Set([...applied.flatMap(e => e.evidence), ...step.evidence])],
                 };
             }
             break; // re-run from the cheapest technique after any progress
