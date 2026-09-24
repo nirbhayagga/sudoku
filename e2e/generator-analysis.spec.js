@@ -109,7 +109,7 @@ test('closing an import cancels its pending Play request', async ({ page }) => {
     expect(await page.evaluate(() => localStorage.getItem('sudoku_saved_game'))).toBeNull();
 });
 
-test('dynamic deductions render their proof and reveal the correct value in a real worker', async ({ page }, testInfo) => {
+test('simpler uniqueness deductions render a candidate map and reveal the correct value in a real worker', async ({ page }, testInfo) => {
     const puzzle = PUZZLES.expert[444].puzzle;
     const solution = SudokuSolver.solveSudoku(puzzle).solution;
     const partial = [...puzzle];
@@ -122,9 +122,9 @@ test('dynamic deductions render their proof and reveal the correct value in a re
     await page.locator('#btn-hint').click();
     await expect(page.locator('#status')).toContainText('Explained hint — free', { timeout: 12000 });
     await page.locator('#hint-details > summary').click();
-    await expect(page.locator('#hint-steps')).toContainText('Following the assumption');
+    await expect(page.locator('#hint-steps')).toContainText('verified to have one solution');
     await page.locator('#hint-steps details > summary').first().click();
-    await expect(page.locator('#hint-steps details[open]')).toContainText('From');
+    await expect(page.locator('#hint-steps details[open] svg')).toBeVisible();
     await page.screenshot({ path: `e2e-results/dynamic-proof-${testInfo.project.name}.png`, fullPage: true });
     const target = await page.locator('.hint-target').evaluate(node => [...node.parentNode.children].indexOf(node));
     await page.locator('#btn-hint').click();

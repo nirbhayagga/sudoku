@@ -1,5 +1,5 @@
 import { createReasoningState, applyDeduction } from './reasoning.js';
-import { nextExtendedDeduction } from './extended-reasoning.js';
+import { nextEnhancedDeduction, establishUniqueness } from './enhanced-reasoning.js';
 
 /** Retain only proven exclusions across consecutive hint reveals, separate from pencil marks. */
 export function findHintPath(puzzle, { continuation = null, maxSteps = 810 } = {}) {
@@ -14,10 +14,11 @@ export function findHintPath(puzzle, { continuation = null, maxSteps = 810 } = {
             return new Set(saved);
         });
     }
+    establishUniqueness(state);
     const trace = [];
     for (let i = 0; i < maxSteps; i++) {
         const budget = {};
-        const step = nextExtendedDeduction(state, { profile: 'interactive', budget });
+        const step = nextEnhancedDeduction(state, { profile: 'interactive', budget });
         if (!step) return { status: budget.exhausted ? 'budget-exhausted' : 'unresolved', trace };
         applyDeduction(state, step);
         trace.push(step);

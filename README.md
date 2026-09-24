@@ -86,14 +86,16 @@ The tiers overlap: Nightmare 1 rates at 19 search nodes, while Hard 82 rates at
 22 and Evil 500 at 122. Seventeen clues alone do not guarantee greater human
 difficulty. See the [technique report](docs/puzzle-rating.md) for deduction-based
 measurements and their limits; no levels have been reclassified.
-The [v3 maintenance assessment](docs/puzzle-assessment-v3.md) finishes **5,500/5,500**
-with checked deductions, including all 199 boards that stalled in the preserved
-[v2 assessment](docs/puzzle-assessment-v2.md). Its shared techniques also improve
-live hints and imported-puzzle assessment; browser workers use a smaller work limit.
+The [v4 maintenance assessment](docs/puzzle-assessment-v4.md) finishes **5,500/5,500**
+with checked deductions, including uniqueness rectangles and BUG+1, shorter-chain
+selection, opening measurements and bounded alternative paths. Its shared rules
+also power browser hints and imported-puzzle assessment with smaller work budgets.
+Candidate maps and detailed proofs are available inside the free hint preview.
 The seeded generator retains its documented v2 targeting policy for reproducibility.
-The [full-bank SE comparison](docs/full-bank-se-comparison.md) shows substantial
-overlap between the existing tiers. Explanation coverage is not an exact SE rating
-or proof of the easiest solving route; no levels have been reclassified.
+The [v4 SE comparison](docs/full-bank-se-comparison-v4.md) records an independent
+benchmark, not an interchangeable rating scale. Earlier v1–v3 reports remain available.
+The harder external benchmark explains 40/80 sampled boards; unresolved boards remain
+unranked. No levels have been reclassified.
 
 The separate [persistent-candidate assessment](docs/puzzle-assessment-v1.md)
 retains eliminations across steps and includes representative boards for review.
@@ -105,12 +107,12 @@ and separates the deferred board-size and variant work.
 The [broader adoption review](docs/sudoku-adoption-roadmap.md) compares other Sudoku
 projects, SE's size builds, rating features, and possible future improvements.
 
-Measured local gzip sizes are approximately **27.0 kB for entry JS**, 8.6 kB for CSS,
-48.3 kB for Inter and 31.5 kB for JetBrains Mono: about **115 kB** before HTML and icons.
-The lazy puzzle bank is 114.7 kB, the on-demand reasoning/generator worker 11.1 kB,
-and the PNG exporter 0.7 kB. The service worker also caches these optional chunks
-and the bank for offline use, so a full first visit costs more than the initial
-entry script. Sizes vary with builds and server compression.
+The initial JavaScript entry stays below **30 KiB gzipped**. The puzzle bank and
+analysis worker are loaded on demand; the bank is about 115 kB gzipped. Tests cap
+all compressed assets plus the service worker at **250 KiB**, including the bundled
+fonts. The service worker caches optional chunks and the bank too, so the complete
+first visit costs more than the initial entry script. HTML and icons add to that
+transfer; actual compression depends on the server.
 
 ## Storage and offline use
 

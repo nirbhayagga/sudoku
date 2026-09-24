@@ -189,8 +189,8 @@ describe('modular build', () => {
         const total = [...assetsOf(modular).map((f) => `assets/${f}`), 'sw.js']
             .reduce((n, f) => n + gzipKb(modular, f), 0);
         // Includes both fonts, the whole lazy bank and the on-demand proof worker.
-        // Dynamic proofs bring the measured complete download to about 241 KiB.
-        expect(total).toBeLessThan(245);
+        // Enhanced proofs and candidate maps fit within 250 KiB including all fonts.
+        expect(total).toBeLessThan(250);
     });
 });
 

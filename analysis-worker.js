@@ -1,4 +1,4 @@
-import { assessPuzzleDeep } from './deep-assessment.js';
+import { assessPuzzleEnhanced } from './enhanced-assessment.js';
 import { generatePuzzle } from './puzzle-generation.js';
 import { findHintPath } from './hint-path.js';
 import { SudokuSolver } from './solver.js';
@@ -7,7 +7,7 @@ self.onmessage = ({ data }) => {
     const { id, kind, input } = data;
     try {
         let result;
-        if (kind === 'assess') result = assessPuzzleDeep(input.puzzle, { ...input.options, profile: 'interactive' });
+        if (kind === 'assess') result = assessPuzzleEnhanced(input.puzzle, { ...input.options, profile: 'interactive' });
         else if (kind === 'generate') result = generatePuzzle(input, progress => self.postMessage({ id, progress }));
         else if (kind === 'hint') result = findHintPath(input.puzzle, { continuation: input.continuation });
         else throw new Error('Unknown analysis request.');

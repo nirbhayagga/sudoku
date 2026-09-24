@@ -63,7 +63,7 @@ describe('dynamic proof engine', () => {
     });
     it('handles arbitrary transformed imports and keeps interactive hints consistent', () => {
         // Digit relabeling is not a lookup into a known puzzle/level.
-        const puzzle = cases[0].replace(/[1-9]/g, d => String(10 - Number(d)));
+        const puzzle = cases[1].replace(/[1-9]/g, d => String(10 - Number(d)));
         const assessment = assessPuzzleDeep(puzzle, { profile: 'interactive' });
         expect(assessment.status).toBe('solved');
         expect(assessment.limits.dynamicWorkPerStep).toBe(100000);

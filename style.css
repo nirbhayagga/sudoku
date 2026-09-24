@@ -2560,3 +2560,12 @@ kbd {
 .generator-preview span:nth-child(9n) { border-right: 0; }
 .generator-preview span:nth-child(n+19):nth-child(-n+27), .generator-preview span:nth-child(n+46):nth-child(-n+54) { border-bottom: 2px solid var(--text-primary); }
 .generator-preview span:nth-child(n+73) { border-bottom: 0; }
+
+/* Proof diagrams inherit every theme and retain a textual explanation. */
+.hint-diagram { margin: .75rem 0; }
+.hint-diagram svg { width: 100%; max-width: 450px; background: var(--bg-secondary); }
+.hint-diagram text { fill: var(--text-primary); font: 11px 'JetBrains Mono', monospace; }
+.hint-diagram .diagram-conclusion { fill: var(--accent-text); font-weight: 700; }
+.diagram-cell { fill: var(--bg-secondary); stroke: var(--text-muted); stroke-width: .3; }
+.diagram-evidence { fill: var(--bg-secondary); stroke: var(--accent-text); stroke-width: 1.5; }
+.diagram-box { stroke: var(--text-primary); stroke-width: 2; }

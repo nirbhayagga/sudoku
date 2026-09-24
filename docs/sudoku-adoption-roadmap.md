@@ -1,5 +1,12 @@
 # Broader Sudoku engine and product review
 
+Implementation follow-up: [v4 assessment](puzzle-assessment-v4.md) and
+[v4 SE comparison](full-bank-se-comparison-v4.md) now cover uniqueness rectangles,
+BUG+1, shorter-chain selection, bounded alternative paths, opening measurements,
+candidate maps and external benchmark preparation. The original review below is
+retained as a record of its baseline and remaining research candidates.
+
+
 Reviewed September 24, 2026. This supplements the preserved
 [SE source review](sudoku-explainer-review.md), [feature matrix](sudoku-feature-comparison.md)
 and [complete variant-name checklist](sudoku-variants-assessment.md).

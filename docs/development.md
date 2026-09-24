@@ -217,3 +217,18 @@ console.log(result.puzzle, result.targetMet, result.assessment.label);
 Cloud/static and whole-app Docker/Podman self-hosting share these frontend
 capabilities. There is no analysis service or separate full-solver edition.
 The optional leaderboard remains available in self-hosted deployments.
+
+
+## Enhanced reasoning profile (v4)
+
+`enhanced-reasoning.js` adds verified uniqueness patterns and short-chain selection
+to the preserved v3 engine. `enhanced-assessment.js` runs family-capped passes and
+records opening deductions, chain node/depth counts, and bounded alternate orders.
+`named-techniques.js` never reads a solved board; uniqueness is a separately checked
+premise. `hint-diagram.js` renders optional candidate maps from deduction premises.
+The browser uses the interactive profile; maintenance uses larger limits.
+
+Run `node scripts/assess-v4.js --help` for bank, arbitrary-board and external-corpus
+assessment. `scripts/prepare-benchmarks.py` prepares pinned harder research inputs.
+See [the v4 assessment](puzzle-assessment-v4.md) for current coverage, reproducibility
+and limits. Historical CLIs and reports remain available.

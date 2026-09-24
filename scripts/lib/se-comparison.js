@@ -45,14 +45,16 @@ export function compareSe(report, ratings) {
             humanFamily: row.human.family, humanStatus: row.human.status, se };
     });
     const rated = records.filter(r => r.se.status === 'rated');
-    const families = ['singles', 'locked-candidates', 'subsets', 'wings', 'chains', 'dynamic-chains'];
+    const families = report.policy.version === 'human-v4.0'
+        ? ['singles', 'locked-candidates', 'subsets', 'wings', 'uniqueness', 'chains', 'dynamic-chains']
+        : ['singles', 'locked-candidates', 'subsets', 'wings', 'chains', 'dynamic-chains'];
     const solved = rated.filter(r => r.humanStatus === 'solved' && families.includes(r.humanFamily));
     const groups = key => Object.fromEntries([...new Set(records.map(key))].map(name => {
         const rows = rated.filter(r => key(r) === name);
         return [name, { count: rows.length, er: distribution(rows.map(r => r.se.er)), ep: distribution(rows.map(r => r.se.ep)), ed: distribution(rows.map(r => r.se.ed)) }];
     }));
     return { policy: report.policy.version, total: records.length, rated: rated.length, failed: records.length - rated.length,
-        correlations: { searchNodesVsSe: spearman(rated.map(r => [r.searchNodes, r.se.er])),
+        correlations: { searchNodesVsSe: spearman(rated.filter(r => Number.isFinite(r.searchNodes)).map(r => [r.searchNodes, r.se.er])),
             resolvedFamilyVsSe: spearman(solved.map(r => [families.indexOf(r.humanFamily), r.se.er])), familySample: solved.length },
         tiers: groups(r => r.difficulty), families: groups(r => r.humanFamily || 'unresolved'), records };
 }
@@ -69,7 +71,7 @@ export function renderSeComparison(result) {
         ...Object.entries(result.tiers).map(([name, g]) => `| ${name} | ${g.count} | ${range(g.er)} | ${range(g.ep)} | ${range(g.ed)} |`), '',
         '| Our observed family | Count | SE ER |', '|---|---:|---|',
         ...Object.entries(result.families).map(([name, g]) => `| ${name} | ${g.count} | ${range(g.er)} |`), '',
-        `Spearman correlation (average ranks for ties): search nodes versus SE ER **${result.correlations.searchNodesVsSe}**;`,
+        `Spearman correlation (average ranks for ties): search nodes versus SE ER **${result.correlations.searchNodesVsSe ?? 'not measured'}**;`,
         `our ordered families versus SE ER **${result.correlations.resolvedFamilyVsSe}** across **${result.correlations.familySample}** explained/rated boards.`, '',
         'Correlation is not rating agreement or a validated mapping to human difficulty.',
         'Families are broad and overlap. Unresolved boards are excluded from family correlation,',

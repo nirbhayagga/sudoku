@@ -1,3 +1,4 @@
+import { createHintDiagram } from './hint-diagram.js';
 /**
  * Sudoku — UI Controller
  * Solver Mode + Play Mode with pencil marks, undo/redo, digit highlighting,
@@ -1797,6 +1798,14 @@ function loadBank() {
                 const description = document.createElement('p');
                 description.textContent = step.nudge || step.reason;
                 li.append(description);
+                const map = document.createElement('details');
+                const mapLabel = document.createElement('summary');
+                mapLabel.textContent = 'Candidate map';
+                map.append(mapLabel);
+                map.addEventListener('toggle', () => {
+                    if (map.open && !map.querySelector('figure')) map.append(createHintDiagram(step, document));
+                });
+                li.append(map);
                 if (step.removals) {
                     const removals = document.createElement('p');
                     removals.textContent = 'Exclude: ' + step.removals.map(({ cell, digit }) => `${digit} from ${cellName(cell)}`).join('; ') + '.';
