@@ -2544,6 +2544,7 @@ function loadBank() {
     }
 
     document.addEventListener('keydown', (e) => {
+        if (document.body.classList.contains('small-board-active')) return;
         const formField = e.target.closest?.('input:not(.cell-input), textarea, select, [contenteditable="true"]');
         if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && !e.isComposing && e.key.toLowerCase() === 'i' && !formField && !dialogs.isOpen()) {
             e.preventDefault();
@@ -2567,6 +2568,39 @@ function loadBank() {
     // ══════════════════════════════════════════════════════════════════
     //  EVENT LISTENERS
     // ══════════════════════════════════════════════════════════════════
+
+    let smallApp = null, sizeRequest = 0;
+    const boardSize = document.getElementById('board-size');
+    async function changeBoardSize(size, linkedPuzzle = null) {
+        const request = ++sizeRequest;
+        if (size === '9') {
+            smallApp?.deactivate();
+            document.body.classList.remove('small-board-active');
+            document.getElementById('small-app').hidden = true;
+            scheduleFit(); return;
+        }
+        if (gameActive) { setPaused(true); saveGame(); }
+        clearHintNudge();
+        try {
+            const { createSmallApp } = await import('./small-app.js');
+            if (request !== sizeRequest) return;
+            smallApp ||= createSmallApp(document.getElementById('small-app'));
+            document.body.classList.add('small-board-active');
+            document.getElementById('small-app').hidden = false;
+            smallApp.activate(size, linkedPuzzle);
+        } catch (error) { boardSize.value = '9'; setStatus(`Small board could not load: ${error.message}`); }
+    }
+    boardSize.addEventListener('change', () => changeBoardSize(boardSize.value));
+    const sizeParams = new URLSearchParams(location.search);
+    const linkedSize = sizeParams.get('size');
+    if (['4', '6'].includes(linkedSize)) {
+        const puzzle = sizeParams.get('p');
+        const box = linkedSize === '4' ? '2x2' : '2x3';
+        if (sizeParams.get('box') === box && puzzle && puzzle.length === Number(linkedSize) ** 2
+            && [...puzzle].every(d => ('0' + '123456'.slice(0, Number(linkedSize))).includes(d))) {
+            boardSize.value = linkedSize; changeBoardSize(linkedSize, puzzle);
+        }
+    }
 
     tabSolver.addEventListener('click', () => switchMode('solver'));
     tabPlay.addEventListener('click', () => switchMode('play'));
@@ -3065,6 +3099,7 @@ function loadBank() {
      * be a loss for no gain — the board is already at its maximum size.
      */
     function refreshLayout() {
+        if (document.body.classList.contains('small-board-active')) return;
         document.getElementById('btn-results').style.display = completion ? '' : 'none';
         if (btnHandoff) btnHandoff.style.display = completion ? 'none' : '';
         const playing = mode === 'play' && gameActive && !gameWon && !setupOpen;

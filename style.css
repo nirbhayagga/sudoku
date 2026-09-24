@@ -2569,3 +2569,26 @@ kbd {
 .diagram-cell { fill: var(--bg-secondary); stroke: var(--text-muted); stroke-width: .3; }
 .diagram-evidence { fill: var(--bg-secondary); stroke: var(--accent-text); stroke-width: 1.5; }
 .diagram-box { stroke: var(--text-primary); stroke-width: 2; }
+
+.board-size-control { width: 75px; flex-shrink: 0; }
+#board-size { width: 75px; min-height: 44px; padding: .4rem; border-radius: var(--radius); border: 1px solid var(--border-box); color: var(--text-primary); background: var(--bg-secondary); font: inherit; }
+.small-board-active #app, .small-board-active #mode-toggle, .small-board-active .shortcuts, #small-app[hidden] { display: none; }
+#small-app { display: block; width: min(94vw, 520px); max-width: 520px; padding: 1rem; }
+.small-heading { display: flex; gap: 1rem; justify-content: space-between; align-items: center; }
+.small-heading h2 { font-size: 1.3rem; }
+#small-app p, #small-app details { margin: .6rem 0; }
+#small-app label { display: block; margin: .6rem 0; }
+#small-app input:not([type=checkbox]), #small-app select, #small-app textarea { max-width: 100%; min-height: 44px; padding: .5rem; color: var(--text-primary); background: var(--bg-secondary); border: 1px solid var(--border-box); border-radius: .4rem; font: inherit; }
+#small-app input[type=number] { width: 6rem; }
+#small-text { width: 100%; font-family: 'JetBrains Mono', monospace !important; }
+#small-app fieldset { padding: .75rem; border: 1px solid var(--border-box); }
+.small-grid { display: grid; grid-template-columns: repeat(var(--small-size), minmax(0, 1fr)); border: 2px solid var(--text-primary); width: 100%; }
+.small-cell { aspect-ratio: 1; min-width: 0; min-height: 44px; border: 1px solid var(--border-box); border-radius: 0; padding: 0; color: var(--accent-text); background: var(--bg-secondary); font: 500 clamp(24px, 5vw, 40px) 'Inter', sans-serif; cursor: pointer; }
+.small-given { font-weight: 800; color: var(--text-primary); }
+.small-selected { outline: 3px solid var(--accent-text); outline-offset: -4px; }
+.small-pencil { font: 12px 'JetBrains Mono', monospace; color: var(--text-primary); display: block; padding: 3px; }
+.small-actions, .small-pad, .small-setup { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; margin: .65rem 0; }
+.small-pad .btn { flex: 1; padding: .4rem; min-width: 40px; }
+.small-paused .small-cell { color: transparent; }
+#small-progress, #small-clock { font-size: .85rem; color: var(--text-primary); }
+.small-print-frame { position: fixed; width: 1px; height: 1px; left: -10000px; border: 0; }

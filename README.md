@@ -1,6 +1,6 @@
 # Sudoku
 
-Browser-based Sudoku player and solver: 5,500 puzzles, six difficulty tiers,
+Browser-based Sudoku player and solver: 5,500 classic 9×9 puzzles, six difficulty tiers,
 ten themes, hints, pencil marks, daily puzzles, and offline play after caching.
 Vanilla JavaScript with **zero frontend runtime package dependencies**. The
 optional leaderboard uses Express and CORS.
@@ -36,6 +36,11 @@ Open `dist-standalone/index.html`. Keep the **whole output directory** together;
 it contains separate CSS, fonts, icons, and license files alongside the script.
 
 ## Play and solve
+
+The board-size selector also offers **36 distinct 4×4 puzzle classes** and
+**120 curated 6×6 challenges**, with separate saves/progress, imports, hints,
+notes, text/PNG export and printable worksheets. See [small boards](docs/small-boards.md)
+for their geometry, grading and reproducible curation. 16×16 play is deferred.
 
 - Play a bank level, draw a random puzzle, choose a daily puzzle, or share a link.
 - Use manual notes, Fill notes for one-time candidates, or live Auto-notes.
@@ -109,7 +114,7 @@ projects, SE's size builds, rating features, and possible future improvements.
 
 The initial JavaScript entry stays below **30 KiB gzipped**. The puzzle bank and
 analysis worker are loaded on demand; the bank is about 115 kB gzipped. Tests cap
-all compressed assets plus the service worker at **250 KiB**, including the bundled
+all compressed assets plus the service worker at **265 KiB**, including the bundled
 fonts. The service worker caches optional chunks and the bank too, so the complete
 first visit costs more than the initial entry script. HTML and icons add to that
 transfer; actual compression depends on the server.

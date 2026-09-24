@@ -232,3 +232,17 @@ Run `node scripts/assess-v4.js --help` for bank, arbitrary-board and external-co
 assessment. `scripts/prepare-benchmarks.py` prepares pinned harder research inputs.
 See [the v4 assessment](puzzle-assessment-v4.md) for current coverage, reproducibility
 and limits. Historical CLIs and reports remain available.
+
+
+## Small-board geometry
+
+`geometry.js` owns size, box dimensions, symbols, houses and peers. The optimized
+9×9 solver remains specialized; `sized-solver.js` supplies the generic solver and
+small-board deductions, cross-checked against it. `sized-generation.js` and
+`scripts/generate-small-bank.js` reproduce the curated banks. `small-state.js`
+validates bounded saves and implements reversible notes/value changes.
+`small-app.js` is lazy-loaded, and `sized-export.js` handles size-aware links,
+images and worksheets. No server-side analysis service is needed.
+
+See [small-board maintenance and contracts](small-boards.md). Small saves and
+progress use separate versioned storage keys and never enter the 9×9 leaderboard.

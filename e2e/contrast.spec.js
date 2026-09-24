@@ -66,7 +66,9 @@ async function contrastFailures(page) {
         for (const element of root.querySelectorAll('*')) {
             const hasText = [...element.childNodes]
                 .some((n) => n.nodeType === Node.TEXT_NODE && n.textContent.trim());
-            const value = element.matches('input, textarea') ? element.value : '';
+            // Checkbox/radio values such as `on` are not rendered text. Their labels
+            // are measured separately; native control glyphs need a non-text audit.
+            const value = element.matches('input:not([type=checkbox]):not([type=radio]):not([type=hidden]):not([type=range]):not([type=color]), textarea') ? element.value : '';
             if (!hasText && !value) continue;
             if (element.closest('.visually-hidden')) continue;
 
@@ -167,6 +169,10 @@ for (const theme of THEMES) {
             expect(await contrastFailures(page), id).toEqual([]);
             await page.locator(`#${id}`).evaluate(el => el.classList.remove('active'));
         }
+        await page.locator('#board-size').selectOption('6');
+        await page.locator('#small-fill').click();
+        await page.locator('#small-tools summary').click();
+        expect(await contrastFailures(page), 'small board, candidates and export controls').toEqual([]);
     });
 }
 

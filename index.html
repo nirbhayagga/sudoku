@@ -65,7 +65,7 @@
 
   <header class="header">
     <div class="header-top">
-      <div class="header-spacer"></div>
+      <div class="header-spacer board-size-control"><label class="visually-hidden" for="board-size">Board size</label><select id="board-size" aria-label="Board size"><option value="9">9×9</option><option value="4">4×4</option><option value="6">6×6</option></select></div>
       <div class="header-title">
         <h1>Sudoku</h1>
         <p id="subtitle"></p>
@@ -237,6 +237,7 @@
       </div>
     </div>
   </main>
+  <main class="card" id="small-app" hidden aria-label="Small Sudoku boards"></main>
 
   <!-- Paste/Import Modal -->
   <div class="modal-overlay" id="modal-overlay">

@@ -471,3 +471,14 @@ export function restoreBackup(raw) {
         return { success: false, error: rollbackFailed ? 'Restore failed; some previous data could not be recovered.' : 'Restore failed; previous data was preserved.', rollbackFailed };
     }
 }
+
+// Small classic boards have their own versioned saves and content-ID progress.
+export const loadSmallData = size => [4, 6].includes(Number(size)) ? readJson(`sudoku_small_v1_${size}`, null) : null;
+export const saveSmallData = (size, state) => [4, 6].includes(Number(size)) && writeJson(`sudoku_small_v1_${size}`, state);
+export function smallProgress() {
+    const raw = readJson('sudoku_small_progress_v1', []);
+    return Array.isArray(raw) ? [...new Set(raw.filter(id => typeof id === 'string' && /^[46]-[a-f0-9]{16}$/.test(id)))].slice(0, 10000) : [];
+}
+export function recordSmallWin(id) {
+    if (/^[46]-[a-f0-9]{16}$/.test(id)) writeJson('sudoku_small_progress_v1', [...new Set([...smallProgress(), id])]);
+}
