@@ -1,5 +1,7 @@
 # Feature comparison: this project and SudokuExplainer
 
+> Review snapshot before bank revision 2. The [current bank policy](bank-revision-2.md) supersedes the reorder recommendations below.
+
 Status at 2026-09-24. **This project** means the repository code described here,
 not a claim about the currently deployed website. **SE** means the
 [pinned source review](sudoku-explainer-review.md); release-only capabilities are

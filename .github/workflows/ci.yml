@@ -128,11 +128,11 @@ jobs:
             (async () => {
               const r = await fetch("http://127.0.0.1:3001/api/leaderboard", {
                 signal: AbortSignal.timeout(5000), method: "POST", headers: {"Content-Type": "application/json"},
-                body: JSON.stringify({name: "CI smoke", difficulty: "easy", time: 123, hints: 0, level: 1})
+                body: JSON.stringify({bankVersion: 2, name: "CI smoke", difficulty: "easy", time: 123, hints: 0, level: 1})
               });
               assert.equal(r.ok, true);
               assert.equal((await r.json()).success, true);
-              const saved = JSON.parse(fs.readFileSync("/app/data/leaderboard.json", "utf8"));
+              const saved = JSON.parse(fs.readFileSync("/app/data/leaderboard-v2.json", "utf8"));
               assert(saved.easy.some(e => e.name === "CI smoke" && e.time === 123 && e.level === 1));
             })().catch(e => { console.error(e); process.exit(1); });
           '

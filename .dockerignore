@@ -9,7 +9,8 @@ dist
 dist-standalone
 coverage
 tests
-leaderboard-api
+leaderboard-api/*
+!leaderboard-api/bank-meta.json
 scripts
 *.md
 *.txt

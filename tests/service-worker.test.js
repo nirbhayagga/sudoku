@@ -553,7 +553,7 @@ describe('fetch strategy', () => {
 
     it('accepts the emitted shell under a subpath and ignores sibling requests', async () => {
         const worker = loadWorker({ scopeUrl: 'https://sudoku.example.com/game/', fetchImpl: async () => page('app', indexHtml) });
-        expect((await handleFetch(worker.listeners, req('https://sudoku.example.com/game/?daily=2026-09-19', { mode: 'navigate' }))).body).toBe('app');
+        expect((await handleFetch(worker.listeners, req('https://sudoku.example.com/game/?bank=2&daily=2026-09-19', { mode: 'navigate' }))).body).toBe('app');
         expect(await handleFetch(worker.listeners, req('https://sudoku.example.com/other/'))).toBeUndefined();
     });
 

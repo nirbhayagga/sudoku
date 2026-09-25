@@ -82,22 +82,22 @@ full-bank measurements are in the [README](../README.md#difficulty-and-download-
 
 ## Puzzle bank maintenance
 
-The bank maintenance CLI uses normal ES-module imports and has dry-run and
-atomic-writer tests. Its existing tier selection uses the legacy search metric;
-no bank policy/order changes are automatic. `--write` requires the existing tier
-size, and dry-run output uses exclusive creation to protect earlier files.
-Use the shared `generatePuzzle()` API for technique-targeted generation.
+`scripts/generate-bank.js` remains a search-node candidate collector. Its CLI
+rejects `--write` so it cannot silently replace the human-technique ladder. Import
+and reorder dry runs still verify uniqueness; output files are created exclusively.
+Use `generatePuzzle()` for reproducible technique-targeted candidates.
 
 ```bash
 node scripts/generate-bank.js --difficulty evil --count 500 --pool 6000
+node scripts/assess-v4.js --all --transforms --out=e2e-results/new-rating.json
+node scripts/reclassify-bank.js --assessment=e2e-results/new-rating.json --out=e2e-results/new-proposal
 ```
 
-The intended default produces a candidate JSON file for inspection; `--write` changes the
-bank. Import and reorder modes also include uniqueness checks. **Do not reorder released
-levels casually:** a level is a 1-based array position, used in saved games,
-shared links, daily mappings, and scores. Evil and Nightmare are ascending by
-search-node rating; the other tiers are unordered. The source 17-clue catalogue
-is not tracked and is required to regenerate Nightmare.
+Review the proposal before repeating the last command with `--apply` and a fresh
+output directory. It verifies input/source hashes, exact bank membership, unique
+solutions and identity collisions, then generates the bank, API metadata and rank
+manifest together. See [the policy](bank-revision-2.md). The external 17-clue
+catalogue is intentionally untracked; reordering the retained bank does not need it.
 
 See the [SudokuExplainer engineering review](sudoku-explainer-review.md) for the
 feature comparison, shared reasoning/generation architecture, optional offline

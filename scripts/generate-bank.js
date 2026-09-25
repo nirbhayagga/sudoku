@@ -1,25 +1,20 @@
 /**
- * Regenerate one difficulty tier of puzzle-bank.js.
+ * Legacy search-node candidate collector. Dry runs only; use the human
+ * assessment and reclassification pipeline to publish a bank revision.
  *
  *   node scripts/generate-bank.js --difficulty evil --count 500 --pool 4000
- *   node scripts/generate-bank.js --difficulty evil --write
- *   node scripts/generate-bank.js --difficulty nightmare --reorder --write
- *   node scripts/generate-bank.js --difficulty nightmare --import 17clue.txt --count 3000 --write
+ *   node scripts/generate-bank.js --difficulty nightmare --reorder --out=candidates.json
+ *   node scripts/generate-bank.js --difficulty evil --import FILE --count 500
  *
- * Selection is by SudokuSolver.rateDifficulty (search nodes needed beyond pure
- * constraint propagation), not clue count. Clue count does not separate tiers:
- * the bank's expert and evil tiers had near-identical clue counts and turned out
- * to be the same difficulty. This generates a large pool and keeps the hardest
- * `count` of it, so the tier is defined by measured difficulty.
- *
- * Puzzle position is the user-visible level number and is recorded in
- * leaderboard entries, so rewriting a tier invalidates existing scores for it.
+ * Search effort is a diagnostic, not a human difficulty label. --import takes
+ * a separate filename argument. Every retained candidate is uniquely solvable.
  */
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { SudokuSolver } from '../solver.js';
 import { SudokuGenerator } from '../generator.js';
+import { puzzleId } from '../puzzle-id.js';
 import { PUZZLES } from '../puzzle-bank.js';
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
@@ -55,20 +50,9 @@ export function parseArgs(argv) {
     return args;
 }
 
-/**
- * Id format used by the bank: prefix letter + zero-padded position. Read back
- * from the loaded bank, which derives ids from ID_PREFIX/ID_WIDTH, so generated
- * ids stay consistent with everything already stored against them.
- */
-function idFormat(existing) {
-    const sample = existing[0].id;
-    const prefix = sample[0];
-    const width = sample.length - 1;
-    return (n) => prefix + String(n).padStart(width, '0');
-}
-
 function main() {
     const args = parseArgs(process.argv.slice(2));
+    if (args.write) throw new Error('Use human assessment and reclassify-bank.js to publish; this search-node tool only produces candidates.');
     // Fail before expensive generation when a dry-run destination already exists.
     const output = args.out || (!args.reorder ? `${args.difficulty}-${args.import ? 'imported' : 'regenerated'}.json` : null);
     if (!args.write && output && fs.existsSync(path.resolve(output))) throw new Error('EEXIST: output already exists');
@@ -85,7 +69,7 @@ function main() {
     }
 
     if (args.import) {
-        importTier(args, SudokuSolver, existing);
+        importTier(args, SudokuSolver);
         return;
     }
 
@@ -139,13 +123,12 @@ function main() {
     }
     console.log('  uniqueness    all verified');
 
-    const makeId = idFormat(existing);
-    const entries = chosen.map((c, i) => ({ id: makeId(i + 1), puzzle: c.puzzle }));
+    const entries = chosen.map(c => ({ id: puzzleId(c.puzzle), puzzle: c.puzzle }));
 
     if (!args.write) {
         const out = path.resolve(args.out || `${args.difficulty}-regenerated.json`);
         fs.writeFileSync(out, JSON.stringify(entries, null, 2) + '\n', { flag: 'wx' });
-        console.log(`\nDry run. Wrote ${out}\nRe-run with --write to patch puzzle-bank.js.`);
+        console.log(`\nDry run. Wrote ${out}\nAssess candidates with assess-v4.js before proposing a bank change.`);
         return;
     }
 
@@ -164,7 +147,7 @@ function main() {
  * in a large source: selecting the top slice of a big catalogue produces a far
  * more consistent tier than sampling it arbitrarily.
  */
-function importTier(args, SudokuSolver, existing) {
+function importTier(args, SudokuSolver) {
     const file = path.resolve(args.import);
     console.log(`Importing "${args.difficulty}" from ${file}\n`);
 
@@ -233,13 +216,12 @@ function importTier(args, SudokuSolver, existing) {
     console.log(`  kept ${chosen.length}: min ${nodes[0]}, median ${nodes[Math.floor(nodes.length / 2)]}, max ${nodes[nodes.length - 1]}, ` +
         `${Math.round(nodes.filter((n) => n === 0).length / nodes.length * 100)}% pure-logic`);
 
-    const makeId = idFormat(existing);
-    const entries = chosen.map((c, i) => ({ id: makeId(i + 1), puzzle: c.puzzle }));
+    const entries = chosen.map(c => ({ id: puzzleId(c.puzzle), puzzle: c.puzzle }));
 
     if (!args.write) {
         const out = path.resolve(args.out || `${args.difficulty}-imported.json`);
         fs.writeFileSync(out, JSON.stringify(entries, null, 2) + '\n', { flag: 'wx' });
-        console.log(`\nDry run. Wrote ${out}\nRe-run with --write to patch puzzle-bank.js.`);
+        console.log(`\nDry run. Wrote ${out}\nAssess candidates with assess-v4.js before proposing a bank change.`);
         return;
     }
     patchBank(args.difficulty, entries);
@@ -266,12 +248,11 @@ function reorderTier(args, SudokuSolver, existing) {
     console.log(`  level 1 needs ${nodes[0]} search nodes, level ${rated.length} needs ${nodes[nodes.length - 1]}`);
     console.log(`  median ${nodes[Math.floor(nodes.length / 2)]}`);
 
-    const makeId = idFormat(existing);
-    const entries = rated.map((entry, i) => ({ id: makeId(i + 1), puzzle: entry.puzzle }));
+    const entries = rated.map(entry => ({ id: puzzleId(entry.puzzle), puzzle: entry.puzzle }));
 
     if (!args.write) {
         if (args.out) fs.writeFileSync(path.resolve(args.out), JSON.stringify(entries, null, 2) + '\n', { flag: 'wx' });
-        console.log('\nDry run. Re-run with --write to patch puzzle-bank.js.');
+        console.log('\nDry run. Assess candidates with assess-v4.js before proposing a bank change.');
         return;
     }
     patchBank(args.difficulty, entries);

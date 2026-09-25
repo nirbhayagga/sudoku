@@ -497,7 +497,7 @@ describe('continuing on another device', () => {
 
     it('pauses, shows the link, and stops saving here', async () => {
         app.window.dispatchEvent(new app.window.Event('pagehide'));
-        expect(app.window.localStorage.getItem('sudoku_saved_game')).not.toBeNull();
+        expect(app.window.localStorage.getItem('sudoku_saved_game_v2')).not.toBeNull();
 
         const { link } = await handOff(app);
         expect(link).toContain('g=1');
@@ -506,12 +506,12 @@ describe('continuing on another device', () => {
         expect(app.$('#btn-pause').textContent).toBe('Resume');
 
         // Clipboard fallback keeps recovery until the user confirms copying.
-        expect(app.window.localStorage.getItem('sudoku_saved_game')).not.toBeNull();
+        expect(app.window.localStorage.getItem('sudoku_saved_game_v2')).not.toBeNull();
         app.click('#btn-handoff-confirm');
         // Confirmed hand-off must not be saved again on pagehide.
-        expect(app.window.localStorage.getItem('sudoku_saved_game')).toBeNull();
+        expect(app.window.localStorage.getItem('sudoku_saved_game_v2')).toBeNull();
         app.window.dispatchEvent(new app.window.Event('pagehide'));
-        expect(app.window.localStorage.getItem('sudoku_saved_game')).toBeNull();
+        expect(app.window.localStorage.getItem('sudoku_saved_game_v2')).toBeNull();
     });
 
     // Playing on here regardless is a choice; the first move resumes saving.
@@ -521,7 +521,7 @@ describe('continuing on another device', () => {
         const next = empties[4];
         app.type(next, EASY_SOLUTION[next]);
         app.window.dispatchEvent(new app.window.Event('pagehide'));
-        expect(JSON.parse(app.window.localStorage.getItem('sudoku_saved_game')).userValues[next])
+        expect(JSON.parse(app.window.localStorage.getItem('sudoku_saved_game_v2')).userValues[next])
             .toBe(EASY_SOLUTION[next]);
     });
 
@@ -542,7 +542,7 @@ describe('continuing on another device', () => {
         expect(other.window.location.search).toBe('');
 
         other.window.dispatchEvent(new other.window.Event('pagehide'));
-        const saved = JSON.parse(other.window.localStorage.getItem('sudoku_saved_game'));
+        const saved = JSON.parse(other.window.localStorage.getItem('sudoku_saved_game_v2'));
         expect(saved.notes[noted]).toEqual(['5']);
         expect(saved.hintsUsed).toBe(1);
         expect(saved.mistakes).toBe(1);
@@ -558,7 +558,7 @@ describe('continuing on another device', () => {
         app.window.dispatchEvent(new app.window.Event('pagehide'));
         const other = await bootApp({
             url: link,
-            localStorage: { sudoku_saved_game: JSON.stringify({
+            localStorage: { sudoku_saved_game_v2: JSON.stringify({
                 puzzle: EASY_PUZZLE, solution: EASY_SOLUTION, difficulty: 'hard',
                 userValues: EASY_PUZZLE, notes: Array.from({ length: 81 }, () => []),
                 timerSeconds: 5, lockedCells: [...EASY_PUZZLE].map((c) => c !== '0'),
@@ -570,7 +570,7 @@ describe('continuing on another device', () => {
     });
 
     it('ignores a link that does not hold a valid game', async () => {
-        const other = await bootApp({ url: 'http://localhost/?g=1&b=notaboard&v=1&x=easy' });
+        const other = await bootApp({ url: 'http://localhost/?bank=2&g=1&b=notaboard&v=1&x=easy' });
         expect(other.$('#status').textContent).toBe('Click "New Game" to start');
         expect(other.cells().filter((c) => c.classList.contains('locked'))).toHaveLength(0);
         other.close();
@@ -611,7 +611,7 @@ describe('mistakes', () => {
         const wrong = EASY_SOLUTION[empty] === '1' ? '2' : '1';
         app.type(empty, wrong);
         app.window.dispatchEvent(new app.window.Event('pagehide'));
-        const saved = JSON.parse(app.window.localStorage.getItem('sudoku_saved_game'));
+        const saved = JSON.parse(app.window.localStorage.getItem('sudoku_saved_game_v2'));
         expect(saved.mistakes).toBe(1);
     });
 });
@@ -677,14 +677,14 @@ describe('winning', () => {
 
     it('records the result in stats', () => {
         completePuzzle(app);
-        const stats = JSON.parse(app.window.localStorage.getItem('sudoku_stats'));
+        const stats = JSON.parse(app.window.localStorage.getItem('sudoku_stats_v2'));
         expect(stats.easy.played).toBe(1);
         expect(stats.easy.bestTime).toBeGreaterThanOrEqual(0);
     });
 
     it('clears the saved game', () => {
         completePuzzle(app);
-        expect(app.window.localStorage.getItem('sudoku_saved_game')).toBeNull();
+        expect(app.window.localStorage.getItem('sudoku_saved_game_v2')).toBeNull();
     });
 });
 
@@ -695,7 +695,7 @@ describe('save and resume', () => {
         app.type(empty, EASY_SOLUTION[empty]);
         await app.tick(2100); // debounced by 2s
 
-        const saved = JSON.parse(app.window.localStorage.getItem('sudoku_saved_game'));
+        const saved = JSON.parse(app.window.localStorage.getItem('sudoku_saved_game_v2'));
         expect(saved.puzzle).toBe(EASY_PUZZLE);
         expect(saved.difficulty).toBe('easy');
         expect(saved.userValues[empty]).toBe(EASY_SOLUTION[empty]);
@@ -715,7 +715,7 @@ describe('save and resume', () => {
             timestamp: Date.now(),
         };
         const resumed = await bootApp({
-            localStorage: { sudoku_saved_game: JSON.stringify(saved) },
+            localStorage: { sudoku_saved_game_v2: JSON.stringify(saved) },
         });
 
         const banner = resumed.$('.resume-banner');
@@ -731,7 +731,7 @@ describe('save and resume', () => {
 
         const resumed = await bootApp({
             localStorage: {
-                sudoku_saved_game: JSON.stringify({
+                sudoku_saved_game_v2: JSON.stringify({
                     puzzle: EASY_PUZZLE,
                     solution: EASY_SOLUTION,
                     difficulty: 'easy',
@@ -755,7 +755,7 @@ describe('save and resume', () => {
     it('discards the saved game when dismissed', async () => {
         const resumed = await bootApp({
             localStorage: {
-                sudoku_saved_game: JSON.stringify({
+                sudoku_saved_game_v2: JSON.stringify({
                     puzzle: EASY_PUZZLE,
                     solution: EASY_SOLUTION,
                     difficulty: 'easy',
@@ -771,7 +771,7 @@ describe('save and resume', () => {
         });
 
         resumed.click('#btn-resume-no');
-        expect(resumed.window.localStorage.getItem('sudoku_saved_game')).toBeNull();
+        expect(resumed.window.localStorage.getItem('sudoku_saved_game_v2')).toBeNull();
         expect(resumed.$('.resume-banner')).toBeNull();
         resumed.close();
     });
@@ -843,8 +843,8 @@ describe('themes', () => {
 describe('difficulty selection', () => {
     it('updates the level range for the chosen difficulty', () => {
         app.click('.diff-btn[data-diff="nightmare"]');
-        expect(app.$('#level-input').max).toBe('3000');
-        expect(app.$('#level-max').textContent).toMatch(/3000/);
+        expect(app.$('#level-input').max).toBe('192');
+        expect(app.$('#level-max').textContent).toMatch(/192/);
     });
 
     it('marks the selected difficulty as active', () => {
@@ -916,7 +916,7 @@ describe('level attribution', () => {
         app.type(empty, '5');
         await app.tick(2100);
 
-        const saved = JSON.parse(app.window.localStorage.getItem('sudoku_saved_game'));
+        const saved = JSON.parse(app.window.localStorage.getItem('sudoku_saved_game_v2'));
         expect(saved.level).toBe(3);
     });
 
@@ -928,14 +928,14 @@ describe('level attribution', () => {
         app.type(EASY_PUZZLE.indexOf('0'), '5');
         await app.tick(2100);
 
-        const saved = JSON.parse(app.window.localStorage.getItem('sudoku_saved_game'));
+        const saved = JSON.parse(app.window.localStorage.getItem('sudoku_saved_game_v2'));
         expect(saved.level).toBe(3);
     });
 
     it('restores the level when a game is resumed', async () => {
         const resumed = await bootApp({
             localStorage: {
-                sudoku_saved_game: JSON.stringify({
+                sudoku_saved_game_v2: JSON.stringify({
                     puzzle: EASY_PUZZLE,
                     solution: EASY_SOLUTION,
                     difficulty: 'easy',
@@ -955,7 +955,7 @@ describe('level attribution', () => {
         resumed.type(EASY_PUZZLE.indexOf('0'), '5');
         await resumed.tick(2100);
 
-        const saved = JSON.parse(resumed.window.localStorage.getItem('sudoku_saved_game'));
+        const saved = JSON.parse(resumed.window.localStorage.getItem('sudoku_saved_game_v2'));
         expect(saved.level).toBe(42);
         resumed.close();
     });
@@ -969,7 +969,7 @@ describe('saving on the way out', () => {
         const empty = EASY_PUZZLE.indexOf('0');
         app.type(empty, EASY_SOLUTION[empty]);
 
-        expect(app.window.localStorage.getItem('sudoku_saved_game')).toBeNull();
+        expect(app.window.localStorage.getItem('sudoku_saved_game_v2')).toBeNull();
 
         Object.defineProperty(app.document, 'visibilityState', {
             value: 'hidden',
@@ -977,7 +977,7 @@ describe('saving on the way out', () => {
         });
         app.document.dispatchEvent(new app.window.Event('visibilitychange'));
 
-        const saved = JSON.parse(app.window.localStorage.getItem('sudoku_saved_game'));
+        const saved = JSON.parse(app.window.localStorage.getItem('sudoku_saved_game_v2'));
         expect(saved.userValues[empty]).toBe(EASY_SOLUTION[empty]);
     });
 
@@ -988,7 +988,7 @@ describe('saving on the way out', () => {
 
         app.window.dispatchEvent(new app.window.Event('pagehide'));
 
-        const saved = JSON.parse(app.window.localStorage.getItem('sudoku_saved_game'));
+        const saved = JSON.parse(app.window.localStorage.getItem('sudoku_saved_game_v2'));
         expect(saved.userValues[empty]).toBe(EASY_SOLUTION[empty]);
     });
 });
@@ -1005,7 +1005,7 @@ describe('timer', () => {
     /** Elapsed time is computed on demand, so a save reports it exactly. */
     async function savedSeconds() {
         app.window.dispatchEvent(new app.window.Event('pagehide'));
-        return JSON.parse(app.window.localStorage.getItem('sudoku_saved_game')).timerSeconds;
+        return JSON.parse(app.window.localStorage.getItem('sudoku_saved_game_v2')).timerSeconds;
     }
 
     it('starts at zero', () => {
@@ -1051,7 +1051,7 @@ describe('timer', () => {
     it('continues from the saved time when a game is resumed', async () => {
         const resumed = await bootApp({
             localStorage: {
-                sudoku_saved_game: JSON.stringify({
+                sudoku_saved_game_v2: JSON.stringify({
                     puzzle: EASY_PUZZLE,
                     solution: EASY_SOLUTION,
                     difficulty: 'easy',
@@ -1075,7 +1075,7 @@ describe('timer', () => {
 
         // Exactly 110: resuming used to start a second interval without
         // clearing the first, which could advance the clock twice per second.
-        const saved = JSON.parse(resumed.window.localStorage.getItem('sudoku_saved_game'));
+        const saved = JSON.parse(resumed.window.localStorage.getItem('sudoku_saved_game_v2'));
         expect(saved.timerSeconds).toBe(110);
 
         resumedClock.restore();
@@ -1744,7 +1744,7 @@ describe('auto-notes', () => {
         it('counts the game in stats', () => {
             app.click('#btn-auto-notes');
             completePuzzle(app);
-            const stats = JSON.parse(app.window.localStorage.getItem('sudoku_stats'));
+            const stats = JSON.parse(app.window.localStorage.getItem('sudoku_stats_v2'));
             expect(stats.easy.autoNotesGames).toBe(1);
         });
 
@@ -1761,7 +1761,7 @@ describe('auto-notes', () => {
             app.type(EASY_PUZZLE.indexOf('0'), EASY_SOLUTION[EASY_PUZZLE.indexOf('0')]);
             app.window.dispatchEvent(new app.window.Event('pagehide'));
 
-            const saved = JSON.parse(app.window.localStorage.getItem('sudoku_saved_game'));
+            const saved = JSON.parse(app.window.localStorage.getItem('sudoku_saved_game_v2'));
             expect(saved.autoNotes).toBe(true);
             expect(saved.autoNotesUsed).toBe(true);
         });
@@ -1790,7 +1790,7 @@ describe('stats display', () => {
     it('counts a started game even if it is not finished', async () => {
         await startGame(app);
         app.click('#btn-stats');
-        const stats = JSON.parse(app.window.localStorage.getItem('sudoku_stats'));
+        const stats = JSON.parse(app.window.localStorage.getItem('sudoku_stats_v2'));
         expect(stats.easy.started).toBe(1);
         expect(stats.easy.won).toBe(0);
     });
@@ -1839,7 +1839,7 @@ describe('stats display', () => {
         completePuzzle(app);
         app.click('#btn-stats');
         app.click('#btn-stats-reset');
-        expect(app.window.localStorage.getItem('sudoku_stats')).toBeNull();
+        expect(app.window.localStorage.getItem('sudoku_stats_v2')).toBeNull();
         expect(app.window.localStorage.getItem('sudoku_streak')).toBeNull();
     });
 });
@@ -1874,7 +1874,7 @@ describe('daily puzzle', () => {
         await app.tick(60);
         app.window.dispatchEvent(new app.window.Event('pagehide'));
 
-        const saved = JSON.parse(app.window.localStorage.getItem('sudoku_saved_game'));
+        const saved = JSON.parse(app.window.localStorage.getItem('sudoku_saved_game_v2'));
         expect(saved.daily).toBe(dayKey());
     });
 
@@ -1887,13 +1887,13 @@ describe('daily puzzle', () => {
         await app.tick(60);
         completePuzzle(app, puzzle, solution);
 
-        expect(JSON.parse(app.window.localStorage.getItem('sudoku_daily_done'))).toContain(dayKey());
+        expect(JSON.parse(app.window.localStorage.getItem('sudoku_daily_done_v2'))).toContain(dayKey());
         expect(app.$('#btn-daily').classList.contains('done')).toBe(true);
     });
 
     it('shows the day as already done on a later load', async () => {
         const done = await bootApp({
-            localStorage: { sudoku_daily_done: JSON.stringify([dayKey()]) },
+            localStorage: { sudoku_daily_done_v2: JSON.stringify([dayKey()]) },
         });
         expect(done.$('#btn-daily').classList.contains('done')).toBe(true);
         done.close();
@@ -1902,7 +1902,7 @@ describe('daily puzzle', () => {
     it('does not mark the day done for an ordinary game', async () => {
         await startGame(app);
         completePuzzle(app);
-        expect(app.window.localStorage.getItem('sudoku_daily_done')).toBeNull();
+        expect(app.window.localStorage.getItem('sudoku_daily_done_v2')).toBeNull();
     });
 });
 
@@ -1913,7 +1913,7 @@ describe('share links', () => {
 
     describe('opening a link', () => {
         it('loads a bank puzzle by difficulty and level', async () => {
-            const shared = await bootApp({ url: 'http://localhost/?d=hard&level=7' });
+            const shared = await bootApp({ url: 'http://localhost/?bank=2&d=hard&level=7' });
             await shared.tick(60);
 
             const expected = PUZZLES.hard[6].puzzle;
@@ -1935,7 +1935,7 @@ describe('share links', () => {
         });
 
         it('loads a day from a daily link', async () => {
-            const shared = await bootApp({ url: 'http://localhost/?daily=2026-08-20' });
+            const shared = await bootApp({ url: 'http://localhost/?bank=2&daily=2026-08-20' });
             await shared.tick(60);
 
             const { difficulty, level } = dailyPuzzle('2026-08-20');
@@ -1954,9 +1954,9 @@ describe('share links', () => {
         // Following a link is an explicit request for that puzzle.
         it('does not offer to resume when a link names a puzzle', async () => {
             const shared = await bootApp({
-                url: 'http://localhost/?d=easy&level=1',
+                url: 'http://localhost/?bank=2&d=easy&level=1',
                 localStorage: {
-                    sudoku_saved_game: JSON.stringify({
+                    sudoku_saved_game_v2: JSON.stringify({
                         puzzle: EASY_PUZZLE, solution: EASY_SOLUTION, difficulty: 'easy',
                         userValues: EASY_PUZZLE, notes: Array.from({ length: 81 }, () => []),
                         timerSeconds: 5, hintsUsed: 0,
@@ -1972,7 +1972,7 @@ describe('share links', () => {
         it('still offers to resume with no link', async () => {
             const shared = await bootApp({
                 localStorage: {
-                    sudoku_saved_game: JSON.stringify({
+                    sudoku_saved_game_v2: JSON.stringify({
                         puzzle: EASY_PUZZLE, solution: EASY_SOLUTION, difficulty: 'easy',
                         userValues: EASY_PUZZLE, notes: Array.from({ length: 81 }, () => []),
                         timerSeconds: 5, hintsUsed: 0,

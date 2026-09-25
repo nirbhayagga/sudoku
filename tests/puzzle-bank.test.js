@@ -1,16 +1,16 @@
+import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import { puzzleId } from '../puzzle-id.js';
+import { FAMILY_TIERS, difficultyFor, ratingKey, compareRatingKeys } from '../rating-policy.js';
+import { assessPuzzleEnhanced } from '../enhanced-assessment.js';
+const ranking = JSON.parse(readFileSync(new URL('../docs/bank-ranking.json', import.meta.url)));
+const apiIds = JSON.parse(readFileSync(new URL('../leaderboard-api/bank-ids.json', import.meta.url)));
 import { describe, it, expect } from 'vitest';
 import { SudokuSolver } from '../solver.js';
 import { PUZZLES, ALL_PUZZLES } from '../puzzle-bank.js';
 import { DIFFICULTY_LABELS, BANK_SIZES } from '../difficulties.js';
 
-const EXPECTED_COUNTS = {
-    easy: 500,
-    medium: 500,
-    hard: 500,
-    expert: 500,
-    evil: 500,
-    nightmare: 3000,
-};
+const EXPECTED_COUNTS = { easy: 1493, medium: 1570, hard: 997, expert: 256, evil: 992, nightmare: 192 };
 
 // Solving all 5,500 puzzles takes a few seconds. Sample by default; CI sets
 // FULL_BANK_CHECK=1 to verify every shipped puzzle.
@@ -69,32 +69,11 @@ describe('bank structure', () => {
         expect(new Set(strings).size).toBe(strings.length);
     });
 
-    // app.js selects a level as bankList[level - 1], so a puzzle's position in
-    // its array is its user-visible level number, and that number is stored in
-    // leaderboard entries. Reordering this file silently invalidates old scores.
-    // Ids encode that position (e01..e500, n00001..n03000), so they must stay
-    // numerically sequential and aligned with the array index.
-    it('numbers ids sequentially from 1, matching their array index', () => {
-        const misnumbered = [];
-        for (const [difficulty, list] of Object.entries(PUZZLES)) {
-            list.forEach((entry, index) => {
-                const number = Number(entry.id.replace(/^[a-z]/, ''));
-                if (number !== index + 1) {
-                    misnumbered.push(`${difficulty}[${index}] = ${entry.id}, expected ${index + 1}`);
-                }
-            });
+    it('identifies boards independently of their display position', () => {
+        for (const entry of ALL_PUZZLES) {
+            expect(entry.id).toBe(puzzleId(entry.puzzle));
+            expect(PUZZLES[entry.difficulty][entry.level - 1].puzzle).toBe(entry.puzzle);
         }
-        expect(misnumbered).toEqual([]);
-    });
-
-    it('gives each difficulty its own id prefix', () => {
-        const prefixes = new Map();
-        for (const [difficulty, list] of Object.entries(PUZZLES)) {
-            const seen = new Set(list.map((p) => p.id[0]));
-            expect(seen.size, difficulty).toBe(1);
-            prefixes.set(difficulty, [...seen][0]);
-        }
-        expect(new Set(prefixes.values()).size).toBe(prefixes.size);
     });
 });
 
@@ -155,106 +134,29 @@ describe(`puzzle validity (${FULL ? 'full bank' : `${SAMPLE_SIZE}/difficulty sam
     }
 });
 
-describe('clue counts', () => {
-    const averageClues = (difficulty) => {
-        const list = PUZZLES[difficulty];
-        const total = list.reduce((n, p) => n + p.puzzle.replace(/0/g, '').length, 0);
-        return total / list.length;
-    };
-
-    // Only asserted up to expert. Beyond that, tiers are selected by measured
-    // solving effort rather than clue count, and the two genuinely diverge: the
-    // evil tier averages slightly MORE clues than expert while being far harder
-    // (0% vs 39% solvable by pure logic). Requiring monotonic clue counts here
-    // would re-encode the assumption that produced two identical tiers.
-    it('decrease monotonically from easy through expert', () => {
-        const order = ['easy', 'medium', 'hard', 'expert'];
-        const averages = order.map(averageClues);
-        for (let i = 1; i < averages.length; i++) {
-            expect(averages[i], order[i]).toBeLessThan(averages[i - 1]);
+describe('published human-technique order', () => {
+    it('keeps the exact original board collection and all 3,000 catalogue boards', () => {
+        const boards = ALL_PUZZLES.map(p => p.puzzle).sort();
+        expect(createHash('sha256').update(boards.join('\n')).digest('hex'))
+            .toBe('aa7715daeb96aad1621bc767fdf511819566fc51b887c3cdd1856b8bda270440');
+        expect(boards.filter(p => p.replaceAll('0', '').length === 17)).toHaveLength(3000);
+    });
+    it('matches the published assessment manifest and independent API identity list', () => {
+        for (const [difficulty, list] of Object.entries(PUZZLES)) {
+            const ranks = ranking.tiers[difficulty];
+            expect(ranks.map(r => r[0])).toEqual(list.map(p => p.id));
+            expect(apiIds[difficulty]).toEqual(list.map(p => p.id));
+            expect(ranks.every(r => FAMILY_TIERS[r[1]] === difficulty)).toBe(true);
+            for (let i = 1; i < ranks.length; i++) expect(compareRatingKeys(ranks[i - 1].slice(1), ranks[i].slice(1))).toBeLessThanOrEqual(0);
         }
     });
-
-    it('keeps evil in the same clue neighbourhood as expert', () => {
-        expect(Math.abs(averageClues('evil') - averageClues('expert'))).toBeLessThan(3);
-    });
-
-    it('gives nightmare far fewer clues than any other tier', () => {
-        for (const difficulty of ['easy', 'medium', 'hard', 'expert', 'evil']) {
-            expect(averageClues('nightmare'), difficulty)
-                .toBeLessThan(averageClues(difficulty));
+    it('rechecks representative tier boundaries with the production maintenance engine', () => {
+        for (const [difficulty, list] of Object.entries(PUZZLES)) {
+            for (const index of [0, list.length - 1]) {
+                const result = assessPuzzleEnhanced(list[index].puzzle);
+                expect(difficultyFor(result), `${difficulty} ${index + 1}`).toBe(difficulty);
+                expect(ratingKey(result)).toEqual(ranking.tiers[difficulty][index].slice(1));
+            }
         }
-    });
-
-    it('gives every nightmare puzzle exactly 17 clues', () => {
-        const wrong = PUZZLES.nightmare
-            .filter((p) => p.puzzle.replace(/0/g, '').length !== 17)
-            .map((p) => `${p.id}: ${p.puzzle.replace(/0/g, '').length} clues`);
-        expect(wrong).toEqual([]);
-    });
-});
-
-describe('difficulty ladder', () => {
-    // Clue count alone does not make a ladder — the expert and evil tiers once
-    // had near-identical clue counts and were the same difficulty. These assert
-    // the property that actually matters: each tier demands more solving effort.
-    //
-    // 'nightmare' belongs on this scale now that it holds the hardest 3,000 of
-    // the published 17-clue catalogue rather than an arbitrary sample of it;
-    // previously 45% of that tier needed no search at all.
-    const LADDER = ['easy', 'medium', 'hard', 'expert', 'evil', 'nightmare'];
-    const SAMPLE = 120;
-
-    /** Evenly spaced sample, so the measurement is reproducible. */
-    function rate(difficulty) {
-        const list = PUZZLES[difficulty];
-        const step = Math.max(1, Math.floor(list.length / SAMPLE));
-        const nodes = [];
-        for (let i = 0; i < list.length && nodes.length < SAMPLE; i += step) {
-            nodes.push(SudokuSolver.rateDifficulty(list[i].puzzle));
-        }
-        nodes.sort((a, b) => a - b);
-        return {
-            median: nodes[Math.floor(nodes.length / 2)],
-            pureLogic: nodes.filter((n) => n === 0).length / nodes.length,
-        };
-    }
-
-    it('never needs less search effort as difficulty rises', () => {
-        const medians = LADDER.map((d) => rate(d).median);
-        for (let i = 1; i < medians.length; i++) {
-            expect(medians[i], `${LADDER[i]} vs ${LADDER[i - 1]}`)
-                .toBeGreaterThanOrEqual(medians[i - 1]);
-        }
-    });
-
-    it('solves fewer puzzles by pure logic as difficulty rises', () => {
-        const shares = LADDER.map((d) => rate(d).pureLogic);
-        for (let i = 1; i < shares.length; i++) {
-            expect(shares[i], `${LADDER[i]} vs ${LADDER[i - 1]}`)
-                .toBeLessThanOrEqual(shares[i - 1]);
-        }
-    });
-
-    // The specific regression that started this: evil must be meaningfully
-    // harder than expert, not statistically identical to it.
-    it('makes evil distinctly harder than expert', () => {
-        const expert = rate('expert');
-        const evil = rate('evil');
-        expect(evil.median).toBeGreaterThan(expert.median);
-        expect(evil.pureLogic).toBeLessThan(expert.pureLogic);
-    });
-
-    it('makes nightmare the hardest tier', () => {
-        const nightmare = rate('nightmare');
-        for (const difficulty of ['easy', 'medium', 'hard', 'expert', 'evil']) {
-            expect(nightmare.median, difficulty).toBeGreaterThan(rate(difficulty).median);
-        }
-    });
-
-    // No tier may be solvable by propagation alone at the top end.
-    it('leaves no pure-logic puzzles in the two hardest tiers', () => {
-        expect(rate('evil').pureLogic).toBe(0);
-        expect(rate('nightmare').pureLogic).toBe(0);
-    });
+    }, 120000);
 });

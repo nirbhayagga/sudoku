@@ -6,8 +6,8 @@
  * per-level leaderboard meaningful for it — every player that day is on the
  * identical puzzle, so times are directly comparable.
  *
- * The mapping must never change for a past date, or old scores stop describing
- * the puzzle they were set on.
+ * The mapping is scoped to the bank revision in shared links. Revision 2
+ * intentionally starts a fresh schedule alongside the new difficulty ladder.
  */
 import { BANK_SIZES } from './difficulties.js';
 

@@ -8,8 +8,9 @@
  * Backup operations report failures explicitly instead of hiding data loss.
  */
 
-import { BANK_SIZES, GAME_LABELS, isDifficulty, isGameDifficulty } from './difficulties.js';
+import { BANK_VERSION, BANK_SIZES, GAME_LABELS, isDifficulty, isGameDifficulty } from './difficulties.js';
 import { SudokuSolver } from './solver.js';
+import { isPuzzleId } from './puzzle-id.js';
 
 const DIFFICULTIES = Object.keys(BANK_SIZES);
 const THEMES = ['light', 'dark', 'midnight', 'sakura', 'ocean', 'forest', 'arctic', 'peony', 'matcha', 'vino'];
@@ -98,9 +99,9 @@ export function validateGameState(state, { recomputeSolution = true } = {}) {
     return result;
 }
 
-const SAVE_KEY = 'sudoku_saved_game';
+const SAVE_KEY = 'sudoku_saved_game_v2';
 const STREAK_KEY = 'sudoku_streak';
-const STATS_KEY = 'sudoku_stats';
+const STATS_KEY = 'sudoku_stats_v2';
 const THEME_KEY = 'sudoku-theme';
 const NAME_KEY = 'sudoku-player-name';
 const SHORTCUTS_KEY = 'sudoku-shortcuts-open';
@@ -109,7 +110,7 @@ export function getShortcutsOpen(fallback = null) {
     return typeof value === 'boolean' ? value : fallback;
 }
 export const setShortcutsOpen = value => writeJson(SHORTCUTS_KEY, Boolean(value));
-const playedKey = (difficulty) => `played_${difficulty}`;
+const playedKey = (difficulty) => `played_v2_${difficulty}`;
 
 function readJson(key, fallback) {
     try {
@@ -290,7 +291,7 @@ export function getSummary() {
 // Which days' puzzles have been solved. Kept as a small set of recent days so
 // it cannot grow without bound.
 
-const DAILY_KEY = 'sudoku_daily_done';
+const DAILY_KEY = 'sudoku_daily_done_v2';
 const DAILY_HISTORY = 60;
 
 export const getDailyDone = () => {
@@ -368,12 +369,8 @@ export function clearPlayed(difficulty) {
 }
 
 
-const ID_PREFIX = { easy: 'e', medium: 'm', hard: 'h', expert: 'x', evil: 'v', nightmare: 'n' };
 function validPlayedId(id, difficulty) {
-    if (!isDifficulty(difficulty) || typeof id !== 'string' || !/^[emhxvn]\d{2,5}$/.test(id)) return false;
-    const level = Number(id.slice(1));
-    return level >= 1 && level <= BANK_SIZES[difficulty] &&
-        id === ID_PREFIX[difficulty] + String(level).padStart(difficulty === 'nightmare' ? 5 : 2, '0');
+    return isDifficulty(difficulty) && isPuzzleId(id);
 }
 function normalizePlayed(raw, difficulty) {
     return Array.isArray(raw) ? [...new Set(raw.filter(id => validPlayedId(id, difficulty)))] : [];
@@ -405,7 +402,7 @@ export function exportBackup({ includeSavedGame = true } = {}) {
         const theme = localStorage.getItem(THEME_KEY);
         const playerName = localStorage.getItem(NAME_KEY);
         const backup = {
-            format: 'sudoku-backup', version: 1,
+            format: 'sudoku-backup', version: 1, bankVersion: BANK_VERSION,
             stats: normalizeStats(read(STATS_KEY)),
             settings: { theme: THEMES.includes(theme) ? theme : null, playerName: (playerName || '').slice(0, 20), shortcutsOpen: getShortcutsOpen() },
             played: Object.fromEntries(DIFFICULTIES.map(difficulty => [difficulty, normalizePlayed(read(playedKey(difficulty)), difficulty)])),
@@ -429,7 +426,7 @@ export function restoreBackup(raw) {
     try {
         if (typeof raw !== 'string') throw new Error('Expected backup JSON text.');
         const backup = JSON.parse(raw);
-        if (!isRecord(backup) || backup.format !== 'sudoku-backup' || backup.version !== 1) throw new Error('Unsupported backup format or version.');
+        if (!isRecord(backup) || backup.format !== 'sudoku-backup' || (backup.version !== 1 || backup.bankVersion !== BANK_VERSION)) throw new Error('Unsupported backup format or version.');
         const { stats, settings, played, streak, dailyDone } = backup;
         if (!isRecord(stats) || !sameData(stats, normalizeStats(stats)) ||
             !isRecord(settings) || !sameData(settings, { theme: settings.theme, playerName: settings.playerName,

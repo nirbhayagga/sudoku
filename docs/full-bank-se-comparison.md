@@ -1,5 +1,8 @@
 # Full-bank comparison with Sudoku Explainer
 
+> Historical assessment of the bank before revision 2. Level references below use that order.
+> See [the current bank definitions](bank-revision-2.md); the original measurements are preserved.
+
 Our policy: `human-v3.0`. SE rated **5500/5500**; failed/sentinel results: **0**.
 
 The tables compare observed results, not interchangeable numeric scales. A family

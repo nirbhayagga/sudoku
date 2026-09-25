@@ -1,5 +1,7 @@
 # Independent check of the 199 unresolved puzzles
 
+> Historical subset experiment. The [current bank policy](bank-revision-2.md) uses the later full-bank assessment.
+
 **Historical v2 check.** The later [v3 core](puzzle-assessment-v3.md) now explains
 all 199 itself. The [full-bank SE comparison](full-bank-se-comparison.md) covers all
 5,500 puzzles; this earlier subset experiment is retained for provenance.

@@ -2,12 +2,11 @@ import { describe, it, expect } from 'vitest';
 import { findHintPath } from '../hint-path.js';
 import { runReasoning, createReasoningState, applyDeduction } from '../reasoning.js';
 import { findForcingChain, verifyChainProof } from '../chains.js';
-import { PUZZLES } from '../puzzle-bank.js';
 import { SudokuSolver } from '../solver.js';
 
 describe('hint proof continuity', () => {
     it('continues successive explanations with retained exclusions and verified placements', () => {
-        let board = PUZZLES.easy[97].puzzle;
+        let board = '020600340100704056040030010006050403354060000270140000000310070031205690702406030';
         const answer = SudokuSolver.solveSudoku(board).solution;
         let continuation = null;
         const failures = [];
@@ -27,7 +26,7 @@ describe('hint proof continuity', () => {
         expect(chains).toBeGreaterThan(0);
         expect(board).toBe(answer);
         // A changed visible board ignores the stale continuation.
-        expect(findHintPath(PUZZLES.easy[0].puzzle, { continuation })).toEqual(findHintPath(PUZZLES.easy[0].puzzle));
+        expect(findHintPath('906040000041508902087010540400030621025000070103009450019800000830050006560190000', { continuation })).toEqual(findHintPath('906040000041508902087010540400030621025000070103009450019800000830050006560190000'));
     });
     it('reports a chain work limit even when the final allowed edge is reached exactly', () => {
         const grid = Array.from({ length: 81 }, () => null);
@@ -38,7 +37,7 @@ describe('hint proof continuity', () => {
         expect(() => findForcingChain(grid, { maxDepth: 0 })).toThrow('Invalid chain budget');
     });
     it('independently rejects altered chain implications and contradiction claims', () => {
-        const puzzle = PUZZLES.easy[97].puzzle;
+        const puzzle = '020600340100704056040030010006050403354060000270140000000310070031205690702406030';
         const result = runReasoning(puzzle, { trace: true });
         const state = createReasoningState(puzzle);
         let proof;

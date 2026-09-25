@@ -25,7 +25,7 @@ export default [
     {
         files: ['*.js'],
         languageOptions: {
-            ecmaVersion: 2022,
+            ecmaVersion: 2025,
             sourceType: 'module',
             globals: globals.browser,
         },
@@ -35,7 +35,7 @@ export default [
     {
         files: ['scripts/**/*.js', 'tests/**/*.js', 'e2e/**/*.js', 'playwright.config.js', 'eslint.config.js', 'vitest.config.js', 'vite.config.js'],
         languageOptions: {
-            ecmaVersion: 2022,
+            ecmaVersion: 2025,
             sourceType: 'module',
             globals: globals.node,
         },
@@ -54,7 +54,7 @@ export default [
     {
         files: ['leaderboard-api/**/*.js'],
         languageOptions: {
-            ecmaVersion: 2022,
+            ecmaVersion: 2025,
             sourceType: 'commonjs',
             globals: globals.node,
         },

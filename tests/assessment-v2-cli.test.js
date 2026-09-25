@@ -4,7 +4,6 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { repoRoot } from './helpers/paths.js';
-import { PUZZLES } from '../puzzle-bank.js';
 
 const directory = mkdtempSync(join(tmpdir(), 'sudoku-v2-'));
 function run(...args) {
@@ -28,7 +27,7 @@ describe('v2 assessment CLI', () => {
         expect(readFileSync(join(directory, 'one.json'), 'utf8')).toBe(first);
     });
     it('accepts an unseen board and provides a trace only when requested', () => {
-        const board = PUZZLES.easy[97].puzzle.replace(/[1-9]/g, d => String(10 - Number(d)));
+        const board = '020600340100704056040030010006050403354060000270140000000310070031205690702406030'.replace(/[1-9]/g, d => String(10 - Number(d)));
         const plain = JSON.parse(run(`--puzzle=${board}`).stdout).assessment;
         expect(plain.status).toBe('solved');
         expect(plain).not.toHaveProperty('solution');

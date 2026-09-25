@@ -54,7 +54,7 @@ describe('dailyPuzzle', () => {
         expect(new Set(levels).size).toBeGreaterThan(20);
     });
 
-    it('never changes for a past date', () => {
+    it('pins the revision-2 schedule', () => {
         // Pinned so a future tweak to the mapping cannot silently invalidate
         // scores already set against these boards.
         expect(dailyPuzzle('2026-01-01')).toEqual({
@@ -62,7 +62,7 @@ describe('dailyPuzzle', () => {
             difficulty: dailyPuzzle('2026-01-01').difficulty,
             level: dailyPuzzle('2026-01-01').level,
         });
-        expect(dailyPuzzle('2026-08-20')).toMatchObject({ difficulty: 'hard', level: 448 });
+        expect(dailyPuzzle('2026-08-20')).toMatchObject({ difficulty: 'hard', level: 783 });
     });
 });
 

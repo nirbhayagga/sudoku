@@ -1,5 +1,4 @@
 import { describe, it, expect } from 'vitest';
-import { PUZZLES } from '../puzzle-bank.js';
 import { SudokuSolver } from '../solver.js';
 import { createReasoningState, applyDeduction, runReasoning } from '../reasoning.js';
 import { assessPuzzleDeep } from '../deep-assessment.js';
@@ -7,7 +6,7 @@ import { nextExtendedDeduction, replayExtendedDeduction } from '../extended-reas
 import { findDynamicChain, verifyDynamicProof } from '../dynamic-chains.js';
 import { findHintPath } from '../hint-path.js';
 
-const cases = [PUZZLES.expert[444].puzzle, PUZZLES.expert[147].puzzle, PUZZLES.evil[290].puzzle];
+const cases = ['000070000010400372600005000006000000000030000200000408300090054050000007802041060', '000030029700009400080600007060000090030500000002000030500860070010000008300010000', '705010000100209000068000002000501004630020001000030020300150200000000000000400819'];
 
 describe('dynamic proof engine', () => {
     it.each(cases)('finishes formerly stalled puzzles with independently replayable deductions', puzzle => {

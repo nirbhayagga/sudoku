@@ -12,7 +12,7 @@ test('shortcut visibility follows the device and preserves an explicit choice', 
 
 test('keyboard preview, notes, undo/redo, pause and Escape are safe', async ({ page, isMobile }) => {
     test.skip(isMobile, 'Real grid keyboard path uses desktop; touch controls have separate tests.');
-    await page.goto('/?d=easy&level=1');
+    await page.goto('/?bank=2&d=easy&level=1');
     await expect(page.getByRole('dialog')).toHaveCount(0);
     await expect(page.locator('.cell-wrapper.locked').first()).toBeVisible();
     const cell = page.locator('.cell-wrapper:not(.locked) .cell-input').first();
