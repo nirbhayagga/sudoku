@@ -47,9 +47,11 @@ test('imports, completes, exports, shares and undoes a small puzzle', async ({pa
     await page.locator('#small-share').click();
     const link=await page.locator('#small-text').inputValue(); expect(new URL(link).searchParams.get('p')).toBe(p);
     await page.locator('#small-print-source').selectOption('consecutive');
-    await page.locator('#small-print-count').fill('5'); await page.locator('#small-per-page').selectOption('2');
+    await page.locator('#small-print-unit').selectOption('pages');
+    await page.locator('#small-print-count').fill('2'); await page.locator('#small-per-page').selectOption('2');
     await page.locator('#small-answers').check(); await page.locator('#small-print').click();
-    await expect(page.frameLocator('.small-print-frame').locator('article')).toHaveCount(10);
+    await expect(page.locator('#small-print-summary')).toContainText('4 pages total');
+    await expect(page.frameLocator('.small-print-frame').locator('article')).toHaveCount(8);
     await page.locator('#small-tools summary').click();
     await page.screenshot({path:`e2e-results/small-board-${info.project.name}.png`,fullPage:true});
     expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
@@ -65,12 +67,29 @@ test('small boards work from the standalone disk build', async ({page}) => {
     await expect(page.locator('#small-status')).toContainText('free');
 });
 
-test('small boards remain reachable on narrow and landscape screens', async ({page}) => {
+test('small boards remain reachable on narrow and landscape screens', async ({page}, info) => {
     await page.goto('/'); await page.locator('#board-size').selectOption('6');
     for(const viewport of [{width:320,height:480},{width:740,height:350}]) {
         await page.setViewportSize(viewport);
         await page.locator('#small-tools summary').scrollIntoViewIfNeeded();
         await expect(page.locator('#small-tools summary')).toBeInViewport();
         expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+        const targets = await page.locator('#small-pad button, #small-undo, #small-hint').evaluateAll(buttons => buttons.map(b => { const r = b.getBoundingClientRect(); return [r.width, r.height]; }));
+        expect(targets.every(([width, height]) => width >= 44 && height >= 44)).toBe(true);
+        await page.screenshot({path:`e2e-results/small-6-${viewport.width}-${info.project.name}.png`,fullPage:true});
     }
+});
+
+test('the last challenge cannot be restarted through Next and backups use board identity', async ({page}) => {
+    await page.goto('/'); await page.locator('#board-size').selectOption('4');
+    await page.locator('#small-level').fill(String(SMALL_BANK[4].length));
+    await page.locator('#small-start').click();
+    await expect(page.locator('#small-next')).toBeDisabled();
+    await page.locator('#small-tools summary').click();
+    const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('sudoku_small_v1_4')));
+    // A backup can carry an old display level; the puzzle itself is authoritative.
+    if (!saved) throw new Error('Expected a saved small game');
+    saved.level = 1; saved.id = 'wrong';
+    await page.locator('#small-restore').setInputFiles({name:'game.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(saved))});
+    await expect(page.locator('#small-identity')).toContainText(`Challenge ${SMALL_BANK[4].length}`);
 });

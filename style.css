@@ -2588,7 +2588,14 @@ kbd {
 .small-selected { outline: 3px solid var(--accent-text); outline-offset: -4px; }
 .small-pencil { font: 12px 'JetBrains Mono', monospace; color: var(--text-primary); display: block; padding: 3px; }
 .small-actions, .small-pad, .small-setup { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; margin: .65rem 0; }
-.small-pad .btn { flex: 1; padding: .4rem; min-width: 40px; }
+#small-app .btn { min-height: 44px; }
+.small-actions > .btn-group { flex-wrap: wrap; }
+.small-pad { display: grid; grid-template-columns: repeat(var(--small-size), minmax(0, 1fr)); }
+.small-pad .btn { padding: .4rem; min-width: 44px; }
+.small-pad .btn:last-child { grid-column: 1 / -1; }
+@media (max-width: 380px) {
+    .small-pad[data-size="6"] { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
 .small-paused .small-cell { color: transparent; }
 #small-progress, #small-clock { font-size: .85rem; color: var(--text-primary); }
 .small-print-frame { position: fixed; width: 1px; height: 1px; left: -10000px; border: 0; }

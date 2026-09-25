@@ -7,28 +7,30 @@ import { sizedLink, sizedPng, sizedSheet, SIZED_PRINT_CSS, formatSizedPuzzle } f
 import { loadSmallData, saveSmallData, smallProgress, recordSmallWin } from './storage.js';
 import { copyToClipboard } from './share.js';
 import { formatTime } from './format.js';
+import { planWorksheet } from './printing.js';
 
 export function createSmallApp(root) {
     root.innerHTML = `<div class="small-heading"><h2 id="small-title"></h2><span id="small-clock"></span></div>
       <p id="small-identity"></p><p id="small-progress"></p>
       <div class="small-grid" id="small-grid" role="group" aria-label="Sudoku board"></div>
       <div class="small-pad" id="small-pad" aria-label="Digits"></div>
-      <div class="small-actions"><button class="btn" id="small-undo">Undo</button><button class="btn" id="small-redo">Redo</button>
-      <button class="btn btn-toggle" id="small-notes" aria-pressed="false">Notes</button><button class="btn btn-toggle" id="small-auto" aria-pressed="false">Auto-notes</button>
-      <button class="btn" id="small-fill">Fill notes</button><button class="btn" id="small-hint">Hint (free)</button><button class="btn" id="small-pause">Pause</button></div>
+      <div class="small-actions"><div class="btn-group" role="group" aria-label="History"><button class="btn" id="small-undo">Undo</button><button class="btn" id="small-redo">Redo</button></div>
+      <div class="btn-group" role="group" aria-label="Notes"><button class="btn btn-toggle" id="small-notes" aria-pressed="false">Notes</button><button class="btn btn-toggle" id="small-auto" aria-pressed="false">Auto-notes</button>
+      <button class="btn" id="small-fill">Fill notes</button></div><div class="btn-group" role="group" aria-label="Game"><button class="btn" id="small-hint">Hint (free)</button><button class="btn" id="small-pause">Pause</button></div></div>
       <p id="small-status" role="status" aria-live="polite"></p><details id="small-proof" hidden><summary>Explanation details</summary><ol></ol></details>
       <div class="small-setup"><label>Challenge <input id="small-level" type="number" min="1" value="1"></label>
       <button class="btn btn-primary" id="small-start">Start</button><button class="btn" id="small-next">Next challenge</button></div>
-      <details id="small-tools"><summary>Import, export and print</summary>
+      <details id="small-tools"><summary>Import, export and more</summary>
       <label for="small-text">Puzzle text (one line, rows or boxed grid)</label><textarea id="small-text" rows="6" spellcheck="false"></textarea>
       <div class="small-actions"><button class="btn" id="small-import">Play imported puzzle</button><button class="btn" id="small-generate">Generate</button></div>
       <label>Export source <select id="small-source"><option value="puzzle">Original puzzle</option><option value="board">Current position</option></select></label>
       <label>Text format <select id="small-format"><option value="rows">Rows</option><option value="line">Line (dots)</option><option value="zeros">Line (zeros)</option><option value="grid">Boxed grid</option></select></label>
       <div class="small-actions"><button class="btn" id="small-export">Export text</button><button class="btn" id="small-copy">Copy text</button><button class="btn" id="small-png">Download PNG</button><button class="btn" id="small-share">Share puzzle</button></div>
       <fieldset><legend>Printable worksheet</legend><label>Selection <select id="small-print-source"><option value="current">Current puzzle</option><option value="consecutive">Consecutive challenges</option><option value="random">Random challenges</option></select></label>
-      <label>Puzzle count <input id="small-print-count" type="number" min="1" max="24" value="4"></label>
+      <div id="small-print-batch" hidden><label>Choose total by <select id="small-print-unit"><option value="puzzles">Number of puzzles</option><option value="pages">Number of puzzle pages</option></select></label>
+      <label>Amount <input id="small-print-count" type="number" min="1" max="24" value="4"></label></div>
       <label>Per page <select id="small-per-page"><option>1</option><option>2</option><option selected>4</option><option>6</option></select></label>
-      <label><input id="small-answers" type="checkbox"> Include separate answers</label><button class="btn" id="small-print">Print / Save PDF</button></fieldset>
+      <label><input id="small-answers" type="checkbox"> Include separate answers</label><p id="small-print-summary" role="status"></p><button class="btn" id="small-print">Print / Save PDF</button></fieldset>
       <button class="btn" id="small-backup">Download game backup</button><label>Restore game backup <input id="small-restore" type="file" accept="application/json,.json"></label>
       </details><details><summary>Small-board shortcuts</summary><p>Digits enter a value; arrows select a cell; Delete erases. N toggles notes, A auto-notes, H previews/reveals, Space pauses. Ctrl/Cmd+Z undoes; Ctrl/Cmd+Shift+Z redoes. Undo also works after completion.</p></details>`;
     const $ = id => root.querySelector(`#small-${id}`);
@@ -61,8 +63,10 @@ export function createSmallApp(root) {
         }
         $('notes').setAttribute('aria-pressed', String(notes)); $('auto').setAttribute('aria-pressed', String(state.auto));
         $('pause').textContent = paused ? 'Resume' : 'Pause';
+        $('next').disabled = state.level === SMALL_BANK[g.size].length;
         $('undo').disabled = paused || !state.undo.length; $('redo').disabled = paused || !state.redo.length;
         $('clock').textContent = `${formatTime(Math.floor(state.elapsedMs / 1000))} · ${state.hints} hints`;
+        updatePrintPlan();
         if (isWon()) {
             if (!state.recorded) { recordSmallWin(state.id); state.recorded = true; }
             message(`Completed ${g.size}×${g.size}${state.level ? ` challenge ${state.level}` : ' puzzle'} in ${formatTime(Math.floor(state.elapsedMs / 1000))}, ${state.hints} hints. Share, export, undo, or choose your next challenge.`);
@@ -71,6 +75,8 @@ export function createSmallApp(root) {
     }
     function build() {
         $('grid').replaceChildren(); $('pad').replaceChildren();
+        $('pad').style.setProperty('--small-size', g.size);
+        $('pad').dataset.size = g.size;
         for (let i = 0; i < g.count; i++) {
             const b = document.createElement('button'); b.type = 'button'; b.dataset.cell = i;
             if ((i % g.size + 1) % g.boxCols === 0 && i % g.size !== g.size - 1) b.style.borderRightWidth = '3px';
@@ -85,6 +91,9 @@ export function createSmallApp(root) {
     }
     function load(next) {
         settle(); save(); state = next; answer = solveSized(state.puzzle, g).solutions[0];
+        const index = SMALL_BANK[g.size].findIndex(p => p.puzzle === state.puzzle);
+        state.level = index < 0 ? null : index + 1;
+        state.id = index < 0 ? 'imported' : SMALL_BANK[g.size][index].id;
         selected = Math.max(0, state.board.indexOf('0')); notes = false; paused = false; anchor = Date.now(); clearHint(); build(); render();
     }
     function start(level) {
@@ -112,7 +121,7 @@ export function createSmallApp(root) {
         for (const step of pending.trace) { const li = document.createElement('li'); li.textContent = step.nudge; $('proof').querySelector('ol').append(li); }
     };
     $('start').onclick = () => start(Number($('level').value));
-    $('next').onclick = () => start(Math.min(SMALL_BANK[g.size].length, (state.level || 0) + 1));
+    $('next').onclick = () => { if (state.level !== SMALL_BANK[g.size].length) start((state.level || 0) + 1); };
     $('import').onclick = () => {
         try { const p = parseSizedPuzzle($('text').value, g); if (!p) throw new Error(`Enter exactly ${g.count} cells using digits 1–${g.size}.`);
             const next = newSmallGame(p, g); const rating = assessSized(p, g); load(next);
@@ -135,10 +144,27 @@ export function createSmallApp(root) {
             const next = validateSmallGame(JSON.parse(await file.text())); if (!next || next.size !== g.size) throw new Error('Choose a valid backup for this board size.'); load(next); message('Game restored.');
         } catch (e) { message(e.message); } finally { $('restore').value = ''; }
     };
+    function printPlan() {
+        const current = $('print-source').value === 'current';
+        return planWorksheet({ amount: current ? 1 : Number($('print-count').value),
+            unit: current ? 'puzzles' : $('print-unit').value, perPage: Number($('per-page').value),
+            order: $('print-source').value === 'consecutive' ? 'consecutive' : 'random',
+            start: Number($('level').value), bankSize: current ? 1 : SMALL_BANK[g.size].length,
+            answers: $('answers').checked });
+    }
+    function updatePrintPlan() {
+        $('print-batch').hidden = $('print-source').value === 'current';
+        $('print-count').max = $('print-unit').value === 'pages' ? Math.floor(24 / Number($('per-page').value)) : 24;
+        try {
+            const plan = printPlan();
+            $('print-summary').textContent = `${plan.count} puzzles · ${plan.puzzlePages} puzzle pages${plan.answerPages ? ` + ${plan.answerPages} answer pages` : ''} · ${plan.totalPages} pages total.`;
+            $('print').disabled = false;
+        } catch (e) { $('print-summary').textContent = e.message; $('print').disabled = true; }
+    }
+    for (const id of ['print-source', 'print-unit', 'print-count', 'per-page', 'answers', 'level']) $(id).addEventListener('input', updatePrintPlan);
     $('print').onclick = () => {
         try {
-            const count = Number($('print-count').value), perPage = Number($('per-page').value), selection = $('print-source').value;
-            if (!Number.isInteger(count) || count < 1 || count > 24) throw new Error('Choose 1–24 puzzles.');
+            const { count } = printPlan(), perPage = Number($('per-page').value), selection = $('print-source').value;
             let puzzles = [source()];
             if (selection !== 'current') {
                 const bank = [...SMALL_BANK[g.size]];
