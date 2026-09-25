@@ -201,8 +201,8 @@ reviewed reclassification is in v1.1.0; subsequent work is divided as follows.
 | Release stage | Contents | Gate |
 |---|---|---|
 | v1.1.0 | Verified 9×9 gameplay/import/export/generator improvements, shared proofs, maintenance tooling and bank revision 2 | Reviewed technique boundaries, all 5,500 boards retained, complete checks and explicit fresh bank progress |
-| v1.2.0 | Curated 4×4 and 6×6, targeted additional 9×9 puzzles and self-paced progression | Shared geometry, uniqueness/equivalence checks, repeatable grading, saved progression and touch tests |
-| v1.3.0 | Technique practice and selected rule variants | Each selected rule supported consistently by validation, solver, hints, imports, saves, print and sharing |
+| v1.2.0 | Curated 4×4 and 6×6 and targeted additional 9×9 puzzles | Shared geometry, uniqueness/equivalence checks, repeatable grading and touch tests |
+| v1.3.0 | Self-paced progression, technique practice and selected rule variants | Persistent progression; each selected rule supported consistently by validation, solver, hints, imports, saves, print and sharing |
 | Future 16×16 pilot | Small collection spanning its own difficulty range | Symbol/input design, readable notes and print layout, measured runtime and corpus quality |
 
 Do not move the published `v1.0.0` tag again. Prefer stable puzzle identities and
@@ -245,15 +245,15 @@ old levels and scores is intentionally omitted; this revision starts fresh bank
 progress and uses content identities for new shares.
 
 v1.2.0 will combine the prepared 36-class 4×4 collection and 120 curated 6×6
-challenges with self-paced progression and targeted 9×9 additions. Expert patterns and the dynamic-chain end
+challenges with targeted 9×9 additions. Expert patterns and the dynamic-chain end
 of Nightmare are the first expansion candidates. Additions must pass uniqueness,
 identity/equivalence filtering and the same offline grading policy; no quota is
 filled with transformed duplicates or unresolved boards labelled hardest.
-16×16 remains a separate future pilot. Technique practice and selected rule
-variants are planned for v1.3.0; the precise initial variant set remains to be
-selected from the existing assessment.
+16×16 remains a separate future pilot. Self-paced progression, technique practice
+and selected rule variants are planned for v1.3.0; the precise initial variant
+set remains to be selected from the existing assessment.
 
-### Progression scope for v1.2.0
+### Progression scope for v1.3.0
 
 Progression is planned, not yet implemented. Small boards already retain completion
 progress and offer a manual Next challenge button. The complete mode should:
