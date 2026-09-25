@@ -52,9 +52,16 @@ remains available, and the first completion is recorded only once.
 - Current, consecutive or random worksheets, up to 24 puzzles with 1/2/4/6 per
   page and optional separate answer sheets. Choose a puzzle count or puzzle-page
   count; the summary includes additional answer pages. Use the browser's PDF printer.
-- Generation on this device, with its seed reported.
-- A game-backup download and size-checked restore. These are separate from the
-  9×9 Stats backup; clearing site data removes both sizes' local progress.
+- Generation and import checking in a cancellable worker, with the seed reported
+  for generation. The browser stops work after 20 seconds.
+- A game-backup download and size/rule-checked restore, including that board's
+  progression path. Stats backups include all progression paths; small active
+  games still use their own backups. Clearing site data removes local progress.
+
+The Progression disclosure starts or resumes a dedicated path. Completing a
+progression game records its identity once and enables an explicit Next action.
+Ordinary games still count toward the collection's completion total, but do not
+advance that path. See [activities](activities.md) for progression and variants.
 
 ## Maintenance
 

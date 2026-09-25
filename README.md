@@ -43,6 +43,11 @@ The board-size selector also offers **36 distinct 4×4 puzzle classes** and
 notes, text/PNG export and printable worksheets. See [small boards](docs/small-boards.md)
 for their geometry, grading and reproducible curation. 16×16 play is deferred.
 
+**Progression and practice** offers a saved, self-paced path and 56 lessons across
+14 techniques. The 9×9 **Rules** selector adds Diagonal and Hyper, with 24 curated
+puzzles each. See [activities](docs/activities.md) for rules, backups, provenance
+and repeatable curation tools.
+
 - Play a bank level, draw a random puzzle, choose a daily puzzle, or share a link.
 - Use manual notes, Fill notes for one-time candidates, or live Auto-notes.
   Generated notes and digit changes support undo/redo, including peer notes.
@@ -112,9 +117,9 @@ The [engine review](docs/sudoku-explainer-review.md) and
 [adoption roadmap](docs/sudoku-adoption-roadmap.md) describe implemented techniques
 and future sizes, variants and practice features.
 
-The initial JavaScript entry stays below **30 KiB gzipped**. The puzzle bank and
+The initial JavaScript entry stays below **32 KiB gzipped**. The puzzle bank and
 analysis worker are loaded on demand; the bank is about 123 kB gzipped. Tests cap
-all compressed assets plus the service worker at **270 KiB**, including the bundled
+all compressed assets plus the service worker at **285 KiB**, including the bundled
 fonts. The service worker caches optional chunks and the bank too, so the complete
 first visit costs more than the initial entry script. HTML and icons add to that
 transfer; actual compression depends on the server.

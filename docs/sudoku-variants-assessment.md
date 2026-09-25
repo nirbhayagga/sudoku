@@ -2,7 +2,9 @@
 
 Reviewed 2026-09-24 alongside the [SudokuExplainer comparison](sudoku-explainer-review.md).
 This records the requested roadmap and engineering recommendations, not shipped
-variant support. The current working tree supports classic **9×9 only**.
+variant support. Its baseline working tree supported classic **9×9 only**.
+The historical assessment is preserved here. Current capabilities are documented
+in [small boards](small-boards.md) and [activities](activities.md).
 
 The [broader adoption review](sudoku-adoption-roadmap.md) adds actual smoke checks
 of the SE 4×4/6×6/16×16 release CLIs and comparisons with other geometry/variant engines.

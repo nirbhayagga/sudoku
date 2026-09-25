@@ -249,14 +249,14 @@ v1.2.0 combines the 36-class 4×4 collection and 120 curated 6×6 challenges wit
 candidates. See [the expansion report](bank-expansion-1.2.md). Additions must pass uniqueness,
 identity/equivalence filtering and the same offline grading policy; no quota is
 filled with transformed duplicates or unresolved boards labelled hardest.
-16×16 remains a separate future pilot. Self-paced progression, technique practice
-and selected rule variants are planned for v1.3.0; the precise initial variant
-set remains to be selected from the existing assessment.
+16×16 remains a separate future pilot. The v1.3.0 candidate implements self-paced
+progression, 56 practice positions across 14 techniques, and 24 puzzles each for
+Diagonal and Hyper. See [activities and maintenance](activities.md) for the
+implemented controls, reproducible collections and limitations.
 
 ### Progression scope for v1.3.0
 
-Progression is planned, not yet implemented. Small boards already retain completion
-progress and offer a manual Next challenge button. The complete mode should:
+The v1.3.0 progression implementation follows this scope:
 
 - Follow the ordered 9×9 bank from Easy through Nightmare, with an independent
   challenge sequence for each small size.
@@ -270,7 +270,6 @@ progress and offer a manual Next challenge button. The complete mode should:
 - Keep completed challenges replayable and show current progress without adding
   a separate top-level tab for each size.
 
-Keep navigation compact: one board-size selector and grouped play options. In
-v1.3, add a separate rules selector showing only supported choices rather than
-a tab for every combination. Practice should let players choose a technique
-without exposing offline maintenance controls in ordinary play.
+Navigation uses one board-size selector and a separate rules selector for 9×9.
+Progression and practice are grouped in a disclosure; practice opens a technique
+lesson without exposing offline maintenance controls in ordinary play.

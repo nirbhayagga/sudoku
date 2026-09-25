@@ -176,5 +176,6 @@ its original pool, preserving existing dates. v1.1 stats and backups remain usab
 
 Use the board-size selector for 4×4 or 6×6. Their controls include notes, hints,
 generation, imports, exports and bulk printing; see [small boards](small-boards.md).
-Full progression, technique practice and selected rule variants are planned for
-v1.3; small boards already remember completions and offer Next challenge.
+v1.3 adds full progression, 56 technique lessons, and Diagonal/Hyper rules.
+See [activities](activities.md) for controls and the distinction between ordinary
+completion totals and each separate progression path.

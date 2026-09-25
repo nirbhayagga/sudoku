@@ -15,8 +15,8 @@ npm run test:coverage
 ```
 
 `check` runs lint, unit/DOM tests, and both builds. The full-bank option checks
-all 5,692 classic 9×9 puzzles instead of a deterministic sample; small-bank tests
-also check all 156 small boards. Browser tests use production
+all 5,692 classic 9×9 puzzles instead of a deterministic sample; collection tests
+also check all 156 small boards, 48 variants and 56 practice positions. Browser tests use production
 output; installed browsers alone do not add coverage—projects in
 `playwright.config.js` select which engines and flows run. Emulation is not a real
 iPhone test. Contrast checks cover the states exercised, not a full accessibility
@@ -74,9 +74,14 @@ that every same-origin response is valid application content.
 | `daily.js`, `share.js` | Date mapping, puzzle links, and game snapshots |
 | `theme.js`, `dialogs.js` | Themes and dialog focus management |
 | `leaderboard-client.js` | Optional API integration |
+| `progression.js` | Independent paths identified by puzzle content, with explicit next selection |
+| `practice.js`, `practice-bank.js`, `practice-app.js` | Reconstructed verified technique lessons and lazy practice UI |
+| `geometry.js`, `sized-solver.js`, `sized-generation.js` | Shared size/rule definitions, generic solver and reproducible generation |
+| `small-app.js`, `small-state.js`, `sized-export.js` | Small/variant gameplay, validated state, interchange and print |
+| `variant-bank.js`, `variant-tools.js` | Curated Diagonal/Hyper collections and rule-preserving equivalence checks |
 | `sw-template.js`, `vite.config.js` | Offline strategy and generated builds |
 
-Boards are 81-character strings with `0` for empties. The solver uses candidate
+Classic 9×9 boards are 81-character strings with `0` for empties. The solver uses candidate
 bitmasks internally. Its `rateDifficulty` counts explored search nodes; it is an
 algorithm-specific measure, not proof that a person must guess. The current
 full-bank measurements are in the [README](../README.md#difficulty-and-download-size).
@@ -247,3 +252,7 @@ images and worksheets. No server-side analysis service is needed.
 
 See [small-board maintenance and contracts](small-boards.md). Small saves and
 progress use separate versioned storage keys and never enter the 9×9 leaderboard.
+The [activities guide](activities.md) covers practice/variant curation and the
+offline correctness benchmark for newly added or imported puzzles. Build tests
+cap the initial JavaScript at 32 KiB gzip and all assets plus the service worker
+at 285 KiB, including fonts, banks, practice and the analysis worker.
