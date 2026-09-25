@@ -4,8 +4,9 @@ export function seededRandom(seed) {
     return () => { state += 0x6D2B79F5; let t = state; t = Math.imul(t ^ t >>> 15, t | 1); t ^= t + Math.imul(t ^ t >>> 7, t | 61); return ((t ^ t >>> 14) >>> 0) / 4294967296; };
 }
 const shuffle = (a, random) => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
-/** Deterministic minimal digging; every accepted removal preserves uniqueness. */
-export function generateSized(g, seed) {
+/** Deterministic digging; every accepted removal preserves uniqueness.
+ * The optional explained-path constraint can retain non-minimal clue sets. */
+export function generateSized(g, seed, { requireExplained = false } = {}) {
     const random = seededRandom(seed);
     const full = solveSized('0'.repeat(g.count), g, { limit: 1, random });
     if (full.status !== 'solved') throw new Error('Generation work limit');
@@ -13,7 +14,7 @@ export function generateSized(g, seed) {
     for (const cell of shuffle(Array.from({ length: g.count }, (_, i) => i), random)) {
         const old = board[cell]; board[cell] = '0';
         const result = solveSized(board.join(''), g);
-        if (result.status !== 'solved' || result.count !== 1) board[cell] = old;
+        if (result.status !== 'solved' || result.count !== 1 || requireExplained && assessSized(board.join(''), g).status !== 'solved') board[cell] = old;
     }
     const puzzle = board.join('');
     return { puzzle, assessment: assessSized(puzzle, g), seed };

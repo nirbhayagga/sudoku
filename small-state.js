@@ -1,23 +1,24 @@
-import { SMALL_GEOMETRIES, validBoard } from './geometry.js';
+import { SMALL_GEOMETRIES, VARIANT_GEOMETRIES, validBoard } from './geometry.js';
 import { sizedCandidates, solveSized, nextSizedStep, applySizedStep } from './sized-solver.js';
 const snapshot = s => ({ board: s.board, notes: [...s.notes], auto: s.auto });
-export function newSmallGame(puzzle, g, { id = 'imported', level = null } = {}) {
-    const solved = solveSized(puzzle, g);
+export function newSmallGame(puzzle, g, { id = 'imported', level = null, progression = false } = {}) {
+    const solved = solveSized(puzzle, g, { maxNodes: 20000 });
+    if (solved.status === 'budget-exhausted') throw new Error('Puzzle validation reached its work limit. Try a different puzzle.');
     if (solved.status !== 'solved' || solved.count !== 1 || !puzzle.includes('0')) throw new Error('Choose an incomplete puzzle with exactly one solution.');
-    return { version: 1, size: g.size, geometry: g.key, puzzle, board: puzzle, id, level,
+    return { version: 1, size: g.size, geometry: g.key, puzzle, board: puzzle, id, level, progression,
         notes: Array(g.count).fill(0), auto: false, hints: 0, elapsedMs: 0, recorded: false, undo: [], redo: [] };
 }
 export function validateSmallGame(s) {
-    const g = SMALL_GEOMETRIES[s?.size];
+    const g = [...Object.values(SMALL_GEOMETRIES), ...Object.values(VARIANT_GEOMETRIES)].find(g => g.key === s?.geometry && g.size === s?.size);
     const validSnapshot = v => v && validBoard(v.board, g) && [...s.puzzle].every((d, i) => d === '0' || v.board[i] === d)
         && typeof v.auto === 'boolean' && Array.isArray(v.notes) && v.notes.length === g.count && v.notes.every(n => Number.isInteger(n) && n >= 0 && n <= g.all);
     if (!g || s.version !== 1 || s.geometry !== g.key || !validBoard(s.puzzle, g)
-        || !validSnapshot(s) || typeof s.id !== 'string' || s.id.length > 100
+        || !validSnapshot(s) || typeof s.id !== 'string' || s.id.length > 100 || (s.progression != null && typeof s.progression !== 'boolean')
         || !(s.level === null || Number.isInteger(s.level) && s.level >= 1 && s.level <= 10000)
         || !Number.isSafeInteger(s.elapsedMs) || s.elapsedMs < 0 || s.elapsedMs > 31536000000
         || !Number.isSafeInteger(s.hints) || s.hints < 0 || s.hints > 100000 || typeof s.recorded !== 'boolean'
         || ![s.undo, s.redo].every(stack => Array.isArray(stack) && stack.length <= 200 && stack.every(validSnapshot))) return null;
-    const solved = solveSized(s.puzzle, g);
+    const solved = solveSized(s.puzzle, g, { maxNodes: 20000 });
     return solved.status === 'solved' && solved.count === 1 ? structuredClone(s) : null;
 }
 export function editSmallGame(s, g, mutate) {

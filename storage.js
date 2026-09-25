@@ -11,6 +11,7 @@
 import { BANK_VERSION, BANK_SIZES, GAME_LABELS, isDifficulty, isGameDifficulty } from './difficulties.js';
 import { SudokuSolver } from './solver.js';
 import { isPuzzleId } from './puzzle-id.js';
+import { normalizeProgress, validProgressId } from './progression.js';
 
 const DIFFICULTIES = Object.keys(BANK_SIZES);
 const THEMES = ['light', 'dark', 'midnight', 'sakura', 'ocean', 'forest', 'arctic', 'peony', 'matcha', 'vino'];
@@ -69,6 +70,8 @@ export function validateGameState(state, { recomputeSolution = true } = {}) {
     if (result.level !== null && (!isCount(result.level) || result.level < 1 || result.level > BANK_SIZES[result.difficulty])) return null;
     result.daily = state.daily ?? null;
     if (result.daily !== null && !isCalendarDay(result.daily)) return null;
+    result.progression = state.progression ?? false;
+    if (typeof result.progression !== 'boolean' || result.progression && (result.daily !== null || result.difficulty === 'imported')) return null;
     if (result.difficulty === 'imported' && (result.level !== null || result.daily !== null)) return null;
     if (Object.hasOwn(state, 'timestamp')) {
         if (!isCount(state.timestamp)) return null;
@@ -105,6 +108,15 @@ const STATS_KEY = 'sudoku_stats_v2';
 const THEME_KEY = 'sudoku-theme';
 const NAME_KEY = 'sudoku-player-name';
 const SHORTCUTS_KEY = 'sudoku-shortcuts-open';
+const PROGRESSION_KEY = 'sudoku_progression_v1';
+export const getProgression = () => normalizeProgress(readJson(PROGRESSION_KEY, null));
+export function recordProgression(track, id) {
+    track = String(track);
+    if (!validProgressId(track, id)) return false;
+    const progress = getProgression();
+    if (!progress[track].includes(id)) progress[track].push(id);
+    return writeJson(PROGRESSION_KEY, progress);
+}
 export function getShortcutsOpen(fallback = null) {
     const value = readJson(SHORTCUTS_KEY, null);
     return typeof value === 'boolean' ? value : fallback;
@@ -408,6 +420,7 @@ export function exportBackup({ includeSavedGame = true } = {}) {
             played: Object.fromEntries(DIFFICULTIES.map(difficulty => [difficulty, normalizePlayed(read(playedKey(difficulty)), difficulty)])),
             streak: normalizeStreak(read(STREAK_KEY)),
             dailyDone: normalizeDaily(read(DAILY_KEY)),
+            progression: normalizeProgress(read(PROGRESSION_KEY)),
         };
         if (includeSavedGame) {
             const raw = read(SAVE_KEY);
@@ -441,6 +454,12 @@ export function restoreBackup(raw) {
             [DAILY_KEY, JSON.stringify(dailyDone)], [THEME_KEY, settings.theme], [NAME_KEY, settings.playerName],
             ...DIFFICULTIES.map(d => [playedKey(d), JSON.stringify(played[d])]),
         ];
+        // Old backups leave newer progression alone; new ones validate before
+        // the existing atomic/rollback write path touches any personal data.
+        if (Object.hasOwn(backup, 'progression')) {
+            if (!sameData(backup.progression, normalizeProgress(backup.progression))) throw new Error('Invalid progression data.');
+            writes.push([PROGRESSION_KEY, JSON.stringify(backup.progression)]);
+        }
         if (Object.hasOwn(settings, 'shortcutsOpen')) writes.push([SHORTCUTS_KEY, settings.shortcutsOpen === null ? null : JSON.stringify(settings.shortcutsOpen)]);
         if (Object.hasOwn(backup, 'savedGame')) {
             const game = backup.savedGame === null ? null : validateGameState(backup.savedGame);
@@ -470,12 +489,33 @@ export function restoreBackup(raw) {
 }
 
 // Small classic boards have their own versioned saves and content-ID progress.
-export const loadSmallData = size => [4, 6].includes(Number(size)) ? readJson(`sudoku_small_v1_${size}`, null) : null;
-export const saveSmallData = (size, state) => [4, 6].includes(Number(size)) && writeJson(`sudoku_small_v1_${size}`, state);
+export const loadSmallData = size => ['4', '6', '9-diagonal', '9-hyper'].includes(String(size)) ? readJson(`sudoku_small_v1_${size}`, null) : null;
+export const saveSmallData = (size, state) => ['4', '6', '9-diagonal', '9-hyper'].includes(String(size)) && writeJson(`sudoku_small_v1_${size}`, state);
+/** Restore a validated board and its optional path together, with rollback. */
+export function restoreSmallBackup(track, state, completed) {
+    if (!['4', '6', '9-diagonal', '9-hyper'].includes(String(track))) return false;
+    const key = `sudoku_small_v1_${track}`, writes = [[key, JSON.stringify(state)]];
+    if (completed !== undefined) {
+        if (!Array.isArray(completed) || completed.length > 20000 || new Set(completed).size !== completed.length || !completed.every(id => validProgressId(String(track), id))) return false;
+        const paths = getProgression(); paths[track] = completed;
+        writes.push([PROGRESSION_KEY, JSON.stringify(paths)]);
+    }
+    const before = new Map(), changed = [];
+    try {
+        for (const [key] of writes) before.set(key, localStorage.getItem(key));
+        for (const [key, value] of writes) { changed.push(key); localStorage.setItem(key, value); }
+        return true;
+    } catch {
+        for (const key of changed.reverse()) {
+            try { if (before.get(key) === null) localStorage.removeItem(key); else localStorage.setItem(key, before.get(key)); } catch { /* unavailable storage */ }
+        }
+        return false;
+    }
+}
 export function smallProgress() {
     const raw = readJson('sudoku_small_progress_v1', []);
-    return Array.isArray(raw) ? [...new Set(raw.filter(id => typeof id === 'string' && /^[46]-[a-f0-9]{16}$/.test(id)))].slice(0, 10000) : [];
+    return Array.isArray(raw) ? [...new Set(raw.filter(id => typeof id === 'string' && /^(?:[46]|9-(?:diagonal|hyper))-[a-f0-9]{16}$/.test(id)))].slice(0, 10000) : [];
 }
 export function recordSmallWin(id) {
-    if (/^[46]-[a-f0-9]{16}$/.test(id)) writeJson('sudoku_small_progress_v1', [...new Set([...smallProgress(), id])]);
+    if (/^(?:[46]|9-(?:diagonal|hyper))-[a-f0-9]{16}$/.test(id)) writeJson('sudoku_small_progress_v1', [...new Set([...smallProgress(), id])]);
 }

@@ -62,7 +62,7 @@ describe('small game state and formats', () => {
         for (const style of ['line','zeros','rows','grid']) expect(parseSizedPuzzle(formatSizedPuzzle(board,g,style),g)).toBe(board);
         const url = new URL(sizedLink('https://example.test/game?old=1',board,g));
         expect(parseSizedLink(url.search,SMALL_GEOMETRIES)).toEqual({g,puzzle:board});
-        expect(sizedSheet([board,board],g,1).match(/class="sheet"/g)).toHaveLength(2);
+        expect(sizedSheet([board,board],g,1).match(/<section\b/g)).toHaveLength(2);
         expect(() => sizedSheet(['<script>'],g)).toThrow();
     });
     it('restores peer notes and automatic-note changes through undo/redo', () => {

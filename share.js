@@ -27,6 +27,9 @@ import { isCalendarDay, validateGameState } from './storage.js';
 /** Parse a shared puzzle out of a URL. Returns null when there is nothing to load. */
 export function parseShareLink(search) {
     const params = new URLSearchParams(search || '');
+    // Geometry/rule-bearing links belong to the sized board controller. Never
+    // silently load a variant's 81 cells with ordinary classic Sudoku rules.
+    if (params.has('size') || params.has('rule')) return null;
 
     const id = params.get('id');
     if (id !== null) return isPuzzleId(id) ? { kind: 'identity', id } : { kind: 'unavailable' };
@@ -177,6 +180,7 @@ export function gameLink(origin, state) {
     if (state.daily) set('day', state.daily);
     if (state.autoNotes) set('a', 1);
     if (state.autoNotesUsed) set('u', 1);
+    if (state.progression) set('pg', 1);
     return url.toString();
 }
 
@@ -187,9 +191,10 @@ export function gameLink(origin, state) {
  */
 export function parseGameLink(search) {
     const params = new URLSearchParams(search || '');
+    if (params.has('size') || params.has('rule')) return null;
     if (params.get('g') !== GAME_LINK_VERSION || params.get('bank') !== String(BANK_VERSION)) return null;
     if ([...params.keys()].some(key => params.getAll(key).length !== 1)) return null;
-    for (const key of ['a', 'u']) {
+    for (const key of ['a', 'u', 'pg']) {
         if (params.has(key) && !['0', '1'].includes(params.get(key))) return null;
     }
 
@@ -242,6 +247,7 @@ export function parseGameLink(search) {
         difficulty,
         level,
         daily: daily || null,
+        progression: params.get('pg') === '1',
         autoNotes: params.get('a') === '1',
         autoNotesUsed: params.get('u') === '1',
     });
