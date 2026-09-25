@@ -1,17 +1,19 @@
-import { SMALL_GEOMETRIES, cellLabel, parseSizedPuzzle } from './geometry.js';
+import { SMALL_GEOMETRIES, VARIANT_GEOMETRIES, RULE_LABELS, RULE_DESCRIPTIONS, cellLabel, parseSizedPuzzle } from './geometry.js';
 import { SMALL_BANK } from './small-bank.js';
+import { VARIANT_BANK } from './variant-bank.js';
 import { newSmallGame, validateSmallGame, editSmallGame, smallDigit, smallUndo, smallHint } from './small-state.js';
-import { bits, sizedCandidates, solveSized, assessSized } from './sized-solver.js';
-import { generateSized } from './sized-generation.js';
+import { bits, sizedCandidates, solveSized } from './sized-solver.js';
+import { createAnalysisClient } from './analysis-client.js';
 import { sizedLink, sizedPng, sizedSheet, SIZED_PRINT_CSS, formatSizedPuzzle } from './sized-export.js';
-import { loadSmallData, saveSmallData, smallProgress, recordSmallWin } from './storage.js';
+import { loadSmallData, saveSmallData, smallProgress, recordSmallWin, getProgression, recordProgression, restoreSmallBackup } from './storage.js';
+import { progressionPosition } from './progression.js';
 import { copyToClipboard } from './share.js';
 import { formatTime } from './format.js';
 import { planWorksheet } from './printing.js';
 
 export function createSmallApp(root) {
     root.innerHTML = `<div class="small-heading"><h2 id="small-title"></h2><span id="small-clock"></span></div>
-      <p id="small-identity"></p><p id="small-progress"></p>
+      <p id="small-rules"></p><p id="small-identity"></p><p id="small-progress"></p>
       <div class="small-grid" id="small-grid" role="group" aria-label="Sudoku board"></div>
       <div class="small-pad" id="small-pad" aria-label="Digits"></div>
       <div class="small-actions"><div class="btn-group" role="group" aria-label="History"><button class="btn" id="small-undo">Undo</button><button class="btn" id="small-redo">Redo</button></div>
@@ -20,6 +22,7 @@ export function createSmallApp(root) {
       <p id="small-status" role="status" aria-live="polite"></p><details id="small-proof" hidden><summary>Explanation details</summary><ol></ol></details>
       <div class="small-setup"><label>Challenge <input id="small-level" type="number" min="1" value="1"></label>
       <button class="btn btn-primary" id="small-start">Start</button><button class="btn" id="small-next">Next challenge</button></div>
+      <details class="progression-controls"><summary>Progression</summary><p id="small-path-status"></p><button class="btn" id="small-path">Continue progression</button></details>
       <details id="small-tools"><summary>Import, export and more</summary>
       <label for="small-text">Puzzle text (one line, rows or boxed grid)</label><textarea id="small-text" rows="6" spellcheck="false"></textarea>
       <div class="small-actions"><button class="btn" id="small-import">Play imported puzzle</button><button class="btn" id="small-generate">Generate</button></div>
@@ -32,38 +35,61 @@ export function createSmallApp(root) {
       <label>Per page <select id="small-per-page"><option>1</option><option>2</option><option selected>4</option><option>6</option></select></label>
       <label><input id="small-answers" type="checkbox"> Include separate answers</label><p id="small-print-summary" role="status"></p><button class="btn" id="small-print">Print / Save PDF</button></fieldset>
       <button class="btn" id="small-backup">Download game backup</button><label>Restore game backup <input id="small-restore" type="file" accept="application/json,.json"></label>
-      </details><details><summary>Small-board shortcuts</summary><p>Digits enter a value; arrows select a cell; Delete erases. N toggles notes, A auto-notes, H previews/reveals, Space pauses. Ctrl/Cmd+Z undoes; Ctrl/Cmd+Shift+Z redoes. Undo also works after completion.</p></details>`;
+      </details><details><summary>Board shortcuts</summary><p>Digits enter a value; arrows select a cell; Delete erases. N toggles notes, A auto-notes, H previews/reveals, Space pauses. Ctrl/Cmd+Z undoes; Ctrl/Cmd+Shift+Z redoes. Undo also works after completion.</p></details>`;
     const $ = id => root.querySelector(`#small-${id}`);
-    let g, state, selected = 0, notes = false, paused = false, active = false, anchor = Date.now(), pending = null, answer;
+    let g, bank, track, state, selected = 0, notes = false, paused = false, active = false, anchor = Date.now(), pending = null, answer;
+    const analysis = createAnalysisClient();
+    let workSerial = 0, working = false;
+    function cancelWork() {
+        workSerial++; working = false; analysis.cancel();
+        $('generate').textContent = 'Generate'; $('import').disabled = false;
+    }
     const message = text => { $('status').textContent = text; };
     const isWon = () => state?.board === answer;
     const settle = () => { if (state && active && !paused && !isWon()) state.elapsedMs += Math.max(0, Date.now() - anchor); anchor = Date.now(); };
-    const save = () => { if (state) saveSmallData(g.size, state); };
+    const save = () => { if (state) saveSmallData(track, state); };
     const clearHint = () => { pending = null; $('hint').textContent = 'Hint (free)'; $('proof').hidden = true; $('proof').querySelector('ol').replaceChildren(); };
     function render() {
-        $('title').textContent = `${g.size} × ${g.size} Sudoku`;
-        $('identity').textContent = state.level ? `Challenge ${state.level} of ${SMALL_BANK[g.size].length} · ${g.boxRows} × ${g.boxCols} boxes` : `Imported / generated puzzle · ${g.boxRows} × ${g.boxCols} boxes`;
-        if (isWon() && !state.recorded) { recordSmallWin(state.id); state.recorded = true; }
-        $('progress').textContent = `${smallProgress().filter(id => SMALL_BANK[g.size].some(p => p.id === id)).length} of ${SMALL_BANK[g.size].length} challenges completed`;
+        $('title').textContent = `${g.size} × ${g.size} ${g.rule === 'classic' ? '' : RULE_LABELS[g.rule] + ' '}Sudoku`;
+        $('rules').textContent = RULE_DESCRIPTIONS[g.rule];
+        $('grid').dataset.rule = g.rule;
+        $('identity').textContent = state.level ? `Challenge ${state.level} of ${bank.length} · ${g.boxRows} × ${g.boxCols} boxes` : `Imported / generated puzzle · ${g.boxRows} × ${g.boxCols} boxes`;
+        if (isWon() && !state.recorded) {
+            recordSmallWin(state.id);
+            if (state.progression) recordProgression(track, state.id);
+            state.recorded = true;
+        }
+        const path = progressionPosition(bank, getProgression()[track]);
+        $('path-status').textContent = `${path.completed} of ${path.total} progression challenges completed. ` + (path.next ? `Next: challenge ${path.nextIndex + 1}. Only games started in progression count.` : 'Path complete! Replay any challenge by number.');
+        $('path').disabled = !path.next;
+        if (state.progression) $('identity').textContent = 'Progression · ' + $('identity').textContent;
+        $('progress').textContent = `${smallProgress().filter(id => bank.some(p => p.id === id)).length} of ${bank.length} challenges completed`;
         $('grid').style.setProperty('--small-size', g.size);
         $('grid').classList.toggle('small-paused', paused);
         $('grid').setAttribute('aria-label', paused ? 'Paused Sudoku board' : `${g.size} by ${g.size} Sudoku board`);
         const cells = [...$('grid').children];
         for (let i = 0; i < g.count; i++) {
             const button = cells[i], given = state.puzzle[i] !== '0';
-            button.className = 'small-cell' + (given ? ' small-given' : '') + (i === selected ? ' small-selected' : '');
+            button.className = 'small-cell' + (given ? ' small-given' : '') + (i === selected ? ' small-selected' : '') + (g.houses[i].some(u => ['diagonal', 'hyper region'].includes(u.kind)) ? ' variant-region' : '');
             button.setAttribute('aria-label', paused ? `${cellLabel(g, i)}, paused` : `${cellLabel(g, i)}, ${state.board[i] === '0' ? 'empty' : state.board[i]}${given ? ', given' : ''}`);
             button.setAttribute('aria-pressed', String(i === selected)); button.tabIndex = i === selected ? 0 : -1;
             button.replaceChildren();
-            if (!paused && state.board[i] !== '0') button.textContent = state.board[i];
+            if (!paused && state.board[i] !== '0') {
+                const value = document.createElement('span'); value.className = 'small-value';
+                value.textContent = state.board[i]; button.append(value);
+            }
             else if (!paused && state.notes[i]) {
                 const span = document.createElement('span'); span.className = 'small-pencil';
-                span.textContent = bits(state.notes[i]).map(d => g.digits[d]).join(' '); button.append(span);
+                if (g.size === 9) {
+                    span.classList.add('small-pencil-grid');
+                    for (let d = 0; d < g.size; d++) { const mark = document.createElement('span'); mark.textContent = state.notes[i] & (1 << d) ? g.digits[d] : ''; span.append(mark); }
+                } else span.textContent = bits(state.notes[i]).map(d => g.digits[d]).join(' ');
+                button.append(span);
             }
         }
         $('notes').setAttribute('aria-pressed', String(notes)); $('auto').setAttribute('aria-pressed', String(state.auto));
         $('pause').textContent = paused ? 'Resume' : 'Pause';
-        $('next').disabled = state.level === SMALL_BANK[g.size].length;
+        $('next').disabled = state.progression ? !isWon() || !path.next : state.level === bank.length;
         $('undo').disabled = paused || !state.undo.length; $('redo').disabled = paused || !state.redo.length;
         $('clock').textContent = `${formatTime(Math.floor(state.elapsedMs / 1000))} · ${state.hints} hints`;
         updatePrintPlan();
@@ -87,19 +113,31 @@ export function createSmallApp(root) {
             const b = document.createElement('button'); b.className = 'btn'; b.textContent = digit === '0' ? 'Erase' : digit;
             b.dataset.digit = digit; b.addEventListener('click', () => enter(digit)); $('pad').append(b);
         }
-        $('level').max = SMALL_BANK[g.size].length; $('level').value = state.level || 1;
+        if (g.rule !== 'classic') {
+            const ns = 'http://www.w3.org/2000/svg', overlay = document.createElementNS(ns, 'svg');
+            overlay.setAttribute('viewBox', '0 0 900 900'); overlay.setAttribute('aria-hidden', 'true'); overlay.classList.add('variant-outline');
+            const shapes = g.rule === 'diagonal' ? [{ x1: 0, y1: 0, x2: 900, y2: 900 }, { x1: 900, y1: 0, x2: 0, y2: 900 }]
+                : [1,5].flatMap(r => [1,5].map(c => ({ x: c * 100 + 3, y: r * 100 + 3, width: 294, height: 294 })));
+            for (const attrs of shapes) { const shape = document.createElementNS(ns, g.rule === 'diagonal' ? 'line' : 'rect'); for (const [k,v] of Object.entries(attrs)) shape.setAttribute(k,v); overlay.append(shape); }
+            $('grid').append(overlay);
+        }
+        $('level').max = bank.length; $('level').value = state.level || 1;
     }
-    function load(next) {
-        settle(); save(); state = next; answer = solveSized(state.puzzle, g).solutions[0];
-        const index = SMALL_BANK[g.size].findIndex(p => p.puzzle === state.puzzle);
+    function load(next, verifiedAnswer = null, { savePrevious = true } = {}) {
+        cancelWork();
+        const solution = verifiedAnswer || solveSized(next.puzzle, g, { limit: 1, maxNodes: 20000 }).solutions[0];
+        if (!solution) throw new Error('Puzzle validation reached its work limit.');
+        settle(); if (savePrevious) save(); state = next; answer = solution;
+        const index = bank.findIndex(p => p.puzzle === state.puzzle);
         state.level = index < 0 ? null : index + 1;
-        state.id = index < 0 ? 'imported' : SMALL_BANK[g.size][index].id;
+        state.id = index < 0 ? 'imported' : bank[index].id;
+        state.progression = index >= 0 && state.progression === true;
         selected = Math.max(0, state.board.indexOf('0')); notes = false; paused = false; anchor = Date.now(); clearHint(); build(); render();
     }
-    function start(level) {
-        const item = SMALL_BANK[g.size][level - 1];
-        if (!item) { message(`Choose a challenge from 1 to ${SMALL_BANK[g.size].length}.`); return; }
-        load(newSmallGame(item.puzzle, g, { id: item.id, level })); message('Challenge ready. Select a cell and enter a digit.');
+    function start(level, progression = false) {
+        const item = bank[level - 1];
+        if (!item) { message(`Choose a challenge from 1 to ${bank.length}.`); return; }
+        load(newSmallGame(item.puzzle, g, { id: item.id, level, progression })); message('Challenge ready. Select a cell and enter a digit.');
     }
     function enter(digit) {
         if (!active || paused) return;
@@ -121,27 +159,45 @@ export function createSmallApp(root) {
         for (const step of pending.trace) { const li = document.createElement('li'); li.textContent = step.nudge; $('proof').querySelector('ol').append(li); }
     };
     $('start').onclick = () => start(Number($('level').value));
-    $('next').onclick = () => { if (state.level !== SMALL_BANK[g.size].length) start((state.level || 0) + 1); };
-    $('import').onclick = () => {
-        try { const p = parseSizedPuzzle($('text').value, g); if (!p) throw new Error(`Enter exactly ${g.count} cells using digits 1–${g.size}.`);
-            const next = newSmallGame(p, g); const rating = assessSized(p, g); load(next);
-            message(`Imported puzzle. ${rating.status === 'solved' ? ['Singles', 'Locked candidates', 'Subsets'][rating.family] : 'Beyond the small-board explanation rules'}.`);
-        } catch (error) { message(error.message); }
-    };
-    $('generate').onclick = () => {
-        const seed = crypto.getRandomValues(new Uint32Array(1))[0], result = generateSized(g, seed);
-        load(newSmallGame(result.puzzle, g)); message(`Generated on this device. Seed ${seed}.`);
-    };
+    function continuePath() {
+        if (state.progression && !isWon()) { if (paused) $('pause').click(); message('Continue your current progression challenge.'); return; }
+        const path = progressionPosition(bank, getProgression()[track]);
+        if (path.next) start(path.nextIndex + 1, true);
+    }
+    $('path').onclick = continuePath;
+    $('next').onclick = () => { if (state.progression) continuePath(); else if (state.level !== bank.length) start((state.level || 0) + 1); };
+    async function runAnalysis(kind) {
+        if (working) { cancelWork(); message('Search cancelled.'); return; }
+        const puzzle = kind === 'sized-import' ? parseSizedPuzzle($('text').value, g) : null;
+        if (kind === 'sized-import' && !puzzle) { message(`Enter exactly ${g.count} cells using digits 1–${g.size}, with the selected rules.`); return; }
+        const serial = ++workSerial, seed = crypto.getRandomValues(new Uint32Array(1))[0];
+        working = true; $('generate').textContent = 'Cancel search'; $('import').disabled = true;
+        message(kind === 'sized-import' ? 'Checking puzzle and rules…' : 'Generating an explained puzzle…');
+        try {
+            const result = await analysis.request(kind, { puzzle, seed, size: g.size, rule: g.rule });
+            if (serial !== workSerial || !active) return;
+            load(result.state, result.answer);
+            message(kind === 'sized-import' ? `Imported puzzle. ${result.assessment.status === 'solved' ? ['Singles', 'Locked candidates', 'Subsets'][result.assessment.family] : 'Beyond supported deductions; verified-answer hints remain available'}.` : `Generated on this device. Seed ${seed}.`);
+        } catch (error) { if (serial === workSerial && error.name !== 'AbortError') message(error.message); }
+        finally { if (serial === workSerial) cancelWork(); }
+    }
+    $('import').onclick = () => runAnalysis('sized-import');
+    $('generate').onclick = () => runAnalysis('sized-generate');
+    $('text').addEventListener('input', () => { if (working) { cancelWork(); message('Search cancelled because the input changed.'); } });
     const source = () => state[$('source').value === 'board' ? 'board' : 'puzzle'];
     $('export').onclick = () => { $('text').value = formatSizedPuzzle(source(), g, $('format').value); message('Puzzle exported below.'); };
     $('copy').onclick = async () => { message(await copyToClipboard($('text').value) ? 'Copied.' : 'Select and copy the text below.'); };
     $('share').onclick = async () => { const link = sizedLink(location.href, state.puzzle, g); $('text').value = link; message(await copyToClipboard(link) ? 'Puzzle link copied.' : 'Copy the puzzle link below.'); };
     function download(blob, name) { const url = URL.createObjectURL(blob), a = document.createElement('a'); a.href = url; a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(url), 10000); }
     $('png').onclick = async () => { try { download(await sizedPng(source(), g, document), `sudoku-${g.size}x${g.size}.png`); } catch (e) { message(e.message); } };
-    $('backup').onclick = () => { settle(); save(); download(new Blob([JSON.stringify(state)], { type: 'application/json' }), `sudoku-${g.size}x${g.size}-save.json`); };
+    $('backup').onclick = () => { settle(); save(); download(new Blob([JSON.stringify({ ...state, progressionCompleted: getProgression()[track] })], { type: 'application/json' }), `sudoku-${g.size}x${g.size}-${g.rule}-save.json`); };
     $('restore').onchange = async () => {
         try { const file = $('restore').files[0]; if (!file) return; if (file.size > 1000000) throw new Error('Backup is too large.');
-            const next = validateSmallGame(JSON.parse(await file.text())); if (!next || next.size !== g.size) throw new Error('Choose a valid backup for this board size.'); load(next); message('Game restored.');
+            const parsed = JSON.parse(await file.text()), next = validateSmallGame(parsed);
+            if (!next || next.geometry !== g.key) throw new Error('Choose a valid backup for this board size and rules.');
+            delete next.progressionCompleted;
+            if (!restoreSmallBackup(track, next, parsed.progressionCompleted)) throw new Error('Backup has invalid progression or storage is unavailable.');
+            load(next, null, { savePrevious: false }); message('Game restored.');
         } catch (e) { message(e.message); } finally { $('restore').value = ''; }
     };
     function printPlan() {
@@ -149,7 +205,7 @@ export function createSmallApp(root) {
         return planWorksheet({ amount: current ? 1 : Number($('print-count').value),
             unit: current ? 'puzzles' : $('print-unit').value, perPage: Number($('per-page').value),
             order: $('print-source').value === 'consecutive' ? 'consecutive' : 'random',
-            start: Number($('level').value), bankSize: current ? 1 : SMALL_BANK[g.size].length,
+            start: Number($('level').value), bankSize: current ? 1 : bank.length,
             answers: $('answers').checked });
     }
     function updatePrintPlan() {
@@ -167,15 +223,15 @@ export function createSmallApp(root) {
             const { count } = printPlan(), perPage = Number($('per-page').value), selection = $('print-source').value;
             let puzzles = [source()];
             if (selection !== 'current') {
-                const bank = [...SMALL_BANK[g.size]];
-                if (selection === 'random') for (let i = bank.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [bank[i], bank[j]] = [bank[j], bank[i]]; }
+                const pool = [...bank];
+                if (selection === 'random') for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
                 const startAt = selection === 'consecutive' ? Number($('level').value) - 1 : 0;
-                if (startAt < 0 || !Number.isInteger(startAt) || startAt + count > bank.length) throw new Error('The selected range exceeds this bank.');
-                puzzles = bank.slice(startAt, startAt + count).map(p => p.puzzle);
+                if (startAt < 0 || !Number.isInteger(startAt) || startAt + count > pool.length) throw new Error('The selected range exceeds this bank.');
+                puzzles = pool.slice(startAt, startAt + count).map(p => p.puzzle);
             }
             let html = sizedSheet(puzzles, g, perPage);
             if ($('answers').checked) {
-                const solutions = puzzles.map(p => { const s = solveSized(p, g); if (s.count !== 1 || s.status !== 'solved') throw new Error('The position must have one solution to print answers.'); return s.solutions[0]; });
+                const solutions = puzzles.map(p => { const s = solveSized(p, g, { maxNodes: 20000 }); if (s.count !== 1 || s.status !== 'solved') throw new Error('The position must have one verified solution within the print work limit.'); return s.solutions[0]; });
                 html += sizedSheet(solutions, g, perPage, true);
             }
             root.querySelector('iframe')?.remove();
@@ -204,13 +260,15 @@ export function createSmallApp(root) {
     window.addEventListener('pagehide', flush);
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flush(); });
     return {
-        activate(size, puzzle = null) {
-            settle(); save(); state = null; g = SMALL_GEOMETRIES[size]; active = true;
+        activate(size, puzzle = null, rule = 'classic') {
+            settle(); save(); state = null; g = rule === 'classic' ? SMALL_GEOMETRIES[size] : VARIANT_GEOMETRIES[rule];
+            bank = rule === 'classic' ? SMALL_BANK[size] : VARIANT_BANK[rule];
+            track = rule === 'classic' ? String(size) : `9-${rule}`; active = true;
             try {
                 if (puzzle) load(newSmallGame(puzzle, g));
-                else { const saved = validateSmallGame(loadSmallData(g.size)); if (saved) load(saved); else start(1); }
+                else { const saved = validateSmallGame(loadSmallData(track)); if (saved?.geometry === g.key) load(saved); else start(1); }
             } catch (e) { start(1); message(e.message); }
         },
-        deactivate() { settle(); save(); active = false; },
+        deactivate() { cancelWork(); settle(); save(); active = false; },
     };
 }

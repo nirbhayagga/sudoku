@@ -126,9 +126,9 @@ describe('modular build', () => {
     it('keeps the initial chunk far smaller than the bank', () => {
         const entry = scriptsOf(modular).find((f) => f.startsWith('index.'));
         const bank = scriptsOf(modular).find((f) => f.startsWith('puzzle-bank.'));
-        // State validation, backup and accessibility bring the entry to ~21 KiB
-        // gzip. Allow 30 KiB of headroom while the lazy bank stays >80 KiB.
-        expect(gzipKb(modular, `assets/${entry}`)).toBeLessThan(30);
+        // Progression and rule routing bring the entry to ~31 KiB gzip.
+        // Practice, variant banks and analysis still load in separate chunks.
+        expect(gzipKb(modular, `assets/${entry}`)).toBeLessThan(32);
         expect(gzipKb(modular, `assets/${bank}`)).toBeGreaterThan(80);
     });
 
@@ -189,8 +189,8 @@ describe('modular build', () => {
         const total = [...assetsOf(modular).map((f) => `assets/${f}`), 'sw.js']
             .reduce((n, f) => n + gzipKb(modular, f), 0);
         // Includes both fonts, the whole lazy bank and the on-demand proof worker.
-        // Includes 192 additional 9x9 boards and stable daily-pool identities.
-        expect(total).toBeLessThan(270);
+        // Includes practice, variant banks and generic generation in v1.3.
+        expect(total).toBeLessThan(285);
     });
 });
 

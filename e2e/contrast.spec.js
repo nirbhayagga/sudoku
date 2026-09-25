@@ -169,6 +169,18 @@ for (const theme of THEMES) {
             expect(await contrastFailures(page), id).toEqual([]);
             await page.locator(`#${id}`).evaluate(el => el.classList.remove('active'));
         }
+        if (await page.locator('#btn-setup-toggle').isVisible()) await page.locator('#btn-setup-toggle').click();
+        await page.locator('#progression-controls summary').click();
+        await page.locator('#btn-practice').click();
+        await page.locator('#practice-technique').selectOption('naked-pair');
+        await page.locator('#practice-explain').click();
+        expect(await contrastFailures(page), 'practice candidates, proof and controls').toEqual([]);
+        await page.locator('#btn-practice-close').click();
+        for (const rule of ['diagonal', 'hyper']) {
+            await page.locator('#board-rule').selectOption(rule);
+            await page.locator('#small-fill').click();
+            expect(await contrastFailures(page), `${rule} shaded houses and notes`).toEqual([]);
+        }
         await page.locator('#board-size').selectOption('6');
         await page.locator('#small-fill').click();
         await page.locator('#small-tools summary').click();

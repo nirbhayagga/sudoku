@@ -19,6 +19,7 @@ import * as leaderboard from './leaderboard-client.js';
 import { MAX_WORKSHEET_PUZZLES, planWorksheet, renderWorksheet } from './printing.js';
 import { createAnalysisClient } from './analysis-client.js';
 import { createGeneratorDialog } from './generator-dialog.js';
+import { progressionPosition } from './progression.js';
 
 /**
  * The puzzle bank is ~450 kB — over 90% of the app — and is not needed to draw
@@ -147,6 +148,8 @@ function loadBank() {
 
     // Play mode
     let currentDifficulty = 'easy';
+    let currentProgression = false;
+    let progressionItems = null;
     let selectedDifficulty = currentDifficulty;
     let gameRequest = 0;
     let gameLoading = false;
@@ -1127,6 +1130,7 @@ function loadBank() {
     const dialogs = createDialogs([
         document.querySelector('.header'),
         document.querySelector('.mode-toggle'),
+        document.getElementById('board-rules-control'),
         document.getElementById('app'),
         document.querySelector('.shortcuts'),
     ].filter(Boolean), { onOpen: () => clearHintNudge() });
@@ -1406,18 +1410,48 @@ function loadBank() {
     //  PLAY MODE
     // ══════════════════════════════════════════════════════════════════
 
-    function startGame(difficulty, { daily = null, random = false } = {}) {
-        const targetDifficulty = difficulty || selectedDifficulty;
+    function updateProgressionUi() {
+        if (!progressionItems) return;
+        const position = progressionPosition(progressionItems, store.getProgression()['9']);
+        document.getElementById('progression-status').textContent = `${position.completed} of ${position.total} completed. ` +
+            (position.next ? `Next: ${DIFFICULTY_LABELS[position.next.difficulty]} #${position.next.level}. Start when you are ready; other games do not advance this path.` : 'Path complete! You can replay any puzzle using its difficulty and level.');
+        document.getElementById('btn-progression').disabled = !position.next;
+        document.getElementById('btn-win-next').disabled = !position.next;
+    }
+
+    async function continueProgression() {
+        if (currentProgression && gameActive && !completion) {
+            if (timerPaused) setPaused(false);
+            setStatus(`Continue: ${puzzleIdentity()}`);
+            return;
+        }
+        const saved = store.loadSavedGame();
+        if (saved?.progression && !saved.completion) { resumeGame(saved); return; }
+        dialogs.close(winOverlay);
+        return startGame(undefined, { progression: true });
+    }
+
+    function startGame(difficulty, { daily = null, random = false, progression = false } = {}) {
+        let targetDifficulty = difficulty || selectedDifficulty;
         if (!isDifficulty(targetDifficulty) || mode !== 'play') return;
-        const reqLevel = random ? NaN : (levelInput ? parseInt(levelInput.value, 10) : NaN);
+        let reqLevel = random ? NaN : (levelInput ? parseInt(levelInput.value, 10) : NaN);
         const request = ++gameRequest;
         gameLoading = true;
         setStatus('Loading puzzle...');
 
         // Awaiting the bank also yields to the event loop, so the status above
         // paints before the solver runs.
-        return loadBank().then(({ PUZZLES, DAILY_PUZZLES = PUZZLES }) => {
+        return loadBank().then(({ PUZZLES, ALL_PUZZLES, DAILY_PUZZLES = PUZZLES }) => {
             if (request !== gameRequest || mode !== 'play') return;
+            progressionItems = ALL_PUZZLES;
+            updateProgressionUi();
+            if (progression) {
+                const { next } = progressionPosition(ALL_PUZZLES, store.getProgression()['9']);
+                if (!next) { setStatus('Progression complete — every challenge finished!', 'success'); return; }
+                targetDifficulty = next.difficulty;
+                reqLevel = next.level;
+                selectDifficulty(targetDifficulty);
+            }
             let puzzle, solution;
 
             // ── PRIMARY: pick from pre-generated bank ────────────────────
@@ -1479,6 +1513,7 @@ function loadBank() {
             }
 
             currentDifficulty = targetDifficulty;
+            currentProgression = progression;
             currentDaily = daily;
             document.querySelector('.resume-banner')?.remove();
             if (winTimeout) clearTimeout(winTimeout);
@@ -1520,7 +1555,7 @@ function loadBank() {
             // so anything set before this point is overwritten.
             setStatus(currentDaily
                 ? `Daily puzzle — ${formatDay(currentDaily)} · ${label} #${currentLevel}`
-                : `${label}${currentLevel ? ` #${currentLevel}` : ''} — ${clueCount} clues`);
+                : `${currentProgression ? 'Progression · ' : ''}${label}${currentLevel ? ` #${currentLevel}` : ''} — ${clueCount} clues`);
 
             // Select first empty cell
             for (let i = 0; i < 81; i++) {
@@ -2056,11 +2091,13 @@ function loadBank() {
     function puzzleIdentity() {
         if (currentDifficulty === 'imported') return 'Imported puzzle';
         const label = GAME_LABELS[currentDifficulty];
-        return `${label}${currentLevel ? ` · Level ${currentLevel}` : ' · Generated puzzle'}${currentDaily ? ` · Daily ${currentDaily}` : ''}`;
+        return `${currentProgression ? 'Progression · ' : ''}${label}${currentLevel ? ` · Level ${currentLevel}` : ' · Generated puzzle'}${currentDaily ? ` · Daily ${currentDaily}` : ''}`;
     }
 
     function renderCompletion() {
         if (!completion) return;
+        document.getElementById('btn-win-next').hidden = !currentProgression;
+        updateProgressionUi();
         document.getElementById('win-puzzle').textContent = puzzleIdentity();
         const clues = [...currentPuzzle].filter(digit => digit !== '0').length;
         const hintText = completion.hints ? `${completion.hints} hint${completion.hints === 1 ? '' : 's'} used` : 'No hints used';
@@ -2106,6 +2143,7 @@ function loadBank() {
 
             const firstCompletion = !completion;
             if (firstCompletion) completion = { time: timerSeconds, hints: hintsUsed, mistakes, autoNotes: autoNotesUsed, submitted: false };
+            if (currentProgression && firstCompletion) store.recordProgression('9', puzzleId(currentPuzzle));
             renderCompletion();
             refreshLayout();
 
@@ -2274,6 +2312,7 @@ function loadBank() {
             mistakes,
             level: currentLevel,
             daily: currentDaily,
+            progression: currentProgression,
             autoNotes,
             autoNotesUsed,
             completion,
@@ -2304,6 +2343,7 @@ function loadBank() {
         currentDifficulty = state.difficulty;
         currentLevel = state.level ?? null;
         currentDaily = state.daily ?? null;
+        currentProgression = state.progression === true;
         autoNotesUsed = state.autoNotesUsed || state.autoNotes || false;
         timerSeconds = state.timerSeconds || 0;
         hintsUsed = state.hintsUsed || 0;
@@ -2368,8 +2408,10 @@ function loadBank() {
         // Refresh its display level without making saved-board play depend on
         // a bank download. Score submissions also carry the authoritative ID.
         if (isDifficulty(state.difficulty)) {
-            loadBank().then(({ PUZZLES }) => {
+            loadBank().then(({ PUZZLES, ALL_PUZZLES }) => {
                 if (request !== gameRequest) return;
+                progressionItems = ALL_PUZZLES;
+                updateProgressionUi();
                 const index = PUZZLES[state.difficulty].findIndex(p => p.puzzle === state.puzzle);
                 currentLevel = index < 0 ? null : index + 1;
                 if (levelInput) levelInput.value = currentLevel ? String(currentLevel) : '';
@@ -2507,6 +2549,7 @@ function loadBank() {
         gameActive = false;
         gameWon = false;
         currentPuzzle = null;
+        currentProgression = false;
         currentSolution = null;
         completion = null;
         setNotesMode(false);
@@ -2608,9 +2651,13 @@ function loadBank() {
 
     let smallApp = null, sizeRequest = 0;
     const boardSize = document.getElementById('board-size');
-    async function changeBoardSize(size, linkedPuzzle = null) {
+    const boardRule = document.getElementById('board-rule');
+    async function changeBoardSize(size, linkedPuzzle = null, rule = boardRule.value) {
         const request = ++sizeRequest;
-        if (size === '9') {
+        if (size !== '9') rule = 'classic';
+        boardRule.value = rule;
+        document.getElementById('board-rules-control').hidden = size !== '9';
+        if (size === '9' && rule === 'classic') {
             smallApp?.deactivate();
             document.body.classList.remove('small-board-active');
             document.getElementById('small-app').hidden = true;
@@ -2624,20 +2671,29 @@ function loadBank() {
             smallApp ||= createSmallApp(document.getElementById('small-app'));
             document.body.classList.add('small-board-active');
             document.getElementById('small-app').hidden = false;
-            smallApp.activate(size, linkedPuzzle);
-        } catch (error) { boardSize.value = '9'; setStatus(`Small board could not load: ${error.message}`); }
-    }
-    boardSize.addEventListener('change', () => changeBoardSize(boardSize.value));
-    const sizeParams = new URLSearchParams(location.search);
-    const linkedSize = sizeParams.get('size');
-    if (['4', '6'].includes(linkedSize)) {
-        const puzzle = sizeParams.get('p');
-        const box = linkedSize === '4' ? '2x2' : '2x3';
-        if (sizeParams.get('box') === box && puzzle && puzzle.length === Number(linkedSize) ** 2
-            && [...puzzle].every(d => ('0' + '123456'.slice(0, Number(linkedSize))).includes(d))) {
-            boardSize.value = linkedSize; changeBoardSize(linkedSize, puzzle);
+            document.getElementById('board-rules-control').hidden = size !== '9';
+            smallApp.activate(size, linkedPuzzle, rule);
+        } catch (error) {
+            boardSize.value = '9'; boardRule.value = 'classic';
+            smallApp?.deactivate(); document.body.classList.remove('small-board-active');
+            document.getElementById('small-app').hidden = true;
+            document.getElementById('board-rules-control').hidden = false;
+            setStatus(`Board could not load: ${error.message}`);
         }
     }
+    boardSize.addEventListener('change', () => changeBoardSize(boardSize.value));
+    boardRule.addEventListener('change', () => changeBoardSize(boardSize.value));
+    const sizeParams = new URLSearchParams(location.search);
+    const linkedSize = sizeParams.get('size');
+    const linkedRule = sizeParams.get('rule') || 'classic';
+    const linkedBoard = sizeParams.get('p');
+    const sizedLinkRequested = sizeParams.has('size') || sizeParams.has('rule');
+    const validSizedLink = (['4', '6'].includes(linkedSize) && linkedRule === 'classic'
+        || linkedSize === '9' && ['diagonal', 'hyper'].includes(linkedRule))
+        && sizeParams.get('box') === (linkedSize === '4' ? '2x2' : linkedSize === '6' ? '2x3' : '3x3')
+        && linkedBoard?.length === Number(linkedSize) ** 2
+        && [...linkedBoard].every(d => ('0' + '123456789'.slice(0, Number(linkedSize))).includes(d))
+        && [...sizeParams.keys()].every(key => sizeParams.getAll(key).length === 1);
 
     tabSolver.addEventListener('click', () => switchMode('solver'));
     tabPlay.addEventListener('click', () => switchMode('play'));
@@ -2801,6 +2857,27 @@ function loadBank() {
     btnWinNew.addEventListener('click', () => {
         dialogs.close(winOverlay);
         startGame(undefined, { random: true });
+    });
+    document.getElementById('btn-progression').addEventListener('click', continueProgression);
+    let practiceLoaded = false;
+    document.getElementById('btn-practice').addEventListener('click', async () => {
+        if (gameActive) { setPaused(true); saveGame(); }
+        const request = gameRequest;
+        const boardRequest = sizeRequest;
+        try {
+            const { createPracticeApp } = await import('./practice-app.js');
+            if (request !== gameRequest || boardRequest !== sizeRequest) return;
+            if (!practiceLoaded) { createPracticeApp(document.getElementById('practice-content')); practiceLoaded = true; }
+            dialogs.open(document.getElementById('practice-overlay'));
+        } catch { setStatus('Could not load practice. Try again.', 'error'); }
+    });
+    document.getElementById('btn-practice-close').addEventListener('click', () => dialogs.close(document.getElementById('practice-overlay')));
+    document.getElementById('btn-win-next').addEventListener('click', continueProgression);
+    document.getElementById('progression-controls').addEventListener('toggle', async event => {
+        refreshLayout();
+        if (!event.target.open) return;
+        try { progressionItems = (await loadBank()).ALL_PUZZLES; updateProgressionUi(); }
+        catch { document.getElementById('progression-status').textContent = 'Could not load progression. Try again.'; }
     });
 
     diffSelector.addEventListener('click', (e) => {
@@ -3124,6 +3201,7 @@ function loadBank() {
     function setSetupFolded(folded) {
         if (!setupControls || !btnSetupToggle) return;
         setupControls.style.display = folded ? 'none' : '';
+        document.getElementById('board-rules-control').hidden = folded;
         btnSetupToggle.style.display = folded ? '' : 'none';
         btnSetupToggle.setAttribute('aria-expanded', String(!folded));
     }
@@ -3265,11 +3343,15 @@ function loadBank() {
     // applied after so a raw-board link can stay in solver mode.
     const gameState = parseGameLink(window.location.search);
     const sharedPuzzle = gameState ? null : parseShareLink(window.location.search);
-    sharedPuzzleLoaded = gameState !== null || sharedPuzzle !== null;
+    sharedPuzzleLoaded = gameState !== null || sharedPuzzle !== null || sizedLinkRequested;
 
     switchMode('play');
     if (gameState) applyGameLink(gameState);
     else applySharedPuzzle(sharedPuzzle);
+    if (sizedLinkRequested) {
+        if (validSizedLink) { boardSize.value = linkedSize; changeBoardSize(linkedSize, linkedBoard, linkedRule); }
+        else setStatus('This puzzle link has invalid or unsupported board rules.', 'error');
+    }
     revealLeaderboardUi();
 
     // Once the real layout exists, size the board to whatever room is left.

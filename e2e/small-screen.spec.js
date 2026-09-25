@@ -270,6 +270,7 @@ test.describe('setup controls fold while playing', () => {
 
         await expect(page.locator('#difficulty-selector')).toBeVisible();
         await expect(page.locator('#btn-new-game')).toBeVisible();
+        await expect(page.locator('#board-rule')).toBeVisible();
         await context.close();
     });
 
@@ -284,8 +285,11 @@ test.describe('setup controls fold while playing', () => {
 
     // Hiding controls on a screen with room to spare is a loss for no gain.
     test('does not fold when the board is already big enough', async ({ browser }) => {
-        const { context, after } = await play(browser, 1440, 780, false);
+        // Leave room for the rules selector and activity disclosure as well
+        // as the board. Shorter desktops may now correctly fold setup.
+        const { context, before, after } = await play(browser, 1440, 1200, false);
         expect(after.folded).toBe(false);
+        expect(after.cell).toBe(before);
         await context.close();
     });
 
