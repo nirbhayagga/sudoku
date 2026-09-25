@@ -9,7 +9,7 @@
  * The mapping is scoped to the bank revision in shared links. Revision 2
  * intentionally starts a fresh schedule alongside the new difficulty ladder.
  */
-import { BANK_SIZES } from './difficulties.js';
+import { DAILY_SIZES } from './difficulties.js';
 
 /**
  * Difficulty by weekday, easing in over the week and peaking at the weekend.
@@ -53,7 +53,8 @@ export function dailyPuzzle(dayKey) {
     date.setHours(0, 0, 0, 0);
 
     const difficulty = WEEKDAY_DIFFICULTY[date.getDay()];
-    const level = (hashString(dayKey) % BANK_SIZES[difficulty]) + 1;
+    // This is a position in DAILY_PUZZLES, not necessarily today's display level.
+    const level = (hashString(dayKey) % DAILY_SIZES[difficulty]) + 1;
 
     return { dayKey, difficulty, level };
 }

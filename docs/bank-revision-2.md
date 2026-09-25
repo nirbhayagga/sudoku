@@ -1,5 +1,7 @@
 # Bank revision 2 — human-technique ladder
 
+This is the v1.1.0 snapshot. See [the v1.2 expansion](bank-expansion-1.2.md) for current counts and inserted levels.
+
 Policy: human-order-v1. All 5500 original boards retained and uniquely solvable.
 
 | Tier | Puzzles | Verified path families |

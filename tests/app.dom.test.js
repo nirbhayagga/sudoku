@@ -843,8 +843,8 @@ describe('themes', () => {
 describe('difficulty selection', () => {
     it('updates the level range for the chosen difficulty', () => {
         app.click('.diff-btn[data-diff="nightmare"]');
-        expect(app.$('#level-input').max).toBe('192');
-        expect(app.$('#level-max').textContent).toMatch(/192/);
+        expect(app.$('#level-input').max).toBe('256');
+        expect(app.$('#level-max').textContent).toMatch(/256/);
     });
 
     it('marks the selected difficulty as active', () => {
@@ -932,7 +932,7 @@ describe('level attribution', () => {
         expect(saved.level).toBe(3);
     });
 
-    it('restores the level when a game is resumed', async () => {
+    it('resolves the saved board instead of trusting an outdated level', async () => {
         const resumed = await bootApp({
             localStorage: {
                 sudoku_saved_game_v2: JSON.stringify({
@@ -956,7 +956,7 @@ describe('level attribution', () => {
         await resumed.tick(2100);
 
         const saved = JSON.parse(resumed.window.localStorage.getItem('sudoku_saved_game_v2'));
-        expect(saved.level).toBe(42);
+        expect(saved.level).toBe(1);
         resumed.close();
     });
 });

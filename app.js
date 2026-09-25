@@ -1416,7 +1416,7 @@ function loadBank() {
 
         // Awaiting the bank also yields to the event loop, so the status above
         // paints before the solver runs.
-        return loadBank().then(({ PUZZLES }) => {
+        return loadBank().then(({ PUZZLES, DAILY_PUZZLES = PUZZLES }) => {
             if (request !== gameRequest || mode !== 'play') return;
             let puzzle, solution;
 
@@ -1436,7 +1436,9 @@ function loadBank() {
                 let pick;
 
                 // Load specified level if valid
-                if (!isNaN(reqLevel) && reqLevel >= 1 && reqLevel <= bankList.length) {
+                if (daily) {
+                    pick = DAILY_PUZZLES[targetDifficulty][reqLevel - 1];
+                } else if (!isNaN(reqLevel) && reqLevel >= 1 && reqLevel <= bankList.length) {
                     pick = bankList[reqLevel - 1];
                 } else {
                     // Pick a random unplayed puzzle
@@ -2289,7 +2291,7 @@ function loadBank() {
     }
 
     function resumeGame(state) {
-        gameRequest++;
+        const request = ++gameRequest;
         gameLoading = false;
         handedOff = false;
         clearHintNudge();
@@ -2361,6 +2363,25 @@ function loadBank() {
         // Remove resume banner if it exists
         const banner = document.querySelector('.resume-banner');
         if (banner) banner.remove();
+
+        // Insertions can move a level while the saved board stays identical.
+        // Refresh its display level without making saved-board play depend on
+        // a bank download. Score submissions also carry the authoritative ID.
+        if (isDifficulty(state.difficulty)) {
+            loadBank().then(({ PUZZLES }) => {
+                if (request !== gameRequest) return;
+                const index = PUZZLES[state.difficulty].findIndex(p => p.puzzle === state.puzzle);
+                currentLevel = index < 0 ? null : index + 1;
+                if (levelInput) levelInput.value = currentLevel ? String(currentLevel) : '';
+                setStatus(`Resumed: ${puzzleIdentity()} — ${formatTime(timerSeconds)}`);
+                saveGame();
+            }).catch(() => {
+                if (request === gameRequest) {
+                    currentLevel = null;
+                    setStatus('Game resumed; bank level could not be loaded.');
+                }
+            });
+        }
     }
 
     function showResumeBanner(state) {

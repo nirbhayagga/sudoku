@@ -7,10 +7,10 @@ const ranking = JSON.parse(readFileSync(new URL('../docs/bank-ranking.json', imp
 const apiIds = JSON.parse(readFileSync(new URL('../leaderboard-api/bank-ids.json', import.meta.url)));
 import { describe, it, expect } from 'vitest';
 import { SudokuSolver } from '../solver.js';
-import { PUZZLES, ALL_PUZZLES } from '../puzzle-bank.js';
+import { PUZZLES, ALL_PUZZLES, EXPANSION_IDS } from '../puzzle-bank.js';
 import { DIFFICULTY_LABELS, BANK_SIZES } from '../difficulties.js';
 
-const EXPECTED_COUNTS = { easy: 1493, medium: 1570, hard: 997, expert: 256, evil: 992, nightmare: 192 };
+const EXPECTED_COUNTS = { easy: 1493, medium: 1570, hard: 997, expert: 384, evil: 992, nightmare: 256 };
 
 // Solving all 5,500 puzzles takes a few seconds. Sample by default; CI sets
 // FULL_BANK_CHECK=1 to verify every shipped puzzle.
@@ -136,7 +136,7 @@ describe(`puzzle validity (${FULL ? 'full bank' : `${SAMPLE_SIZE}/difficulty sam
 
 describe('published human-technique order', () => {
     it('keeps the exact original board collection and all 3,000 catalogue boards', () => {
-        const boards = ALL_PUZZLES.map(p => p.puzzle).sort();
+        const boards = ALL_PUZZLES.filter(p => !EXPANSION_IDS.has(p.id)).map(p => p.puzzle).sort();
         expect(createHash('sha256').update(boards.join('\n')).digest('hex'))
             .toBe('aa7715daeb96aad1621bc767fdf511819566fc51b887c3cdd1856b8bda270440');
         expect(boards.filter(p => p.replaceAll('0', '').length === 17)).toHaveLength(3000);

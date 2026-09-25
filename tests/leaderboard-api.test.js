@@ -634,6 +634,14 @@ describe('audit regressions', () => {
         expect(entries.map(e => e.time)).toEqual([10, 120]);
         expect(entries[0]).toMatchObject({ mistakes: null, autoNotes: false });
     });
+
+    it('resolves stored levels from board identities after inserted puzzles', async () => {
+        const old = (await (await post(server.base, validScore)).json()).entry;
+        const saved = { ...old, level: old.level === 1 ? 2 : 1 };
+        fs.writeFileSync(server.dataFile, JSON.stringify({ easy: [saved] }));
+        const entries = await (await fetch(`${server.base}/api/leaderboard/easy`)).json();
+        expect(entries[0]).toMatchObject({ level: old.level, puzzleId: old.puzzleId, time: old.time });
+    });
 });
 
 describe('CORS configuration', () => {

@@ -25,6 +25,8 @@ export const DIFFICULTY_LABELS = {
  * loaded; a test asserts these match the bank exactly.
  */
 export const BANK_SIZES = Object.freeze(metadata.sizes);
+// Daily's original pool is fixed even when new challenges are inserted.
+export const DAILY_SIZES = Object.freeze(metadata.dailySizes || metadata.sizes);
 
 /** Accept only published difficulty keys, never inherited object properties. */
 export const isDifficulty = (value) => typeof value === 'string' && Object.hasOwn(BANK_SIZES, value);

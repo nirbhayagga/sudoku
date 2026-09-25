@@ -5,6 +5,14 @@
     "easy": 1493,
     "medium": 1570,
     "hard": 997,
+    "expert": 384,
+    "evil": 992,
+    "nightmare": 256
+  },
+  "dailySizes": {
+    "easy": 1493,
+    "medium": 1570,
+    "hard": 997,
     "expert": 256,
     "evil": 992,
     "nightmare": 192

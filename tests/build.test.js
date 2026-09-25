@@ -189,8 +189,8 @@ describe('modular build', () => {
         const total = [...assetsOf(modular).map((f) => `assets/${f}`), 'sw.js']
             .reduce((n, f) => n + gzipKb(modular, f), 0);
         // Includes both fonts, the whole lazy bank and the on-demand proof worker.
-        // Enhanced proofs and the lazy small-board app bring it to about 257 KiB.
-        expect(total).toBeLessThan(265);
+        // Includes 192 additional 9x9 boards and stable daily-pool identities.
+        expect(total).toBeLessThan(270);
     });
 });
 

@@ -155,10 +155,11 @@ function validateData(data) {
     for (const [difficulty, entries] of Object.entries(data)) {
         if (!VALID_DIFFICULTIES.includes(difficulty) || !Array.isArray(entries)) fail();
         validated[difficulty] = entries.map(entry => {
+            const resolvedLevel = entry?.puzzleId == null ? null : BANK_IDS[difficulty].indexOf(entry.puzzleId) + 1;
             if (entry && entry.bankVersion !== BANK_VERSION) throw new Error('Scores belong to another bank revision; configure a fresh DATA_FILE.');
             if (!entry || typeof entry !== 'object' || Array.isArray(entry)
                 || entry.difficulty !== difficulty
-                || entry.puzzleId !== (entry.level == null ? null : BANK_IDS[difficulty][entry.level - 1])
+                || (entry.level == null ? entry.puzzleId !== null : !resolvedLevel)
                 || typeof entry.name !== 'string' || !entry.name
                 || entry.name.length > 20 || !entry.name.trim()
                 || entry.name.includes('<') || entry.name.includes('>')
@@ -172,7 +173,7 @@ function validateData(data) {
             return {
                 bankVersion: BANK_VERSION, puzzleId: entry.puzzleId,
                 name: entry.name, difficulty, time: entry.time, hints: entry.hints,
-                level: entry.level ?? null, mistakes: entry.mistakes ?? null,
+                level: resolvedLevel, mistakes: entry.mistakes ?? null,
                 autoNotes: entry.autoNotes ?? false, date: entry.date,
             };
         }).sort((a, b) => a.time - b.time).slice(0, 100);

@@ -19,6 +19,21 @@ function save(app) {
 afterEach(() => { apps.splice(0).forEach(app => app.close()); });
 
 describe('audit gameplay regressions', () => {
+    it('keeps the existing Sunday daily board after new Expert puzzles are inserted', async () => {
+        const app = await boot({ url: 'https://sudoku.test/?bank=2&daily=2026-09-27' });
+        await app.tick();
+        expect(save(app).puzzle).toBe('100300050408900600600400301050000063010037000360040200900002004200000900000004000');
+        expect(save(app).level).toBe(PUZZLES.expert.findIndex(p => p.id === 'p8711470b2bbdcbc7') + 1);
+    });
+
+    it('resolves an old saved level by its board', async () => {
+        const board = '100300050408900600600400301050000063010037000360040200900002004200000900000004000';
+        const app = await boot({ localStorage: { sudoku_saved_game_v2: JSON.stringify({ puzzle: board, userValues: board,
+            difficulty: 'expert', level: 204, timerSeconds: 12 }) } });
+        app.click('#btn-resume-yes'); await app.tick();
+        expect(save(app)).toMatchObject({ puzzle: board, level: PUZZLES.expert.findIndex(p => p.puzzle === board) + 1 });
+    });
+
     it('shows shortcuts by default on desktop, collapses on touch and remembers a choice', async () => {
         const desktop = await boot(); expect(desktop.$('.shortcuts').open).toBe(true);
         const phone = await boot({ touch: true }); expect(phone.$('.shortcuts').open).toBe(false);
@@ -145,6 +160,7 @@ describe('audit gameplay regressions', () => {
         expect(app.window.localStorage.getItem('sudoku_stats_v2')).toBe(stats);
         const restored = await boot({ localStorage: { sudoku_saved_game_v2: JSON.stringify(review) } });
         restored.click('#btn-resume-yes');
+        await restored.tick();
         const missing = restored.readGrid().indexOf('0'); restored.type(missing, solution[missing]);
         expect(restored.$('#win-details').textContent).toBe(result);
         expect(JSON.parse(restored.window.localStorage.getItem('sudoku_stats_v2') || '{}').easy?.won || 0).toBe(0);
