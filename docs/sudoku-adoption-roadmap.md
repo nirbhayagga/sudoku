@@ -171,7 +171,10 @@ optional larger features; their existence is not a reason to crowd the current
 play controls. A compact generator entry, progressive hint details and a future
 practice area are a better fit for this app.
 
-## Priorities after this assessment review
+## Priorities recorded at the assessment review
+
+This section preserves the assessment's original recommendations. The current
+approved release scope is recorded in the release sequence below.
 
 1. Improve simpler explanations and rating fidelity: uniqueness patterns with
    verified premises, direct-pattern labels, bounded alternate/shorter chains,
@@ -192,15 +195,15 @@ full-strength human grader; benchmark data is not automatically publishable cont
 
 ## Release sequence
 
-Keep the 9×9 rating migration separate from new sizes and variant rules. There is
-no new tag or release yet, and reordering still requires review of the assessment.
+Keep the 9×9 rating revision separate from new sizes and variant rules. The
+reviewed reclassification is in v1.1.0; subsequent work is divided as follows.
 
 | Release stage | Contents | Gate |
 |---|---|---|
-| Next 9×9 release | Verified gameplay/import/export/generator improvements, shared proofs, maintenance tooling; reviewed reclassification if ready | Improve important simpler-path disagreements, review representative puzzles, approve tier boundaries and migration |
-| Small sizes | Curated challenging 4×4 and 6×6, size-aware play/import/export/print/progress | Shared geometry, unique boards, equivalent-puzzle filtering, size-specific rating and touch tests |
-| 16×16 pilot | Small collection spanning its own difficulty range | Symbol/input design, readable notes and print layout, measured runtime and corpus quality |
-| Later modes/variants | Technique practice and selected constraint families, introduced independently | Each rule supported consistently by validation, solver, hints, imports, saves, print and sharing |
+| v1.1.0 | Verified 9×9 gameplay/import/export/generator improvements, shared proofs, maintenance tooling and bank revision 2 | Reviewed technique boundaries, all 5,500 boards retained, complete checks and explicit fresh bank progress |
+| v1.2.0 | Curated 4×4 and 6×6, targeted additional 9×9 puzzles and self-paced progression | Shared geometry, uniqueness/equivalence checks, repeatable grading, saved progression and touch tests |
+| v1.3.0 | Technique practice and selected rule variants | Each selected rule supported consistently by validation, solver, hints, imports, saves, print and sharing |
+| Future 16×16 pilot | Small collection spanning its own difficulty range | Symbol/input design, readable notes and print layout, measured runtime and corpus quality |
 
 Do not move the published `v1.0.0` tag again. Prefer stable puzzle identities and
 a versioned bank mapping before reordering, so an old link still identifies its
@@ -242,14 +245,32 @@ old levels and scores is intentionally omitted; this revision starts fresh bank
 progress and uses content identities for new shares.
 
 v1.2.0 will combine the prepared 36-class 4×4 collection and 120 curated 6×6
-challenges with targeted 9×9 additions. Expert patterns and the dynamic-chain end
+challenges with self-paced progression and targeted 9×9 additions. Expert patterns and the dynamic-chain end
 of Nightmare are the first expansion candidates. Additions must pass uniqueness,
 identity/equivalence filtering and the same offline grading policy; no quota is
 filled with transformed duplicates or unresolved boards labelled hardest.
-16×16 and constraint variants remain a subsequent, separate pilot.
+16×16 remains a separate future pilot. Technique practice and selected rule
+variants are planned for v1.3.0; the precise initial variant set remains to be
+selected from the existing assessment.
 
-The 1.2 scope does not include a full progression mode or technique practice.
-Small boards already retain completion progress and offer a manual Next challenge
-button. Keep navigation compact: one board-size selector now; if rule variants
-and additional activities are introduced later, use separate rules and play-option
-controls that show only relevant choices rather than a tab for every combination.
+### Progression scope for v1.2.0
+
+Progression is planned, not yet implemented. Small boards already retain completion
+progress and offer a manual Next challenge button. The complete mode should:
+
+- Follow the ordered 9×9 bank from Easy through Nightmare, with an independent
+  challenge sequence for each small size.
+- Record progress only when a progression puzzle is completed. Offer the next
+  challenge afterward and let the player choose when to start it; no daily
+  schedule or automatic board replacement.
+- Remember completed content identities and the next challenge across reloads,
+  with backup support. An active saved game continues to use normal resume.
+- Count each completion once, including after undo/recompletion. Other play
+  activities, such as imports or Daily, do not silently move the progression.
+- Keep completed challenges replayable and show current progress without adding
+  a separate top-level tab for each size.
+
+Keep navigation compact: one board-size selector and grouped play options. In
+v1.3, add a separate rules selector showing only supported choices rather than
+a tab for every combination. Practice should let players choose a technique
+without exposing offline maintenance controls in ordinary play.
