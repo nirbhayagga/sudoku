@@ -28,6 +28,7 @@ test('progression keeps the board until Next, persists entries and ignores norma
 
 test('small progression is explicit, completion stays once after undo, and next starts when requested', async ({page}) => {
     await page.goto('/'); await page.locator('#board-size').selectOption('4');
+    await page.locator('#small-setup-toggle').click();
     await page.locator('#small-app .progression-controls summary').click(); await page.locator('#small-path').click();
     const item=SMALL_BANK[4][0], answer=solveSized(item.puzzle,SMALL_GEOMETRIES[4]).solutions[0];
     await expect(page.locator('#small-next')).toBeDisabled();
@@ -62,6 +63,7 @@ for (const rule of ['diagonal','hyper']) test(`${rule} keeps its constraints thr
     await page.locator('#small-import').click(); await expect(page.locator('#small-status')).toContainText('Imported puzzle.');
     await page.locator('#small-share').click(); const link=await page.locator('#small-text').inputValue();
     expect(new URL(link).searchParams.get('rule')).toBe(rule);
+    await page.locator('[data-tool="print"]').click();
     await page.locator('#small-print').click();
     await expect(page.frameLocator('.small-print-frame').locator('body')).toContainText(rule === 'diagonal' ? 'Diagonal' : 'Hyper');
     await page.goto(link); await expect(page.locator('#board-rule')).toHaveValue(rule); await expect(page.locator('.small-cell')).toHaveCount(81);
@@ -78,6 +80,8 @@ test('rejects mismatched links and restores only the selected rule', async ({pag
     await page.locator('#small-tools summary').click();
     const state = await page.evaluate(() => JSON.parse(localStorage.getItem('sudoku_small_v1_9-diagonal')));
     await page.locator('#board-rule').selectOption('hyper');
+    await page.locator('#small-tools summary').click();
+    await page.locator('[data-tool="backup"]').click();
     await page.locator('#small-restore').setInputFiles({name:'wrong-rule.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(state))});
     await expect(page.locator('#small-status')).toContainText('valid backup for this board size and rules');
     await expect(page.locator('#small-title')).toContainText('Hyper');
@@ -108,6 +112,7 @@ test('cancels small-board work on request, edited input or board switch', async 
 test('variant worksheets fit 1, 2, 4 and 6 puzzles within a Letter or A4 page', async ({page}) => {
     await page.goto('/'); await page.locator('#board-rule').selectOption('hyper');
     await page.locator('#small-tools summary').click();
+    await page.locator('[data-tool="print"]').click();
     await page.locator('#small-print-source').selectOption('consecutive');
     await page.locator('#small-answers').check();
     for (const count of [1,2,4,6]) {

@@ -10,33 +10,79 @@ import { progressionPosition } from './progression.js';
 import { copyToClipboard } from './share.js';
 import { formatTime } from './format.js';
 import { planWorksheet } from './printing.js';
+import { fitToViewport } from './layout.js';
 
 export function createSmallApp(root) {
     root.innerHTML = `<div class="small-heading"><h2 id="small-title"></h2><span id="small-clock"></span></div>
-      <p id="small-rules"></p><p id="small-identity"></p><p id="small-progress"></p>
+      <p id="small-identity"></p>
+      <button class="btn" id="small-setup-toggle" aria-expanded="false" aria-controls="small-setup-options">Game setup…</button>
+      <div id="small-setup-options" hidden>
+        <p id="small-rules"></p><p id="small-progress"></p>
+        <div class="small-setup"><label>Challenge <input id="small-level" type="number" min="1" value="1"></label>
+        <button class="btn btn-primary" id="small-start">Start</button><button class="btn" id="small-next">Next challenge</button></div>
+        <details class="progression-controls"><summary>Progression</summary><p id="small-path-status"></p><button class="btn" id="small-path">Continue progression</button></details>
+      </div>
       <div class="small-grid" id="small-grid" role="group" aria-label="Sudoku board"></div>
       <div class="small-pad" id="small-pad" aria-label="Digits"></div>
       <div class="small-actions"><div class="btn-group" role="group" aria-label="History"><button class="btn" id="small-undo">Undo</button><button class="btn" id="small-redo">Redo</button></div>
       <div class="btn-group" role="group" aria-label="Notes"><button class="btn btn-toggle" id="small-notes" aria-pressed="false">Notes</button><button class="btn btn-toggle" id="small-auto" aria-pressed="false">Auto-notes</button>
       <button class="btn" id="small-fill">Fill notes</button></div><div class="btn-group" role="group" aria-label="Game"><button class="btn" id="small-hint">Hint (free)</button><button class="btn" id="small-pause">Pause</button></div></div>
       <p id="small-status" role="status" aria-live="polite"></p><details id="small-proof" hidden><summary>Explanation details</summary><ol></ol></details>
-      <div class="small-setup"><label>Challenge <input id="small-level" type="number" min="1" value="1"></label>
-      <button class="btn btn-primary" id="small-start">Start</button><button class="btn" id="small-next">Next challenge</button></div>
-      <details class="progression-controls"><summary>Progression</summary><p id="small-path-status"></p><button class="btn" id="small-path">Continue progression</button></details>
-      <details id="small-tools"><summary>Import, export and more</summary>
+      <details id="small-tools"><summary>Import, export and print</summary>
+      <div class="small-tool-choices" role="group" aria-label="Puzzle tools">
+        <button class="btn btn-toggle" data-tool="text" aria-pressed="true">Puzzle text</button>
+        <button class="btn btn-toggle" data-tool="print" aria-pressed="false">Print</button>
+        <button class="btn btn-toggle" data-tool="backup" aria-pressed="false">Backup</button>
+      </div><div id="small-tool-text">
       <label for="small-text">Puzzle text (one line, rows or boxed grid)</label><textarea id="small-text" rows="6" spellcheck="false"></textarea>
       <div class="small-actions"><button class="btn" id="small-import">Play imported puzzle</button><button class="btn" id="small-generate">Generate</button></div>
       <label>Export source <select id="small-source"><option value="puzzle">Original puzzle</option><option value="board">Current position</option></select></label>
       <label>Text format <select id="small-format"><option value="rows">Rows</option><option value="line">Line (dots)</option><option value="zeros">Line (zeros)</option><option value="grid">Boxed grid</option></select></label>
       <div class="small-actions"><button class="btn" id="small-export">Export text</button><button class="btn" id="small-copy">Copy text</button><button class="btn" id="small-png">Download PNG</button><button class="btn" id="small-share">Share puzzle</button></div>
-      <fieldset><legend>Printable worksheet</legend><label>Selection <select id="small-print-source"><option value="current">Current puzzle</option><option value="consecutive">Consecutive challenges</option><option value="random">Random challenges</option></select></label>
+      </div><fieldset id="small-tool-print" hidden><legend>Printable worksheet</legend><label>Selection <select id="small-print-source"><option value="current">Current puzzle</option><option value="consecutive">Consecutive challenges</option><option value="random">Random challenges</option></select></label>
       <div id="small-print-batch" hidden><label>Choose total by <select id="small-print-unit"><option value="puzzles">Number of puzzles</option><option value="pages">Number of puzzle pages</option></select></label>
       <label>Amount <input id="small-print-count" type="number" min="1" max="24" value="4"></label></div>
       <label>Per page <select id="small-per-page"><option>1</option><option>2</option><option selected>4</option><option>6</option></select></label>
       <label><input id="small-answers" type="checkbox"> Include separate answers</label><p id="small-print-summary" role="status"></p><button class="btn" id="small-print">Print / Save PDF</button></fieldset>
-      <button class="btn" id="small-backup">Download game backup</button><label>Restore game backup <input id="small-restore" type="file" accept="application/json,.json"></label>
-      </details><details><summary>Board shortcuts</summary><p>Digits enter a value; arrows select a cell; Delete erases. N toggles notes, A auto-notes, H previews/reveals, Space pauses. Ctrl/Cmd+Z undoes; Ctrl/Cmd+Shift+Z redoes. Undo also works after completion.</p></details>`;
+      <div id="small-tool-backup" hidden><button class="btn" id="small-backup">Download game backup</button><label>Restore game backup <input id="small-restore" type="file" accept="application/json,.json"></label>
+      </div></details><details><summary>Board shortcuts</summary><p>Digits enter a value; arrows select a cell; Delete erases. N toggles notes, A auto-notes, F fills notes, H previews/reveals, P or Space pauses. Ctrl/Cmd+Z undoes; Ctrl/Cmd+Shift+Z redoes. Undo also works after completion.</p></details>`;
     const $ = id => root.querySelector(`#small-${id}`);
+    function showSetup(open) {
+        $('setup-options').hidden = !open;
+        $('setup-toggle').setAttribute('aria-expanded', String(open));
+        $('setup-toggle').textContent = open ? 'Close setup' : 'Game setup…';
+        scheduleLayout();
+    }
+    $('setup-toggle').onclick = () => showSetup($('setup-options').hidden);
+    for (const button of root.querySelectorAll('[data-tool]')) {
+        button.onclick = () => {
+            for (const choice of root.querySelectorAll('[data-tool]')) {
+                const chosen = choice === button;
+                choice.setAttribute('aria-pressed', String(chosen));
+                $(`tool-${choice.dataset.tool}`).hidden = !chosen;
+            }
+            scheduleLayout();
+        };
+    }
+    let layoutPending = false;
+    function scheduleLayout() {
+        if (layoutPending) return;
+        layoutPending = true;
+        requestAnimationFrame(() => { layoutPending = false; refreshLayout(); });
+    }
+    function refreshLayout() {
+        if (!active || document.body.classList.contains('dialog-open')) return;
+        // Expanded tools are intentionally scrollable; don't shrink the board
+        // just because a worksheet or backup form is open.
+        if ($('tools').open || !$('setup-options').hidden || !$('proof').hidden) return;
+        fitToViewport({
+            reset: () => $('grid').style.removeProperty('width'),
+            maximum: () => $('grid').getBoundingClientRect().width,
+            setSize: width => { $('grid').style.width = `${width}px`; },
+            minimum: g.size * (g.size === 9 ? 26 : 44) + 4,
+        });
+    }
+    root.addEventListener('toggle', scheduleLayout, true);
     let g, bank, track, state, selected = 0, notes = false, paused = false, active = false, anchor = Date.now(), pending = null, answer;
     const analysis = createAnalysisClient();
     let workSerial = 0, working = false;
@@ -44,17 +90,18 @@ export function createSmallApp(root) {
         workSerial++; working = false; analysis.cancel();
         $('generate').textContent = 'Generate'; $('import').disabled = false;
     }
-    const message = text => { $('status').textContent = text; };
+    const message = text => { $('status').textContent = text; scheduleLayout(); };
     const isWon = () => state?.board === answer;
     const settle = () => { if (state && active && !paused && !isWon()) state.elapsedMs += Math.max(0, Date.now() - anchor); anchor = Date.now(); };
     const save = () => { if (state) saveSmallData(track, state); };
     const clearHint = () => { pending = null; $('hint').textContent = 'Hint (free)'; $('proof').hidden = true; $('proof').querySelector('ol').replaceChildren(); };
     function render() {
-        $('title').textContent = `${g.size} × ${g.size} ${g.rule === 'classic' ? '' : RULE_LABELS[g.rule] + ' '}Sudoku`;
+        $('title').textContent = `${g.size} × ${g.size}${g.rule === 'classic' ? ' Sudoku' : ' · ' + RULE_LABELS[g.rule]}`;
         $('rules').textContent = RULE_DESCRIPTIONS[g.rule];
         $('grid').dataset.rule = g.rule;
-        $('identity').textContent = state.level ? `Challenge ${state.level} of ${bank.length} · ${g.boxRows} × ${g.boxCols} boxes` : `Imported / generated puzzle · ${g.boxRows} × ${g.boxCols} boxes`;
+        $('identity').textContent = state.level ? `Challenge ${state.level} of ${bank.length}` : `Imported / generated puzzle`;
         if (isWon() && !state.recorded) {
+            showSetup(true);
             recordSmallWin(state.id);
             if (state.progression) recordProgression(track, state.id);
             state.recorded = true;
@@ -137,7 +184,8 @@ export function createSmallApp(root) {
     function start(level, progression = false) {
         const item = bank[level - 1];
         if (!item) { message(`Choose a challenge from 1 to ${bank.length}.`); return; }
-        load(newSmallGame(item.puzzle, g, { id: item.id, level, progression })); message('Challenge ready. Select a cell and enter a digit.');
+        showSetup(false);
+        load(newSmallGame(item.puzzle, g, { id: item.id, level, progression })); message('Select a cell and enter a digit.');
     }
     function enter(digit) {
         if (!active || paused) return;
@@ -251,7 +299,7 @@ export function createSmallApp(root) {
         else if (key.startsWith('arrow')) {
             const delta = { arrowleft: -1, arrowright: 1, arrowup: -g.size, arrowdown: g.size }[key];
             if (delta) { selected = (selected + delta + g.count) % g.count; render(); $('grid').children[selected].focus({ preventScroll: true }); }
-        } else if ({ n: 'notes', a: 'auto', h: 'hint', ' ': 'pause' }[key]) $({ n: 'notes', a: 'auto', h: 'hint', ' ': 'pause' }[key]).click();
+        } else if ({ n: 'notes', a: 'auto', f: 'fill', h: 'hint', p: 'pause', ' ': 'pause' }[key]) $({ n: 'notes', a: 'auto', f: 'fill', h: 'hint', p: 'pause', ' ': 'pause' }[key]).click();
         else handled = false;
         if (handled) { e.preventDefault(); e.stopPropagation(); }
     });
@@ -260,14 +308,18 @@ export function createSmallApp(root) {
     window.addEventListener('pagehide', flush);
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flush(); });
     return {
+        refreshLayout,
+        pause() { if (active && !paused) $('pause').click(); },
         activate(size, puzzle = null, rule = 'classic') {
             settle(); save(); state = null; g = rule === 'classic' ? SMALL_GEOMETRIES[size] : VARIANT_GEOMETRIES[rule];
             bank = rule === 'classic' ? SMALL_BANK[size] : VARIANT_BANK[rule];
             track = rule === 'classic' ? String(size) : `9-${rule}`; active = true;
+            showSetup(false); $('tools').open = false;
             try {
                 if (puzzle) load(newSmallGame(puzzle, g));
                 else { const saved = validateSmallGame(loadSmallData(track)); if (saved?.geometry === g.key) load(saved); else start(1); }
             } catch (e) { start(1); message(e.message); }
+            scheduleLayout();
         },
         deactivate() { cancelWork(); settle(); save(); active = false; },
     };

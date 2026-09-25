@@ -68,13 +68,12 @@ async function contrastFailures(page) {
                 .some((n) => n.nodeType === Node.TEXT_NODE && n.textContent.trim());
             // Checkbox/radio values such as `on` are not rendered text. Their labels
             // are measured separately; native control glyphs need a non-text audit.
-            const value = element.matches('input:not([type=checkbox]):not([type=radio]):not([type=hidden]):not([type=range]):not([type=color]), textarea') ? element.value : '';
+            const value = element.matches('input:not([type=checkbox]):not([type=radio]):not([type=hidden]):not([type=range]):not([type=color]), textarea, select') ? element.value : '';
             if (!hasText && !value) continue;
             if (element.closest('.visually-hidden')) continue;
 
-            // Hidden anywhere up the tree counts as hidden: the overlays are
-            // dismissed with opacity, not display, so their contents are laid
-            // out and measurable while being completely invisible.
+            // Overlays may be hidden by display, visibility or an opacity animation.
+            // Ignore any hidden ancestor, even if the child still has a box.
             let hidden = false;
             for (let node = element; node && node !== document.body; node = node.parentElement) {
                 const s = getComputedStyle(node);
@@ -185,6 +184,10 @@ for (const theme of THEMES) {
         await page.locator('#small-fill').click();
         await page.locator('#small-tools summary').click();
         expect(await contrastFailures(page), 'small board, candidates and export controls').toEqual([]);
+        for (const tool of ['print', 'backup']) {
+            await page.locator(`[data-tool="${tool}"]`).click();
+            expect(await contrastFailures(page), `small board ${tool} controls`).toEqual([]);
+        }
     });
 }
 

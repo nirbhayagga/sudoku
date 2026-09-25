@@ -115,10 +115,13 @@
   <label class="board-rules-control" id="board-rules-control">Rules
     <select id="board-rule"><option value="classic">Classic</option><option value="diagonal">Diagonal</option><option value="hyper">Hyper</option></select>
   </label>
+  <div class="mode-navigation">
   <div class="mode-toggle" id="mode-toggle">
     <button class="mode-tab active" data-mode="play" id="tab-play">Play</button>
     <button class="mode-tab" data-mode="solver" id="tab-solver">Solver</button>
     <div class="mode-indicator" id="mode-indicator"></div>
+  </div>
+  <button class="btn" id="btn-practice" title="Practise a Sudoku technique">Practice</button>
   </div>
 
   <main class="card" id="app" aria-busy="true">
@@ -176,10 +179,9 @@
         <button class="btn btn-primary" id="btn-new-game">New Game</button>
       </div>
       <details class="progression-controls" id="progression-controls">
-        <summary>Progression and practice</summary>
+        <summary>Progression</summary>
         <p id="progression-status">Work through the bank at your own pace. Only progression games count; Daily and other games stay separate.</p>
         <button class="btn" id="btn-progression">Continue progression</button>
-        <button class="btn" id="btn-practice">Practise a technique</button>
       </details>
       </div>
 
@@ -251,7 +253,8 @@
   <!-- Paste/Import Modal -->
   <div class="modal-overlay" id="modal-overlay">
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="import-title">
-      <h2 id="import-title">Import Puzzle</h2>
+      <div class="modal-header"><h2 id="import-title">Import Puzzle</h2><button class="btn" id="btn-modal-cancel">Close</button></div>
+      <div class="modal-body">
       <p>Paste an 81-character string using digits 1-9 and 0 or . for empty cells
         (<code>*</code> <code>x</code> <code>_</code> <code>-</code> work too).<br>
         You can also paste 9 lines of 9 digits, or a grid with separators.</p>
@@ -262,9 +265,9 @@
       <p class="modal-error" id="import-error" role="alert"></p>
       <p class="export-hint" id="import-assessment" role="status"></p>
       <div class="modal-actions">
-        <button class="btn" id="btn-modal-cancel">Cancel</button>
         <button class="btn" id="btn-modal-import">Open in solver</button>
         <button class="btn btn-primary" id="btn-modal-play">Play puzzle</button>
+      </div>
       </div>
     </div>
   </div>
@@ -272,7 +275,8 @@
   <!-- Generator: same on static hosting, offline copies and self-hosted installations. -->
   <div class="modal-overlay" id="generator-overlay">
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="generator-title">
-      <h2 id="generator-title">Generate a puzzle</h2>
+      <div class="modal-header"><h2 id="generator-title">Generate a puzzle</h2><button class="btn" type="button" id="btn-generator-close">Close</button></div>
+      <div class="modal-body">
       <p>Create a unique 9×9 puzzle on this device. Targets are best effort; the preview shows what was achieved.</p>
       <form id="generator-form">
         <div class="generator-fields">
@@ -303,7 +307,6 @@
           <p>The same seed, settings and engine version reproduce a completed search.</p>
         </details>
         <div class="modal-actions">
-          <button class="btn" type="button" id="btn-generator-close">Close</button>
           <button class="btn" type="button" id="btn-generator-cancel" hidden>Cancel search</button>
           <button class="btn btn-primary" type="submit" id="btn-generator-start">Generate</button>
         </div>
@@ -322,13 +325,15 @@
           <button class="btn btn-primary" id="btn-generator-play">Play puzzle</button>
         </div>
       </div>
+      </div>
     </div>
   </div>
 
   <!-- Export Modal -->
   <div class="modal-overlay" id="export-overlay">
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="export-title">
-      <h2 id="export-title">Export Puzzle</h2>
+      <div class="modal-header"><h2 id="export-title">Export Puzzle</h2><button class="btn" id="btn-export-close">Close</button></div>
+      <div class="modal-body">
       <div class="export-options">
         <label for="export-source" id="export-source-label">Board:</label>
         <select id="export-source">
@@ -374,18 +379,20 @@
         <button class="btn" id="btn-print">Print / Save PDF</button>
       </details>
       <div class="modal-actions">
-        <button class="btn" id="btn-export-close">Close</button>
         <button class="btn" id="btn-export-image">Save PNG image</button>
         <button class="btn btn-primary" id="btn-export-copy">Copy text</button>
+      </div>
       </div>
     </div>
   </div>
 
-  <!-- Win overlay -->
+  <!-- Technique practice -->
   <div class="modal-overlay" id="practice-overlay">
     <div class="modal practice-modal" role="dialog" aria-modal="true" aria-labelledby="practice-title">
-      <div class="practice-header"><h2 id="practice-title">Technique practice</h2><button class="btn" id="btn-practice-close">Back to game</button></div>
+      <div class="modal-header practice-header"><h2 id="practice-title">Technique practice</h2><button class="btn" id="btn-practice-close">Back to game</button></div>
+      <div class="modal-body">
       <div id="practice-content"></div>
+      </div>
     </div>
   </div>
   <div id="print-area" aria-hidden="true"></div>
@@ -414,13 +421,14 @@
   <!-- Share Modal (fallback when the clipboard is unavailable) -->
   <div class="modal-overlay" id="share-overlay">
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="share-title">
-      <h2 id="share-title">Share this puzzle</h2>
+      <div class="modal-header"><h2 id="share-title">Share this puzzle</h2><button class="btn btn-primary" id="btn-share-close">Close</button></div>
+      <div class="modal-body">
       <p id="share-hint">Copy the link below.</p>
       <label class="visually-hidden" for="share-text">Link to this puzzle</label>
       <textarea id="share-text" readonly spellcheck="false"></textarea>
       <div class="modal-actions">
         <button class="btn" id="btn-handoff-confirm" style="display:none;">I’ve copied the link</button>
-        <button class="btn btn-primary" id="btn-share-close">Close</button>
+      </div>
       </div>
     </div>
   </div>
@@ -428,7 +436,8 @@
   <!-- Stats Modal -->
   <div class="modal-overlay" id="stats-overlay">
     <div class="modal stats-modal" role="dialog" aria-modal="true" aria-labelledby="stats-title">
-      <h2 id="stats-title">Statistics</h2>
+      <div class="modal-header"><h2 id="stats-title">Statistics</h2><button class="btn btn-primary" id="btn-stats-close">Close</button></div>
+      <div class="modal-body">
       <div id="stats-content"></div>
       <p id="backup-status" role="status"></p>
       <div class="modal-actions">
@@ -438,7 +447,7 @@
       </div>
       <div class="modal-actions">
         <button class="btn btn-danger" id="btn-stats-reset">Reset Stats</button>
-        <button class="btn btn-primary" id="btn-stats-close">Close</button>
+      </div>
       </div>
     </div>
   </div>
@@ -446,7 +455,8 @@
   <!-- Leaderboard Modal -->
   <div class="modal-overlay" id="leaderboard-overlay">
     <div class="modal leaderboard-modal" role="dialog" aria-modal="true" aria-labelledby="lb-title">
-      <h2 id="lb-title">Leaderboard</h2>
+      <div class="modal-header"><h2 id="lb-title">Leaderboard</h2><button class="btn btn-primary" id="btn-lb-close">Close</button></div>
+      <div class="modal-body">
       <div class="leaderboard-tabs" id="leaderboard-tabs">
         <button class="lb-tab active" data-diff="easy" title="Singles: one possible digit in a cell or house">Easy</button>
         <button class="lb-tab" data-diff="medium" title="Locked candidates: pointing and claiming">Medium</button>
@@ -456,8 +466,6 @@
         <button class="lb-tab" data-diff="nightmare" title="Dynamic chains and forcing convergence">Night</button>
       </div>
       <div id="leaderboard-content"></div>
-      <div class="modal-actions">
-        <button class="btn btn-primary" id="btn-lb-close">Close</button>
       </div>
     </div>
   </div>

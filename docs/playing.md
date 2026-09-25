@@ -179,3 +179,15 @@ generation, imports, exports and bulk printing; see [small boards](small-boards.
 v1.3 adds full progression, 56 technique lessons, and Diagonal/Hyper rules.
 See [activities](activities.md) for controls and the distinction between ordinary
 completion totals and each separate progression path.
+
+## Display and menus
+
+Saved 9×9 games offer Resume above the board, with difficulty, level and time.
+Practice is beside the Play/Solver switch. Long dialogs keep their heading and
+Close action visible while their contents scroll; closing restores the page's
+previous position. The native selectors follow the chosen theme. Reduce Motion
+changes animation without reducing the available board size.
+
+On small boards and variants, Game setup contains challenge selection, rules
+and progression. Import/export, print and backup controls are separated into
+panels. Board size and rules still use the existing selectors.

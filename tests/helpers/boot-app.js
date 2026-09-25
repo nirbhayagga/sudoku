@@ -127,6 +127,19 @@ export async function bootApp({ localStorage: seed = {}, serviceWorker = null, u
     }
 
     dom.window.eval(await appBundle());
+    // Linked puzzles now finish initialization before the loading shell opens.
+    // Wait for the same ready signal a browser interaction waits for, including
+    // the bundled dynamic-import and worker microtasks.
+    if (dom.window.document.getElementById('app').getAttribute('aria-busy') === 'true') {
+        await new Promise((resolve, reject) => {
+            const timer = setTimeout(() => { observer.disconnect(); reject(new Error('App initialization did not finish')); }, 10000);
+            const observer = new dom.window.MutationObserver(() => {
+                if (dom.window.document.getElementById('app').getAttribute('aria-busy') !== 'false') return;
+                clearTimeout(timer); observer.disconnect(); resolve();
+            });
+            observer.observe(dom.window.document.getElementById('app'), { attributes: true, attributeFilter: ['aria-busy'] });
+        });
+    }
 
     const { window } = dom;
     const $ = (sel) => window.document.querySelector(sel);

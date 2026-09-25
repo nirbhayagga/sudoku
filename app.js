@@ -13,6 +13,7 @@ import { parseShareLink, bankLink, puzzleLink, gameLink, parseGameLink, copyToCl
 import { candidatesFor, candidateGrid, peersOf, cellName, findNakedSingle, findHiddenSingle } from './techniques.js';
 import { formatTime, escapeHtml, formatPuzzle, parsePuzzleText } from './format.js';
 import { createDialogs } from './dialogs.js';
+import { fitToViewport } from './layout.js';
 import { applyTheme, THEME_COLORS } from './theme.js';
 import * as store from './storage.js';
 import * as leaderboard from './leaderboard-client.js';
@@ -1129,11 +1130,12 @@ function loadBank() {
     // focused ends up inside an aria-hidden subtree.
     const dialogs = createDialogs([
         document.querySelector('.header'),
-        document.querySelector('.mode-toggle'),
+        document.querySelector('.mode-navigation'),
         document.getElementById('board-rules-control'),
         document.getElementById('app'),
+        document.getElementById('small-app'),
         document.querySelector('.shortcuts'),
-    ].filter(Boolean), { onOpen: () => clearHintNudge() });
+    ].filter(Boolean), { onOpen: () => clearHintNudge(), onClosed: scheduleFit });
 
     // ── Import Modal ───────────────────────────────────────────────────
     const importAnalysis = createAnalysisClient();
@@ -1593,7 +1595,7 @@ function loadBank() {
 
         selectDifficulty(difficulty);
         if (levelInput) levelInput.value = String(level);
-        startGame(difficulty, { daily: today });
+        return startGame(difficulty, { daily: today });
     }
 
     /** Tick the Daily button once today's puzzle has been solved. */
@@ -1683,14 +1685,12 @@ function loadBank() {
             } catch { setStatus('Could not load puzzles — try again', 'error'); return; }
         }
         if (shared.kind === 'daily') {
-            startDaily(shared.dayKey);
-            return;
+            return startDaily(shared.dayKey);
         }
         if (shared.kind === 'bank') {
             selectDifficulty(shared.difficulty);
             if (levelInput) levelInput.value = shared.level ? String(shared.level) : '';
-            startGame(shared.difficulty);
-            return;
+            return startGame(shared.difficulty);
         }
         if (shared.play) {
             const before = gameRequest;
@@ -2436,7 +2436,7 @@ function loadBank() {
         const banner = document.createElement('div');
         banner.className = 'resume-banner';
         banner.innerHTML = `
-      <span>Resume ${diff} game? (${time})</span>
+      <span>Resume ${diff}${state.level ? ` #${Number(state.level)}` : ''} game? (${time})</span>
       <div class="resume-actions">
         <button class="btn btn-primary" id="btn-resume-yes">Resume</button>
         <button class="btn" id="btn-resume-no">Dismiss</button>
@@ -2444,12 +2444,7 @@ function loadBank() {
     `;
 
         const card = document.getElementById('app');
-        const numpad = document.getElementById('numpad');
-        if (numpad) {
-            card.insertBefore(banner, numpad);
-        } else {
-            card.appendChild(banner);
-        }
+        card.prepend(banner);
 
         document.getElementById('btn-resume-yes').addEventListener('click', () => {
             resumeGame(state);
@@ -2457,6 +2452,7 @@ function loadBank() {
         document.getElementById('btn-resume-no').addEventListener('click', () => {
             banner.remove();
             store.deleteSavedGame();
+            scheduleFit();
         });
     }
 
@@ -2672,6 +2668,7 @@ function loadBank() {
             document.body.classList.add('small-board-active');
             document.getElementById('small-app').hidden = false;
             document.getElementById('board-rules-control').hidden = size !== '9';
+            subtitleEl.textContent = '';
             smallApp.activate(size, linkedPuzzle, rule);
         } catch (error) {
             boardSize.value = '9'; boardRule.value = 'classic';
@@ -2862,6 +2859,7 @@ function loadBank() {
     let practiceLoaded = false;
     document.getElementById('btn-practice').addEventListener('click', async () => {
         if (gameActive) { setPaused(true); saveGame(); }
+        if (document.body.classList.contains('small-board-active')) smallApp?.pause();
         const request = gameRequest;
         const boardRequest = sizeRequest;
         try {
@@ -3215,7 +3213,8 @@ function loadBank() {
      * be a loss for no gain — the board is already at its maximum size.
      */
     function refreshLayout() {
-        if (document.body.classList.contains('small-board-active')) return;
+        if (dialogs.isOpen()) return;
+        if (document.body.classList.contains('small-board-active')) { smallApp?.refreshLayout(); return; }
         document.getElementById('btn-results').style.display = completion ? '' : 'none';
         if (btnHandoff) btnHandoff.style.display = completion ? 'none' : '';
         const playing = mode === 'play' && gameActive && !gameWon && !setupOpen;
@@ -3259,9 +3258,6 @@ function loadBank() {
     /** Below this a cell is too small to tap, so the page scrolls instead. */
     const MIN_CELL = 26;
 
-    /** Breathing room so the last row never sits flush against the edge. */
-    const FIT_MARGIN = 8;
-
     /** Folding setup away has to earn its keep, in pixels per cell. */
     const MEANINGFUL_GAIN = 4;
 
@@ -3270,49 +3266,25 @@ function loadBank() {
      *   as large as the stylesheet allows — or that nothing could be measured,
      *   in which case rearranging the layout cannot help either.
      */
-    function fitBoard() {
-        const unmeasurable = { size: 0, atMax: true };
-        if (!wrappers.length) return unmeasurable;
-
-        // Clear the previous fit so the stylesheet's maximum applies, then read
-        // it off a real cell. Custom properties are not resolved until they are
-        // used, so several breakpoints hand back a literal `calc(...)` string —
-        // measuring the element is the only way to get a number.
-        document.documentElement.style.removeProperty('--cell-size');
-        // Zero means no layout engine — jsdom, or a hidden document. Nothing
-        // to fit, and nothing to gain by folding controls away.
-        const maxCell = wrappers[0].getBoundingClientRect().width;
-        if (!maxCell) return unmeasurable;
-
-        // Everything except the grid: header, tabs, controls, status, numpad,
-        // padding, margins. Derived rather than listed, so adding UI cannot
-        // silently break the calculation.
-        const gridHeight = gridEl.offsetHeight;
-        const chrome = document.body.scrollHeight - gridHeight;
-
-        const viewport = window.visualViewport?.height || window.innerHeight;
-        const available = viewport - chrome - FIT_MARGIN;
-
-        // 8 one-pixel gaps plus the 2px border either side.
-        const forCells = available - 8 - 4;
-        const fitted = Math.floor(forCells / 9);
-
-        const size = Math.max(MIN_CELL, Math.min(maxCell, fitted));
-        document.documentElement.style.setProperty('--cell-size', `${size}px`);
-        return { size, atMax: fitted >= maxCell };
-    }
-
-    /**
-     * Fit twice.
-     *
-     * The card's max-width is derived from the cell size, so a larger board
-     * widens the card, which lets the buttons wrap into fewer rows, which frees
-     * height — the measurement feeds back into itself. One pass lands close; a
-     * second settles it.
-     */
     function fitBoardSettled() {
-        fitBoard();
-        return fitBoard();
+        if (!wrappers.length) return { size: 0, atMax: true };
+        const result = fitToViewport({
+            reset: () => document.documentElement.style.removeProperty('--cell-size'),
+            maximum: () => {
+                const cell = wrappers[0].getBoundingClientRect().width;
+                if (!cell) return 0; // Hidden board or a DOM without layout.
+                const cardStyle = getComputedStyle(document.getElementById('app'));
+                if (cardStyle.display !== 'grid') return cell;
+                // At the narrow edge of the split layout, CSS can give the
+                // first track less room than the grid's intrinsic width.
+                const column = parseFloat(cardStyle.gridTemplateColumns);
+                return Number.isFinite(column) ? Math.min(cell, (column - 12) / 9) : cell;
+            },
+            setSize: size => document.documentElement.style.setProperty('--cell-size', `${size}px`),
+            minimum: MIN_CELL,
+        });
+        positionPausePanel();
+        return result;
     }
 
     /** Coalesce bursts of resize events into one measurement per frame. */
@@ -3345,20 +3317,27 @@ function loadBank() {
     const sharedPuzzle = gameState ? null : parseShareLink(window.location.search);
     sharedPuzzleLoaded = gameState !== null || sharedPuzzle !== null || sizedLinkRequested;
 
-    switchMode('play');
-    if (gameState) applyGameLink(gameState);
-    else applySharedPuzzle(sharedPuzzle);
-    if (sizedLinkRequested) {
-        if (validSizedLink) { boardSize.value = linkedSize; changeBoardSize(linkedSize, linkedBoard, linkedRule); }
-        else setStatus('This puzzle link has invalid or unsupported board rules.', 'error');
+    async function initializeView() {
+        switchMode('play');
+        try {
+            if (gameState) applyGameLink(gameState);
+            else await applySharedPuzzle(sharedPuzzle);
+            if (sizedLinkRequested) {
+                if (validSizedLink) { boardSize.value = linkedSize; await changeBoardSize(linkedSize, linkedBoard, linkedRule); }
+                else setStatus('This puzzle link has invalid or unsupported board rules.', 'error');
+            }
+        } catch {
+            setStatus('Could not load this puzzle. Choose a puzzle or try the link again.', 'error');
+        } finally {
+            revealLeaderboardUi();
+            refreshLayout();
+            document.getElementById('app').setAttribute('aria-busy', 'false');
+            document.getElementById('loading-status').remove();
+            document.body.classList.remove('is-loading');
+        }
     }
-    revealLeaderboardUi();
-
-    // Once the real layout exists, size the board to whatever room is left.
-    refreshLayout();
-    document.getElementById('app').setAttribute('aria-busy', 'false');
-    document.getElementById('loading-status').remove();
-    document.body.classList.remove('is-loading');
+    void initializeView();
+    document.fonts?.ready.then(scheduleFit);
 
     // ── Offline support ────────────────────────────────────────────────
     // Registered only over http(s): service workers are unavailable on file://,

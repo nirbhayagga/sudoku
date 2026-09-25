@@ -1,30 +1,15 @@
-/**
- * Shared accessibility behaviour for the app's overlays.
- *
- * Every dialog goes through here so they all behave alike: Escape closes, Tab
- * is confined to the dialog, focus moves in on open and returns to whatever
- * opened it, and the page behind is hidden from assistive technology. Without
- * the trap, Tab walks into the grid behind the overlay — invisible to a sighted
- * user and incoherent to a screen reader.
- *
- * The overlays must be siblings of the hidden regions, never descendants, or
- * focus would end up inside an aria-hidden subtree.
- */
+/** Shared dialog focus, background isolation and scroll preservation. */
+const FOCUSABLE = 'a[href], button, input, select, textarea, summary, [tabindex]:not([tabindex="-1"])';
 
-const FOCUSABLE = 'a[href], button, input, select, textarea, [tabindex]:not([tabindex="-1"])';
-
-/**
- * Visible in the sense that matters for focus.
- *
- * Deliberately checks `hidden` and inline `display:none` up the ancestor chain rather than
- * offsetParent or getClientRects: that is how this app hides things (the win
- * screen's submit block, for one), and it works without layout — which jsdom
- * does not have, so the usual checks would report everything as hidden there.
- */
 function isFocusVisible(el) {
-    if (el.disabled || el.hidden) return false;
+    if (el.disabled || el.hidden || el.tabIndex < 0) return false;
     for (let node = el; node && node !== document.body; node = node.parentElement) {
-        if (node.hidden || (node.style && node.style.display === 'none')) return false;
+        const style = window.getComputedStyle(node);
+        if (node.hidden || node.inert || style.display === 'none' || style.visibility === 'hidden') return false;
+        if (node.matches('details:not([open])')) {
+            const summary = node.querySelector(':scope > summary');
+            if (!summary?.contains(el)) return false;
+        }
     }
     return true;
 }
@@ -33,79 +18,64 @@ function focusableIn(root) {
     return [...root.querySelectorAll(FOCUSABLE)].filter(isFocusVisible);
 }
 
-/**
- * @param {Element[]} pageRegions Regions to hide from assistive tech while a
- *   dialog is open.
- */
-export function createDialogs(pageRegions = [], { onOpen = () => {} } = {}) {
+export function createDialogs(pageRegions = [], { onOpen = () => {}, onClosed = () => {} } = {}) {
     let active = null;
 
     function open(overlay, { initialFocus, onClose = () => {} } = {}) {
-        if (active && active.overlay !== overlay) close(active.overlay);
-
+        if (active?.overlay === overlay) return;
+        if (active) close(active.overlay);
         onOpen();
-        active = { overlay, returnFocusTo: document.activeElement, onClose };
+        const scroll = { x: window.scrollX, y: window.scrollY, top: document.body.style.top };
+        const regions = pageRegions.map(region => ({ region, aria: region.getAttribute('aria-hidden'), inert: region.inert }));
+        active = { overlay, returnFocusTo: document.activeElement, onClose, scroll, regions };
+        // Fixed positioning also prevents background touch scrolling on iOS.
+        document.body.style.top = `-${scroll.y}px`;
+        document.body.classList.add('dialog-open');
         overlay.classList.add('active');
-        for (const region of pageRegions) region.setAttribute('aria-hidden', 'true');
-
+        for (const { region } of regions) { region.inert = true; region.setAttribute('aria-hidden', 'true'); }
+        overlay.querySelector('.modal-body')?.scrollTo?.(0, 0);
         const target = initialFocus || focusableIn(overlay)[0];
-        if (target) target.focus();
+        target?.focus({ preventScroll: true });
     }
 
     function close(overlay) {
         overlay.classList.remove('active');
-        for (const region of pageRegions) region.removeAttribute('aria-hidden');
-
-        if (active && active.overlay === overlay) {
-            const { returnFocusTo, onClose } = active;
-            active = null;
-            onClose();
-            // Put focus back where it came from, rather than dropping a
-            // keyboard user at the top of the document.
-            if (returnFocusTo && document.contains(returnFocusTo) && isFocusVisible(returnFocusTo)) {
-                returnFocusTo.focus();
-            }
+        if (active?.overlay !== overlay) return;
+        const { returnFocusTo, onClose, scroll, regions } = active;
+        active = null;
+        for (const { region, aria, inert } of regions) {
+            region.inert = inert;
+            if (aria === null) region.removeAttribute('aria-hidden');
+            else region.setAttribute('aria-hidden', aria);
         }
+        document.body.classList.remove('dialog-open');
+        document.body.style.top = scroll.top;
+        window.scrollTo(scroll.x, scroll.y);
+        onClose();
+        if (returnFocusTo && document.contains(returnFocusTo) && isFocusVisible(returnFocusTo)) {
+            returnFocusTo.focus({ preventScroll: true });
+        }
+        onClosed();
     }
-
-    const isOpen = () => active !== null;
 
     function handleKeydown(e) {
         if (!active) return;
-
         if (e.key === 'Escape') {
             e.preventDefault();
-            // Close the dialog before board-level Escape can cancel a preview
-            // or deselect a cell. Capture keeps focus restoration predictable.
             e.stopPropagation();
             close(active.overlay);
-            return;
-        }
-
-        if (e.key !== 'Tab') return;
-
-        const focusable = focusableIn(active.overlay);
-        if (focusable.length === 0) {
+        } else if (e.key === 'Tab') {
+            // Own the whole cycle: native tabbing can leave a clipped dialog,
+            // and closed details must not contribute invisible endpoints.
+            const items = focusableIn(active.overlay);
             e.preventDefault();
-            return;
-        }
-
-        const first = focusable[0];
-        const last = focusable[focusable.length - 1];
-        const current = document.activeElement;
-        const escaped = !active.overlay.contains(current);
-
-        // Wrap at both ends, and pull focus back in if it got out.
-        if (e.shiftKey && (current === first || escaped)) {
-            e.preventDefault();
-            last.focus();
-        } else if (!e.shiftKey && (current === last || escaped)) {
-            e.preventDefault();
-            first.focus();
+            if (!items.length) return;
+            const index = items.indexOf(document.activeElement);
+            const next = index < 0 ? (e.shiftKey ? items.length - 1 : 0)
+                : (index + (e.shiftKey ? -1 : 1) + items.length) % items.length;
+            items[next].focus();
         }
     }
-
     document.addEventListener('keydown', handleKeydown, true);
-
-    return { open, close, isOpen };
+    return { open, close, isOpen: () => active !== null };
 }

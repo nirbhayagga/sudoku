@@ -6,7 +6,7 @@ remain unchanged from v1.2.
 
 ## Progression
 
-Open **Progression and practice → Continue progression** in 9×9 Play. The path
+Open **Progression → Continue progression** in 9×9 Play. The path
 starts at Easy 1 and follows the ordered bank through Nightmare. Completing a
 puzzle records its content identity once. **Next progression puzzle** offers the
 next unfinished challenge; no date or completion automatically replaces a board.
@@ -14,7 +14,7 @@ Daily, random games, imports and ordinary numbered games do not advance this pat
 Replay any completed board using its difficulty and level.
 
 4×4, 6×6, Diagonal and Hyper have independent progression paths in their own
-Progression disclosure. Their ordinary completion totals include other bank
+**Game setup → Progression** section. Their ordinary completion totals include other bank
 games; the separate progression total includes only progression games.
 
 The active game remembers whether it belongs to progression. Undo/recompletion
@@ -26,7 +26,7 @@ link includes the current activity, not the complete progression history.
 
 ## Technique practice
 
-Choose **Practise a technique** in 9×9 Play. Practice pauses the active game and
+Choose **Practice** beside Play/Solver. Practice pauses the active game and
 opens a separate lesson, with no changes to game statistics or progression.
 The initial set contains **56 positions across 14 techniques**, four per technique.
 They come from our own bank and are reconstructed through verified deductions.

@@ -46,6 +46,7 @@ test('imports, completes, exports, shares and undoes a small puzzle', async ({pa
     await (await downloaded).saveAs(`e2e-results/small-${info.project.name}.png`);
     await page.locator('#small-share').click();
     const link=await page.locator('#small-text').inputValue(); expect(new URL(link).searchParams.get('p')).toBe(p);
+    await page.locator('[data-tool="print"]').click();
     await page.locator('#small-print-source').selectOption('consecutive');
     await page.locator('#small-print-unit').selectOption('pages');
     await page.locator('#small-print-count').fill('2'); await page.locator('#small-per-page').selectOption('2');
@@ -82,6 +83,7 @@ test('small boards remain reachable on narrow and landscape screens', async ({pa
 
 test('the last challenge cannot be restarted through Next and backups use board identity', async ({page}) => {
     await page.goto('/'); await page.locator('#board-size').selectOption('4');
+    await page.locator('#small-setup-toggle').click();
     await page.locator('#small-level').fill(String(SMALL_BANK[4].length));
     await page.locator('#small-start').click();
     await expect(page.locator('#small-next')).toBeDisabled();
@@ -90,6 +92,7 @@ test('the last challenge cannot be restarted through Next and backups use board 
     // A backup can carry an old display level; the puzzle itself is authoritative.
     if (!saved) throw new Error('Expected a saved small game');
     saved.level = 1; saved.id = 'wrong';
+    await page.locator('[data-tool="backup"]').click();
     await page.locator('#small-restore').setInputFiles({name:'game.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(saved))});
     await expect(page.locator('#small-identity')).toContainText(`Challenge ${SMALL_BANK[4].length}`);
 });

@@ -77,6 +77,7 @@ that every same-origin response is valid application content.
 | `progression.js` | Independent paths identified by puzzle content, with explicit next selection |
 | `practice.js`, `practice-bank.js`, `practice-app.js` | Reconstructed verified technique lessons and lazy practice UI |
 | `geometry.js`, `sized-solver.js`, `sized-generation.js` | Shared size/rule definitions, generic solver and reproducible generation |
+| `layout.js` | Bounded fitting against natural page height, independent of transitions and viewport minimums |
 | `small-app.js`, `small-state.js`, `sized-export.js` | Small/variant gameplay, validated state, interchange and print |
 | `variant-bank.js`, `variant-tools.js` | Curated Diagonal/Hyper collections and rule-preserving equivalence checks |
 | `sw-template.js`, `vite.config.js` | Offline strategy and generated builds |
@@ -163,9 +164,10 @@ and consecutive ranges before bank selection. Answer pages are additional;
 requesting a page total means that many full puzzle pages, never a truncated range.
 Printing does not advance played levels, game progression, or statistics.
 
-Startup shows a loading status while the grid is built and fitted, then reveals
-the measured layout. It does not wait for the optional leaderboard or a bank
-request to finish. Keep touch cells free of programmatic focus during clearing;
+Startup shows a stable loading shell until the requested initial puzzle/view is
+ready, then reveals the fitted layout. Shared bank and daily links await their
+bank load; ordinary startup does not fetch the bank. The optional leaderboard
+never delays startup. Fonts settling and viewport changes schedule another fit. Keep touch cells free of programmatic focus during clearing;
 desktop focus uses `preventScroll` so setup does not move the viewport.
 
 
@@ -256,3 +258,25 @@ The [activities guide](activities.md) covers practice/variant curation and the
 offline correctness benchmark for newly added or imported puzzles. Build tests
 cap the initial JavaScript at 32 KiB gzip and all assets plus the service worker
 at 285 KiB, including fonts, banks, practice and the analysis worker.
+
+## Visual regression coverage
+
+`e2e/ui-polish.spec.js` models nonzero safe-area insets on narrow phones, compares
+normal/reduced-motion board sizing, delays the shared bank load, checks resume
+placement and dialog focus/scroll behavior, and samples the painted select
+background in every theme. CSS/computed contrast alone cannot verify native
+WebKit control painting. Dialogs retain a fixed header, scroll their body, make
+background regions inert, and restore the previous page scroll position.
+
+`fitToViewport` searches a bounded size range against natural content height.
+The measuring class temporarily removes the body's viewport minimum and
+transitions. Keep card widths independent of the cell size so wrapping does not
+oscillate during fitting. In the split desktop layout, cap the board against
+the actual first grid column as well as available height; a fitted page can
+still have overlapping columns even when it has no document overflow. Reduced Motion disables transitions rather than giving
+every element a nonzero transition duration. Small boards use the same fitter
+while their setup and tools are closed; expanded tools may scroll normally.
+
+The inset tests substitute CSS environment values in Linux browsers. They are
+not real standalone iOS tests. Check cold/warm PWA launch, update, foreground,
+rotation, native keyboard and safe areas on an installed iPhone before release.
