@@ -15,7 +15,8 @@ npm run test:coverage
 ```
 
 `check` runs lint, unit/DOM tests, and both builds. The full-bank option checks
-all 5,500 puzzles instead of a deterministic sample. Browser tests use production
+all 5,692 classic 9×9 puzzles instead of a deterministic sample; small-bank tests
+also check all 156 small boards. Browser tests use production
 output; installed browsers alone do not add coverage—projects in
 `playwright.config.js` select which engines and flows run. Emulation is not a real
 iPhone test. Contrast checks cover the states exercised, not a full accessibility

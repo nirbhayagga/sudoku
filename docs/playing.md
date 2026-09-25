@@ -154,8 +154,8 @@ if automatic copying fails, your source save remains until you confirm copying.
 
 ## Bank revision 2 (v1.1.0)
 
-All 5,500 boards now follow human-technique tiers, with increasing levels inside
-each tier. Nightmare has 192 boards; level 192 is highest under this policy.
+In v1.1.0, all 5,500 boards were assigned human-technique tiers, with increasing
+levels inside each tier. That release had 192 Nightmare boards.
 Easy uses singles, Medium locked candidates, Hard subsets, Expert wings and
 uniqueness, Evil static chains, and Nightmare dynamic chains.
 
@@ -165,3 +165,16 @@ remain. Previous storage is left under its old keys; there is no automatic
 conversion or old-backup restore. Older numbered/daily/handoff links display a
 bank-change notice rather than opening a different board. Raw grid links still
 work. New shared bank links carry a stable board identity.
+
+## More classic challenges (v1.2.0)
+
+The 9×9 bank now has 5,692 puzzles, including 384 Expert and 256 Nightmare.
+Nightmare 256 is highest under the app's observed-path policy. Added puzzles are
+inserted in technique order, so a display level may move. Content-ID share links,
+saved games and self-hosted stored scores still follow the same board. Daily uses
+its original pool, preserving existing dates. v1.1 stats and backups remain usable.
+
+Use the board-size selector for 4×4 or 6×6. Their controls include notes, hints,
+generation, imports, exports and bulk printing; see [small boards](small-boards.md).
+Full progression, technique practice and selected rule variants are planned for
+v1.3; small boards already remember completions and offer Next challenge.

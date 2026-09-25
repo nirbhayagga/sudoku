@@ -1,7 +1,8 @@
 # Sudoku
 
-Browser-based Sudoku player and solver: 5,500 classic 9×9 puzzles, six difficulty tiers,
-ten themes, hints, pencil marks, daily puzzles, and offline play after caching.
+Browser-based Sudoku player and solver: 5,692 classic 9×9 puzzles, plus 36 minimal
+4×4 puzzle classes and 120 curated 6×6 challenges. Six 9×9 difficulty tiers, ten
+themes, hints, pencil marks, daily puzzles, and offline play after caching.
 Vanilla JavaScript with **zero frontend runtime package dependencies**. The
 optional leaderboard uses Express and CORS.
 
@@ -70,28 +71,35 @@ See [controls and sharing](docs/playing.md) for shortcuts and import formats.
 
 ## Difficulty and download size
 
-All **5,500 puzzles** are retained and reclassified using verified human-technique
-paths. Every tier is ordered by technique, proof complexity and deduction workload.
+All original **5,500 puzzles** are retained, with **192 new Expert and Nightmare
+puzzles** added in v1.2. Every 9×9 tier is ordered by technique, proof complexity
+and deduction workload. Small-board ratings are specific to their size; see
+[small classic boards](docs/small-boards.md).
 
 | Tier | Puzzles | Observed solving path |
 |---|---:|---|
 | Easy | 1,493 | Naked and hidden singles |
 | Medium | 1,570 | Locked candidates: pointing and claiming |
 | Hard | 997 | Naked and hidden subsets |
-| Expert | 256 | Wings, fish and uniqueness patterns |
+| Expert | 384 | Wings, fish and uniqueness patterns |
 | Evil | 992 | Static forcing chains |
-| Nightmare | 192 | Dynamic chains and forcing convergence |
+| Nightmare | 256 | Dynamic chains and forcing convergence |
 
-Choose a higher level for a harder path under this policy. **Nightmare 192** is
+Choose a higher level for a harder path under this policy. **Nightmare 256** is
 the highest-ranked current board; this is an engine-defined ordering, not a
 promise that every person will find it hardest. Clue count is not the ranking.
 See [bank revision 2](docs/bank-revision-2.md) for the exact order, transformation
-checks, boundaries and repeatable commands. The [independent validation](docs/bank-revision-2-validation.md) includes min/median/P90/max SE measurements for the new tiers. Content identities survive display
-reordering; the revision intentionally resets older numbered references and bank
-progress. No puzzle has been removed.
+checks, boundaries and repeatable commands for the v1.1 collection. The
+[v1.2 expansion](docs/bank-expansion-1.2.md) records the additions and reproducible
+selection; [current measurements](docs/bank-expansion-1.2-validation.md) show
+min/median/P90/max for every expanded tier. The [independent validation](docs/bank-revision-2-validation.md) includes
+min/median/P90/max SE measurements for the v1.1 tiers, not the new additions.
+Content identities survive display reordering. v1.2 preserves v1.1 saves, stats
+and the Daily pool; display levels can move. No puzzle has been removed.
 
-The [v4 assessment](docs/puzzle-assessment-v4.md) explains all 5,500 boards with
-checked deductions. Browser hints and imported-puzzle assessment share its rules
+The [v4 assessment](docs/puzzle-assessment-v4.md) explains the original 5,500 boards
+with checked deductions; the same engine verifies every added board. Browser
+hints and imported-puzzle assessment share its rules
 with smaller work budgets, so an interactive assessment can reach its limit.
 Candidate maps and proof details are available in the free hint preview. The
 seeded generator retains its v2 targeting policy for reproducibility.
@@ -105,8 +113,8 @@ The [engine review](docs/sudoku-explainer-review.md) and
 and future sizes, variants and practice features.
 
 The initial JavaScript entry stays below **30 KiB gzipped**. The puzzle bank and
-analysis worker are loaded on demand; the bank is about 118 kB gzipped. Tests cap
-all compressed assets plus the service worker at **265 KiB**, including the bundled
+analysis worker are loaded on demand; the bank is about 123 kB gzipped. Tests cap
+all compressed assets plus the service worker at **270 KiB**, including the bundled
 fonts. The service worker caches optional chunks and the bank too, so the complete
 first visit costs more than the initial entry script. HTML and icons add to that
 transfer; actual compression depends on the server.

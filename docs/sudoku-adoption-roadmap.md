@@ -244,9 +244,9 @@ ships the completed gameplay/reasoning improvements. Compatibility conversion of
 old levels and scores is intentionally omitted; this revision starts fresh bank
 progress and uses content identities for new shares.
 
-v1.2.0 will combine the prepared 36-class 4×4 collection and 120 curated 6×6
-challenges with targeted 9×9 additions. Expert patterns and the dynamic-chain end
-of Nightmare are the first expansion candidates. Additions must pass uniqueness,
+v1.2.0 combines the 36-class 4×4 collection and 120 curated 6×6 challenges with
+128 new Expert and 64 new Nightmare puzzles, selected from 4,000 seeded 9×9
+candidates. See [the expansion report](bank-expansion-1.2.md). Additions must pass uniqueness,
 identity/equivalence filtering and the same offline grading policy; no quota is
 filled with transformed duplicates or unresolved boards labelled hardest.
 16×16 remains a separate future pilot. Self-paced progression, technique practice
