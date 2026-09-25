@@ -25,7 +25,7 @@ test('downloads a backup, rejects invalid JSON, then restores settings and the s
     const backup = JSON.parse(bytes.toString());
     expect(backup).toMatchObject({ format: 'sudoku-backup', version: 1, settings: { theme: 'forest' } });
     expect(backup.savedGame).toBeTruthy();
-    const originalSave = await page.evaluate(() => localStorage.getItem('sudoku_saved_game_v2'));
+    const originalSave = await page.evaluate(() => JSON.parse(localStorage.getItem('sudoku_saved_game_v2')));
 
     async function upload(buffer, name) {
         page.once('dialog', dialog => dialog.accept());
@@ -35,7 +35,11 @@ test('downloads a backup, rejects invalid JSON, then restores settings and the s
     }
     await upload(Buffer.from('{ broken JSON'), 'broken.json');
     await expect(page.locator('#backup-status')).toContainText('Invalid backup JSON');
-    expect(await page.evaluate(() => localStorage.getItem('sudoku_saved_game_v2'))).toBe(originalSave);
+    const afterInvalidImport = await page.evaluate(() => JSON.parse(localStorage.getItem('sudoku_saved_game_v2')));
+    // The pending autosave or file chooser's visibility change may refresh the
+    // timestamp. Invalid input must preserve every field of the paused game.
+    expect(afterInvalidImport).toEqual({ ...originalSave, timestamp: expect.any(Number) });
+    expect(afterInvalidImport.timestamp).toBeGreaterThanOrEqual(originalSave.timestamp);
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'forest');
 
     await page.locator('#btn-stats-close').click();

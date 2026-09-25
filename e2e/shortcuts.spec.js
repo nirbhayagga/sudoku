@@ -6,6 +6,9 @@ test('shortcut visibility follows the device and preserves an explicit choice', 
     await expect(shortcuts).toHaveJSProperty('open', !isMobile);
     await shortcuts.locator('summary').click();
     await expect(shortcuts).toHaveJSProperty('open', isMobile);
+    // Native details queues its toggle event after changing the open property.
+    await expect.poll(() => page.evaluate(() => localStorage.getItem('sudoku-shortcuts-open')))
+        .toBe(JSON.stringify(isMobile));
     await page.reload();
     await expect(shortcuts).toHaveJSProperty('open', isMobile);
 });
