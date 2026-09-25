@@ -3,13 +3,12 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { PUZZLES } from '../puzzle-bank.js';
 
 describe('enhanced assessment CLI', () => {
     it('reproduces arbitrary-puzzle reports, transformations and provenance without overwriting', () => {
         const dir=mkdtempSync(join(tmpdir(),'sudoku-v4-'));
         try {
-            const input=join(dir,'puzzles.txt');writeFileSync(input,PUZZLES.expert[444].puzzle+'\n');
+            const input=join(dir,'puzzles.txt');writeFileSync(input,'000070000010400372600005000006000000000030000200000408300090054050000007802041060'+'\n');
             for(const name of ['one','two']) execFileSync(process.execPath,['scripts/assess-v4.js',`--file=${input}`,'--transforms',`--out=${join(dir,name+'.json')}`],{stdio:'pipe'});
             const a=readFileSync(join(dir,'one.json'),'utf8');expect(a).toBe(readFileSync(join(dir,'two.json'),'utf8'));
             const report=JSON.parse(a);expect(report.records[0].human.family).toBe('uniqueness');expect(report.records[0].transformations).toHaveLength(3);

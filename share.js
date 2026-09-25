@@ -20,12 +20,17 @@
  * link's (`d`, `p`, `daily`) so parseShareLink never mistakes one for a bank
  * puzzle; callers check for a game link first.
  */
-import { BANK_SIZES, isDifficulty, isGameDifficulty } from './difficulties.js';
+import { BANK_VERSION, BANK_SIZES, isDifficulty, isGameDifficulty } from './difficulties.js';
+import { isPuzzleId } from './puzzle-id.js';
 import { isCalendarDay, validateGameState } from './storage.js';
 
 /** Parse a shared puzzle out of a URL. Returns null when there is nothing to load. */
 export function parseShareLink(search) {
     const params = new URLSearchParams(search || '');
+
+    const id = params.get('id');
+    if (id !== null) return isPuzzleId(id) ? { kind: 'identity', id } : { kind: 'unavailable' };
+    if (['d', 'daily', 'g'].some(k => params.has(k)) && params.get('bank') !== String(BANK_VERSION)) return { kind: 'outdated' };
 
     const daily = params.get('daily');
     if (isCalendarDay(daily)) {
@@ -52,10 +57,15 @@ export function parseShareLink(search) {
 }
 
 /** Build a link for a bank puzzle. */
-export function bankLink(origin, difficulty, level) {
+export function bankLink(origin, difficulty, level, id = null) {
     if (!isDifficulty(difficulty) || (level != null && (!Number.isInteger(level) || level < 1 || level > BANK_SIZES[difficulty]))) throw new TypeError('Invalid bank puzzle.');
     const url = new URL(origin);
     url.search = '';
+    url.searchParams.set('bank', String(BANK_VERSION));
+    if (id !== null) {
+        if (!isPuzzleId(id)) throw new TypeError('Invalid puzzle identity.');
+        url.searchParams.set('id', id);
+    }
     url.searchParams.set('d', difficulty);
     if (level) url.searchParams.set('level', String(level));
     return url.toString();
@@ -76,6 +86,7 @@ export function dailyLink(origin, dayKey) {
     if (!isCalendarDay(dayKey)) throw new TypeError('Invalid calendar day.');
     const url = new URL(origin);
     url.search = '';
+    url.searchParams.set('bank', String(BANK_VERSION));
     url.searchParams.set('daily', dayKey);
     return url.toString();
 }
@@ -144,6 +155,7 @@ export function gameLink(origin, state) {
     const set = (key, value) => url.searchParams.set(key, String(value));
 
     set('g', GAME_LINK_VERSION);
+    set('bank', BANK_VERSION);
     set('b', state.puzzle);
     set('v', state.userValues);
 
@@ -175,7 +187,7 @@ export function gameLink(origin, state) {
  */
 export function parseGameLink(search) {
     const params = new URLSearchParams(search || '');
-    if (params.get('g') !== GAME_LINK_VERSION) return null;
+    if (params.get('g') !== GAME_LINK_VERSION || params.get('bank') !== String(BANK_VERSION)) return null;
     if ([...params.keys()].some(key => params.getAll(key).length !== 1)) return null;
     for (const key of ['a', 'u']) {
         if (params.has(key) && !['0', '1'].includes(params.get(key))) return null;

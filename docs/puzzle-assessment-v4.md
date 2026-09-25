@@ -1,5 +1,8 @@
 # Human assessment v4
 
+> Historical assessment of the bank before revision 2. Level references below use that order.
+> See [the current bank definitions](bank-revision-2.md); the original measurements are preserved.
+
 **Review report only: no bank reorder or tier changes.**
 
 Explained 5500/5500; other statuses retain no difficulty rank.

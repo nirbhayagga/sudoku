@@ -1,5 +1,8 @@
 # Repeatable difficulty assessment
 
+> Historical assessment of the bank before revision 2. Level references below use that order.
+> See [the current bank definitions](bank-revision-2.md); the original measurements are preserved.
+
 **Preserved v1 assessment guide.** The current browser and generation paths now
 use the [shared v2 engine](puzzle-assessment-v2.md). The maintenance CLI is repaired.
 The v1 measurements and reproduction commands below remain unchanged as historical

@@ -15,6 +15,8 @@
  *   2. file:// — a local dev leaderboard on the default port.
  *   3. Same origin — the Docker setup, where nginx proxies /api/.
  */
+import { BANK_VERSION } from './difficulties.js';
+
 export const API_BASE = (() => {
     if (typeof window.SUDOKU_API_BASE === 'string') {
         return window.SUDOKU_API_BASE.replace(/\/$/, '');
@@ -63,7 +65,7 @@ export const isAvailable = () => available;
 export async function checkHealth() {
     try {
         const body = await requestJSON(`${API_BASE}/api/health`);
-        available = body !== null && typeof body === 'object' && !Array.isArray(body) && body.status === 'ok';
+        available = body !== null && typeof body === 'object' && !Array.isArray(body) && body.status === 'ok' && body.bankVersion === BANK_VERSION;
     } catch (e) {
         // No backend, no network, or no fetch at all (file://, jsdom).
         available = false;
@@ -82,13 +84,13 @@ export async function fetchLeaderboard(difficulty) {
 }
 
 /** Submit a score; null on failure. Success may be unranked (ranked: false, rank: null). */
-export async function submitScore({ name, difficulty, time, hints, level, mistakes, autoNotes }) {
+export async function submitScore({ name, difficulty, time, hints, level, mistakes, autoNotes, puzzleId }) {
     if (!available) return null;
     try {
         const body = await requestJSON(`${API_BASE}/api/leaderboard`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name, difficulty, time, hints, level, mistakes, autoNotes }),
+            body: JSON.stringify({ name, difficulty, time, hints, level, mistakes, autoNotes, puzzleId, bankVersion: BANK_VERSION }),
         });
         if (body?.success === true && (Number.isInteger(body.rank) && body.rank > 0
             || body.ranked === false && body.rank === null)) return body;

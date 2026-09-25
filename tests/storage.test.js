@@ -1,3 +1,4 @@
+import { BANK_SIZES } from '../difficulties.js';
 // @vitest-environment jsdom
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import * as store from '../storage.js';
@@ -13,6 +14,27 @@ const gameState = () => ({
 beforeEach(() => {
     localStorage.clear();
     vi.restoreAllMocks();
+});
+
+describe('bank revision reset', () => {
+    it('leaves previous data untouched without loading it as the new bank', () => {
+        localStorage.setItem('sudoku_saved_game', JSON.stringify(gameState()));
+        localStorage.setItem('sudoku_stats', JSON.stringify({ easy: { won: 3 } }));
+        localStorage.setItem('played_easy', '["e01"]');
+        localStorage.setItem('sudoku_daily_done', '["2026-09-24"]');
+        store.setTheme('matcha'); store.setPlayerName('Player');
+        expect(store.loadSavedGame()).toBeNull(); expect(store.getStats()).toEqual({});
+        expect(store.getPlayed('easy')).toEqual([]); expect(store.getDailyDone()).toEqual([]);
+        expect(store.getTheme()).toBe('matcha'); expect(store.getPlayerName()).toBe('Player');
+        expect(localStorage.getItem('played_easy')).toBe('["e01"]');
+    });
+    it('rejects a personal backup from the earlier bank before writing', () => {
+        store.recordStart('hard');
+        const before = store.exportBackup();
+        const old = JSON.parse(before); delete old.bankVersion;
+        expect(store.restoreBackup(JSON.stringify(old)).success).toBe(false);
+        expect(store.exportBackup()).toBe(before);
+    });
 });
 
 describe('saved game', () => {
@@ -33,7 +55,7 @@ describe('saved game', () => {
     });
 
     it('returns null rather than throwing on corrupt data', () => {
-        localStorage.setItem('sudoku_saved_game', 'not json{{{');
+        localStorage.setItem('sudoku_saved_game_v2', 'not json{{{');
         expect(store.loadSavedGame()).toBeNull();
     });
 });
@@ -76,7 +98,7 @@ describe('stats', () => {
 
     // Stats saved before the field existed have no totalMistakes.
     it('tolerates stats saved without a mistake count', () => {
-        localStorage.setItem('sudoku_stats', JSON.stringify({
+        localStorage.setItem('sudoku_stats_v2', JSON.stringify({
             easy: { started: 1, played: 1, won: 1, bestTime: 50, totalTime: 50, totalHints: 0, autoNotesGames: 0 },
         }));
         expect(store.recordWin('easy', 60, 0, false, new Date(), 1).easy.totalMistakes).toBe(1);
@@ -94,7 +116,7 @@ describe('stats', () => {
     });
 
     it('recovers from corrupt stats', () => {
-        localStorage.setItem('sudoku_stats', '{{{');
+        localStorage.setItem('sudoku_stats_v2', '{{{');
         expect(store.getStats()).toEqual({});
         expect(() => store.recordWin('easy', 10, 0)).not.toThrow();
     });
@@ -121,24 +143,24 @@ describe('preferences', () => {
 describe('played tracking', () => {
     it('starts empty and accumulates', () => {
         expect(store.getPlayed('easy')).toEqual([]);
-        store.markPlayed('easy', 'e01');
-        store.markPlayed('easy', 'e02');
-        expect(store.getPlayed('easy')).toEqual(['e01', 'e02']);
+        store.markPlayed('easy', 'p0000000000000001');
+        store.markPlayed('easy', 'p0000000000000002');
+        expect(store.getPlayed('easy')).toEqual(['p0000000000000001', 'p0000000000000002']);
     });
 
     it('keeps difficulties separate', () => {
-        store.markPlayed('easy', 'e01');
+        store.markPlayed('easy', 'p0000000000000001');
         expect(store.getPlayed('evil')).toEqual([]);
     });
 
     it('clears', () => {
-        store.markPlayed('easy', 'e01');
+        store.markPlayed('easy', 'p0000000000000001');
         store.clearPlayed('easy');
         expect(store.getPlayed('easy')).toEqual([]);
     });
 
     it('recovers if the stored value is not an array', () => {
-        localStorage.setItem('played_easy', '"nonsense"');
+        localStorage.setItem('played_v2_easy', '"nonsense"');
         expect(store.getPlayed('easy')).toEqual([]);
     });
 });
@@ -170,7 +192,7 @@ describe('when storage is unavailable', () => {
     it('never throws from a write helper', () => {
         expect(() => store.setTheme('ocean')).not.toThrow();
         expect(() => store.setPlayerName('Nirb')).not.toThrow();
-        expect(() => store.markPlayed('easy', 'e01')).not.toThrow();
+        expect(() => store.markPlayed('easy', 'p0000000000000001')).not.toThrow();
         expect(() => store.recordWin('easy', 10, 0)).not.toThrow();
     });
 });
@@ -197,7 +219,7 @@ describe('auto-notes in stats', () => {
     });
 
     it('upgrades stats saved before the field existed', () => {
-        localStorage.setItem('sudoku_stats', JSON.stringify({
+        localStorage.setItem('sudoku_stats_v2', JSON.stringify({
             easy: { played: 5, won: 5, bestTime: 90, totalTime: 600, totalHints: 2 },
         }));
         expect(store.recordWin('easy', 80, 0, true).easy.autoNotesGames).toBe(1);
@@ -226,7 +248,7 @@ describe('starts and win rate', () => {
     });
 
     it('never exceeds 100% for stats saved before starts were tracked', () => {
-        localStorage.setItem('sudoku_stats', JSON.stringify({
+        localStorage.setItem('sudoku_stats_v2', JSON.stringify({
             easy: { played: 4, won: 4, bestTime: 60, totalTime: 400, totalHints: 0 },
         }));
         store.recordWin('easy', 50, 0);
@@ -311,7 +333,7 @@ describe('untrusted personal data', () => {
         expect(isDifficulty(difficulty)).toBe(false);
         expect(store.recordStart(difficulty)).toEqual({});
         expect(store.recordWin(difficulty, 10, 0)).toEqual({});
-        expect(store.markPlayed(difficulty, 'e01')).toEqual([]);
+        expect(store.markPlayed(difficulty, 'p0000000000000001')).toEqual([]);
         store.clearPlayed(difficulty);
         expect(store.getPlayed(difficulty)).toEqual([]);
         expect(store.saveGameState({ ...gameState(), difficulty })).toBe(false);
@@ -320,7 +342,7 @@ describe('untrusted personal data', () => {
     });
 
     it('normalizes stats and drops unexpected keys without poisoning prototypes', () => {
-        localStorage.setItem('sudoku_stats', '{"__proto__":{"started":8},"constructor":{"won":9},"easy":{"won":2,"totalTime":"oops","totalHints":-4},"evil":null}');
+        localStorage.setItem('sudoku_stats_v2', '{"__proto__":{"started":8},"constructor":{"won":9},"easy":{"won":2,"totalTime":"oops","totalHints":-4},"evil":null}');
         expect(store.getStats()).toEqual({ easy: {
             started: 2, played: 0, won: 2, bestTime: null, totalTime: 0,
             totalHints: 0, totalMistakes: 0, autoNotesGames: 0,
@@ -332,12 +354,12 @@ describe('untrusted personal data', () => {
     it('normalizes malformed streaks, daily dates and played ids', () => {
         localStorage.setItem('sudoku_streak', '{"current":"oops","best":-5,"lastWin":"2026-02-30"}');
         expect(store.getStreak()).toEqual({ current: 0, best: 0, lastWin: null });
-        localStorage.setItem('sudoku_daily_done', '["2026-02-30","2024-02-29","2024-02-29",null,{}]');
+        localStorage.setItem('sudoku_daily_done_v2', '["2026-02-30","2024-02-29","2024-02-29",null,{}]');
         expect(store.getDailyDone()).toEqual(['2024-02-29']);
         expect(store.markDailyDone('2026-02-29')).toEqual(['2024-02-29']);
-        localStorage.setItem('played_easy', '["e01","e01","e500","e501","v01","__proto__",1,{}]');
-        expect(store.getPlayed('easy')).toEqual(['e01', 'e500']);
-        expect(store.markPlayed('easy', 'e01')).toEqual(['e01', 'e500']);
+        localStorage.setItem('played_v2_easy', '["p0000000000000001","p0000000000000001","p0000000000000500","e501","v01","__proto__",1,{}]');
+        expect(store.getPlayed('easy')).toEqual(['p0000000000000001', 'p0000000000000500']);
+        expect(store.markPlayed('easy', 'p0000000000000001')).toEqual(['p0000000000000001', 'p0000000000000500']);
     });
 
     it('keeps counters safe at their upper bound', () => {
@@ -361,7 +383,7 @@ describe('untrusted personal data', () => {
 
 describe('saved game validation', () => {
     const load = state => {
-        localStorage.setItem('sudoku_saved_game', JSON.stringify(state));
+        localStorage.setItem('sudoku_saved_game_v2', JSON.stringify(state));
         return store.loadSavedGame();
     };
 
@@ -417,7 +439,7 @@ describe('saved game validation', () => {
         { ...gameState(), timerSeconds: Number.MAX_SAFE_INTEGER + 1 },
         { ...gameState(), mistakes: '2' },
         { ...gameState(), autoNotes: 1 },
-        { ...gameState(), level: 501 },
+        { ...gameState(), level: BANK_SIZES.easy + 1 },
         { ...gameState(), daily: '2026-04-31' },
     ])('rejects malformed save %#', state => {
         expect(load(state)).toBeNull();
@@ -436,7 +458,7 @@ describe('personal backup API', () => {
         store.recordWin('easy', 80, 1, true, new Date(2026, 8, 19), 2);
         store.setTheme('forest');
         store.setPlayerName('Nirb');
-        store.markPlayed('easy', 'e01');
+        store.markPlayed('easy', 'p0000000000000001');
         store.markDailyDone('2026-09-19');
         store.saveGameState(gameState());
     };
@@ -456,9 +478,9 @@ describe('personal backup API', () => {
     it('can omit a game, and distinguishes omission from an explicit clear', () => {
         seed();
         const backup = store.exportBackup({ includeSavedGame: false });
-        const original = localStorage.getItem('sudoku_saved_game');
+        const original = localStorage.getItem('sudoku_saved_game_v2');
         expect(store.restoreBackup(backup).success).toBe(true);
-        expect(localStorage.getItem('sudoku_saved_game')).toBe(original);
+        expect(localStorage.getItem('sudoku_saved_game_v2')).toBe(original);
         const parsed = JSON.parse(backup);
         parsed.savedGame = null;
         parsed.settings.theme = null;
@@ -545,7 +567,7 @@ describe('personal backup API', () => {
 
     it('can recover personal data while excluding a corrupt save', () => {
         seed();
-        localStorage.setItem('sudoku_saved_game', '{}');
+        localStorage.setItem('sudoku_saved_game_v2', '{}');
         expect(() => store.exportBackup()).toThrow();
         expect(typeof store.exportBackup({ includeSavedGame: false })).toBe('string');
     });

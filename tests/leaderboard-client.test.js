@@ -18,7 +18,7 @@ afterEach(() => {
 });
 
 async function enable() {
-    fetchMock.mockResolvedValueOnce(jsonResponse({ status: 'ok' }));
+    fetchMock.mockResolvedValueOnce(jsonResponse({ status: 'ok', bankVersion: 2 }));
     expect(await client.checkHealth()).toBe(true);
     fetchMock.mockClear();
 }
@@ -30,7 +30,7 @@ describe('leaderboard client contract', () => {
         expect(fetchMock).not.toHaveBeenCalled();
     });
 
-    it.each([null, [], {}, { status: 'error' }, 'ok'])('rejects an unexpected health JSON body (%#)', async body => {
+    it.each([null, [], {}, { status: 'error' }, { status: 'ok' }, { status: 'ok', bankVersion: 1 }, 'ok'])('rejects an unexpected health JSON body (%#)', async body => {
         fetchMock.mockResolvedValue(jsonResponse(body));
         expect(await client.checkHealth()).toBe(false);
         expect(client.isAvailable()).toBe(false);
@@ -51,7 +51,7 @@ describe('leaderboard client contract', () => {
         const [url, options] = fetchMock.mock.calls[0];
         expect(url).toBe('https://sudoku.example/game/api/leaderboard');
         expect(options.method).toBe('POST');
-        expect(JSON.parse(options.body)).toEqual(score);
+        expect(JSON.parse(options.body)).toEqual({ ...score, bankVersion: 2 });
         expect(options.headers['Content-Type']).toBe('application/json');
     });
 

@@ -1,3 +1,4 @@
+import { PUZZLES } from '../puzzle-bank.js';
 import { afterEach, describe, expect, it } from 'vitest';
 import { bootApp } from './helpers/boot-app.js';
 import { SudokuSolver } from '../solver.js';
@@ -13,7 +14,7 @@ async function start(app, level = '1') {
 }
 function save(app) {
     app.window.dispatchEvent(new app.window.Event('pagehide'));
-    return JSON.parse(app.window.localStorage.getItem('sudoku_saved_game'));
+    return JSON.parse(app.window.localStorage.getItem('sudoku_saved_game_v2'));
 }
 afterEach(() => { apps.splice(0).forEach(app => app.close()); });
 
@@ -45,14 +46,14 @@ describe('audit gameplay regressions', () => {
         app.click('#btn-modal-play'); await app.tick();
         expect(save(app)).toMatchObject({ difficulty: 'imported', level: null, daily: null, puzzle: board });
         expect(app.$('#status').textContent).toContain('Imported puzzle');
-        expect(JSON.parse(app.window.localStorage.getItem('sudoku_stats')).imported.started).toBe(1);
+        expect(JSON.parse(app.window.localStorage.getItem('sudoku_stats_v2')).imported.started).toBe(1);
         app.click('#btn-fill-notes'); app.click('#btn-hint');
         expect(app.$('#status').textContent).toContain('free');
         expect(save(app).hintsUsed).toBe(0);
         app.click('#btn-hint'); const snapshot = save(app);
         expect(snapshot.hintsUsed).toBe(1);
         expect(parseGameLink(new URL(gameLink('https://example.test/', snapshot)).search)).toMatchObject({ difficulty: 'imported', puzzle: board });
-        const restored = await boot({ localStorage: { sudoku_saved_game: JSON.stringify(snapshot) } });
+        const restored = await boot({ localStorage: { sudoku_saved_game_v2: JSON.stringify(snapshot) } });
         restored.click('#btn-resume-yes'); expect(save(restored).difficulty).toBe('imported');
         const link = puzzleLink('https://example.test/', board, { play: true });
         expect(parseShareLink(new URL(link).search)).toEqual({ kind: 'puzzle', puzzle: board, play: true });
@@ -62,7 +63,7 @@ describe('audit gameplay regressions', () => {
         for (let i = 0; i < 81; i++) if (board[i] === '0') app.type(i, solution[i]);
         expect(app.$('#win-puzzle').textContent).toBe('Imported puzzle');
         expect(app.$('#win-submit').style.display).toBe('none');
-        expect(JSON.parse(app.window.localStorage.getItem('sudoku_stats')).imported.won).toBe(1);
+        expect(JSON.parse(app.window.localStorage.getItem('sudoku_stats_v2')).imported.won).toBe(1);
         app.click('#btn-stats'); expect(app.$('#stats-content').textContent).toContain('Imported');
     });
     it('rejects ambiguous imports for Play but still opens them in Solver', async () => {
@@ -124,13 +125,13 @@ describe('audit gameplay regressions', () => {
         for (let i = 0; i < 81; i++) if (board[i] === '0') app.type(i, solution[i]);
         expect(app.$('#win-puzzle').textContent).toContain('Easy · Level 1');
         expect(app.$('#btn-results').style.display).toBe('');
-        const stats = app.window.localStorage.getItem('sudoku_stats');
+        const stats = app.window.localStorage.getItem('sudoku_stats_v2');
         const result = app.$('#win-details').textContent;
         app.click('#btn-undo'); const review = save(app);
         expect(review.completion).not.toBeNull(); expect(review.userValues).not.toBe(solution);
         app.click('#btn-redo');
         expect(app.readGrid()).toBe(solution);
-        expect(app.window.localStorage.getItem('sudoku_stats')).toBe(stats);
+        expect(app.window.localStorage.getItem('sudoku_stats_v2')).toBe(stats);
         expect(app.$('#win-details').textContent).toBe(result);
         app.click('#btn-win-review');
         app.click('#btn-results');
@@ -141,12 +142,12 @@ describe('audit gameplay regressions', () => {
         app.type(edited, solution[edited] === '1' ? '2' : '1');
         app.click('#btn-undo');
         expect(app.readGrid()).toBe(solution);
-        expect(app.window.localStorage.getItem('sudoku_stats')).toBe(stats);
-        const restored = await boot({ localStorage: { sudoku_saved_game: JSON.stringify(review) } });
+        expect(app.window.localStorage.getItem('sudoku_stats_v2')).toBe(stats);
+        const restored = await boot({ localStorage: { sudoku_saved_game_v2: JSON.stringify(review) } });
         restored.click('#btn-resume-yes');
         const missing = restored.readGrid().indexOf('0'); restored.type(missing, solution[missing]);
         expect(restored.$('#win-details').textContent).toBe(result);
-        expect(JSON.parse(restored.window.localStorage.getItem('sudoku_stats') || '{}').easy?.won || 0).toBe(0);
+        expect(JSON.parse(restored.window.localStorage.getItem('sudoku_stats_v2') || '{}').easy?.won || 0).toBe(0);
     });
     it('keeps random draws random, with the current level in the status', async () => {
         const app = await boot();
@@ -167,7 +168,7 @@ describe('audit gameplay regressions', () => {
     });
     it('removes an old resume offer when a new game starts', async () => {
         const original = await boot(); await start(original); const saved = save(original);
-        const app = await boot({ localStorage: { sudoku_saved_game: JSON.stringify(saved) } });
+        const app = await boot({ localStorage: { sudoku_saved_game_v2: JSON.stringify(saved) } });
         expect(app.$('#btn-resume-yes')).not.toBeNull();
         await start(app, '2');
         expect(app.$('.resume-banner')).toBeNull();
@@ -205,7 +206,7 @@ describe('audit gameplay regressions', () => {
         expect(save(app).puzzle).toBe(board);
         const clock = app.useFakeClock(); clock.advance(5000); expect(save(app).timerSeconds).toBeGreaterThanOrEqual(5); clock.restore();
         for (let i = 0; i < 81; i++) if (board[i] === '0') app.type(i, solution[i]);
-        const stats = JSON.parse(app.window.localStorage.getItem('sudoku_stats'));
+        const stats = JSON.parse(app.window.localStorage.getItem('sudoku_stats_v2'));
         expect(stats.easy.won).toBe(2); expect(stats.easy.started).toBe(2);
     });
     it('mode switches cancel pending puzzle starts', async () => {
@@ -243,5 +244,21 @@ describe('audit gameplay regressions', () => {
         expect(app.$('#btn-update').style.display).toBe('none');
         listeners.controllerchange();
         expect(app.$('#btn-update').style.display).toBe('');
+    });
+});
+
+
+describe('reclassified puzzle links', () => {
+    it('opens the board identity even when the URL carries an unrelated level', async () => {
+        const target = PUZZLES.nightmare[0];
+        const app = await boot({ url: `http://localhost/?id=${target.id}&d=easy&level=1` });
+        await app.tick();
+        expect(app.readGrid()).toBe(target.puzzle);
+        expect(app.$('#status').textContent).toContain('Nightmare #1');
+    });
+    it('explains an old bank link without starting an unrelated game', async () => {
+        const app = await boot({ url: 'http://localhost/?d=nightmare&level=3000' });
+        expect(app.readGrid()).toBe('0'.repeat(81));
+        expect(app.$('#status').textContent).toContain('puzzle bank has changed');
     });
 });

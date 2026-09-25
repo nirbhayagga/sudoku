@@ -5,6 +5,21 @@ import { BANK_SIZES } from '../difficulties.js';
 
 const ORIGIN = 'https://sudoku.example.com/';
 
+describe('bank revision boundaries', () => {
+    it('does not silently reuse old numbered or daily links', () => {
+        for (const query of ['?d=easy&level=1', '?daily=2026-09-24', '?bank=1&d=evil&level=10', '?g=1&b=123']) {
+            expect(parseShareLink(query)).toEqual({ kind: 'outdated' });
+        }
+    });
+    it('prefers stable board identity over a stale level label', () => {
+        const id = 'p0123456789abcdef';
+        const link = bankLink(ORIGIN, 'easy', 1, id);
+        expect(parseShareLink(new URL(link).search)).toEqual({ kind: 'identity', id });
+        expect(parseShareLink(`?id=${id}&d=nightmare&level=999999`)).toEqual({ kind: 'identity', id });
+        expect(parseShareLink('?id=bad')).toEqual({ kind: 'unavailable' });
+    });
+});
+
 describe('parseShareLink', () => {
     it('returns null with no parameters', () => {
         expect(parseShareLink('')).toBeNull();
@@ -13,30 +28,30 @@ describe('parseShareLink', () => {
 
     describe('bank links', () => {
         it('reads a difficulty and level', () => {
-            expect(parseShareLink('?d=evil&level=42')).toEqual({
+            expect(parseShareLink('?bank=2&d=evil&level=42')).toEqual({
                 kind: 'bank', difficulty: 'evil', level: 42,
             });
         });
 
         it('accepts a difficulty without a level', () => {
-            expect(parseShareLink('?d=hard')).toEqual({
+            expect(parseShareLink('?bank=2&d=hard')).toEqual({
                 kind: 'bank', difficulty: 'hard', level: null,
             });
         });
 
         it('ignores a level outside the bank', () => {
-            expect(parseShareLink(`?d=easy&level=${BANK_SIZES.easy + 1}`).level).toBeNull();
-            expect(parseShareLink('?d=easy&level=0').level).toBeNull();
-            expect(parseShareLink('?d=easy&level=-5').level).toBeNull();
+            expect(parseShareLink(`?bank=2&d=easy&level=${BANK_SIZES.easy + 1}`).level).toBeNull();
+            expect(parseShareLink('?bank=2&d=easy&level=0').level).toBeNull();
+            expect(parseShareLink('?bank=2&d=easy&level=-5').level).toBeNull();
         });
 
         it('ignores a non-integer level', () => {
-            expect(parseShareLink('?d=easy&level=abc').level).toBeNull();
-            expect(parseShareLink('?d=easy&level=1.5').level).toBeNull();
+            expect(parseShareLink('?bank=2&d=easy&level=abc').level).toBeNull();
+            expect(parseShareLink('?bank=2&d=easy&level=1.5').level).toBeNull();
         });
 
         it('rejects an unknown difficulty', () => {
-            expect(parseShareLink('?d=impossible&level=1')).toBeNull();
+            expect(parseShareLink('?bank=2&d=impossible&level=1')).toBeNull();
         });
     });
 
@@ -64,29 +79,29 @@ describe('parseShareLink', () => {
 
     describe('daily links', () => {
         it('reads a date', () => {
-            expect(parseShareLink('?daily=2026-08-20')).toEqual({
+            expect(parseShareLink('?bank=2&daily=2026-08-20')).toEqual({
                 kind: 'daily', dayKey: '2026-08-20',
             });
         });
 
         it('rejects a malformed date', () => {
-            expect(parseShareLink('?daily=tomorrow')).toBeNull();
-            expect(parseShareLink('?daily=2026-8-2')).toBeNull();
+            expect(parseShareLink('?bank=2&daily=tomorrow')).toBeNull();
+            expect(parseShareLink('?bank=2&daily=2026-8-2')).toBeNull();
         });
     });
 
     it('prefers a daily link over the others', () => {
-        expect(parseShareLink('?daily=2026-08-20&d=evil&level=1').kind).toBe('daily');
+        expect(parseShareLink('?bank=2&daily=2026-08-20&d=evil&level=1').kind).toBe('daily');
     });
 });
 
 describe('link building', () => {
     it('builds a bank link', () => {
-        expect(bankLink(ORIGIN, 'evil', 42)).toBe('https://sudoku.example.com/?d=evil&level=42');
+        expect(bankLink(ORIGIN, 'evil', 42)).toBe('https://sudoku.example.com/?bank=2&d=evil&level=42');
     });
 
     it('omits a missing level', () => {
-        expect(bankLink(ORIGIN, 'hard', null)).toBe('https://sudoku.example.com/?d=hard');
+        expect(bankLink(ORIGIN, 'hard', null)).toBe('https://sudoku.example.com/?bank=2&d=hard');
     });
 
     it('builds a puzzle link', () => {
@@ -95,18 +110,18 @@ describe('link building', () => {
     });
 
     it('builds a daily link', () => {
-        expect(dailyLink(ORIGIN, '2026-08-20')).toBe('https://sudoku.example.com/?daily=2026-08-20');
+        expect(dailyLink(ORIGIN, '2026-08-20')).toBe('https://sudoku.example.com/?bank=2&daily=2026-08-20');
     });
 
     // Sharing from a page already carrying a link must not stack parameters.
     it('replaces existing query parameters', () => {
-        const from = 'https://sudoku.example.com/?d=easy&level=9';
-        expect(bankLink(from, 'evil', 3)).toBe('https://sudoku.example.com/?d=evil&level=3');
+        const from = 'https://sudoku.example.com/?bank=2&d=easy&level=9';
+        expect(bankLink(from, 'evil', 3)).toBe('https://sudoku.example.com/?bank=2&d=evil&level=3');
     });
 
     it('preserves a subpath, as GitHub Pages needs', () => {
         expect(bankLink('https://me.github.io/sudoku/', 'easy', 1))
-            .toBe('https://me.github.io/sudoku/?d=easy&level=1');
+            .toBe('https://me.github.io/sudoku/?bank=2&d=easy&level=1');
     });
 });
 
@@ -206,7 +221,7 @@ describe('game links', () => {
     });
 
     it('replaces any existing query so links cannot stack', () => {
-        const link = gameLink('https://sudoku.example.com/?d=evil&level=3', state());
+        const link = gameLink('https://sudoku.example.com/?bank=2&d=evil&level=3', state());
         expect(new URL(link).searchParams.get('d')).toBeNull();
     });
 
@@ -243,18 +258,18 @@ describe('game links', () => {
 
 describe('untrusted share inputs', () => {
     it.each(['constructor', '__proto__', 'toString'])('rejects inherited difficulty %s', difficulty => {
-        expect(parseShareLink(`?d=${difficulty}&level=1`)).toBeNull();
+        expect(parseShareLink(`?bank=2&d=${difficulty}&level=1`)).toBeNull();
         expect(() => bankLink(ORIGIN, difficulty, 1)).toThrow(TypeError);
-        expect(parseGameLink(`?g=1&x=${difficulty}&b=${'0'.repeat(81)}&v=${'0'.repeat(81)}`)).toBeNull();
+        expect(parseGameLink(`?bank=2&g=1&x=${difficulty}&b=${'0'.repeat(81)}&v=${'0'.repeat(81)}`)).toBeNull();
     });
 
     it.each(['2026-02-29', '2026-04-31', '1900-02-29', '2026-00-10', '2026-01-00', '0000-01-01'])('rejects impossible date %s', day => {
-        expect(parseShareLink(`?daily=${day}`)).toBeNull();
+        expect(parseShareLink(`?bank=2&daily=${day}`)).toBeNull();
         expect(() => dailyLink(ORIGIN, day)).toThrow(TypeError);
     });
 
     it('accepts actual leap days', () => {
-        expect(parseShareLink('?daily=2000-02-29')).toEqual({ kind: 'daily', dayKey: '2000-02-29' });
+        expect(parseShareLink('?bank=2&daily=2000-02-29')).toEqual({ kind: 'daily', dayKey: '2000-02-29' });
     });
 
     const puzzle = '530070000600195000098000060800060003400803001700020006060000280000419005000080079';

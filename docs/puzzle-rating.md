@@ -1,5 +1,8 @@
 # Puzzle rating report — September 24, 2026
 
+> Historical assessment of the bank before revision 2. Level references below use that order.
+> See [the current bank definitions](bank-revision-2.md); the original measurements are preserved.
+
 **Keep all 5,500 puzzles. Review a new rating policy before changing any level.**
 The current tiers overlap, and the current hint engine is useful evidence about
 deductions but is not yet a sufficient basis for six strict human-difficulty bands.

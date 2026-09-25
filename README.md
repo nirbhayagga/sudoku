@@ -70,50 +70,42 @@ See [controls and sharing](docs/playing.md) for shortcuts and import formats.
 
 ## Difficulty and download size
 
-Easy through Evil contain 500 puzzles each; Nightmare contains 3,000. This
-solver's search-node rating measures work beyond its constraint propagation,
-not universal human difficulty. Zero nodes means this algorithm needed no search.
+All **5,500 puzzles** are retained and reclassified using verified human-technique
+paths. Every tier is ordered by technique, proof complexity and deduction workload.
 
-| Tier | Min nodes | Median | P90 | Max | Zero-search share |
-|---|---:|---:|---:|---:|---:|
-| Easy | 0 | 0 | 0 | 1 | 99.8% |
-| Medium | 0 | 0 | 0 | 6 | 92.4% |
-| Hard | 0 | 0 | 4 | 22 | 66.4% |
-| Expert | 0 | 1 | 7 | 45 | 40% |
-| Evil | 7 | 11 | 20 | 122 | 0% |
-| Nightmare | 19 | 33 | 106 | 3262 | 0% |
+| Tier | Puzzles | Observed solving path |
+|---|---:|---|
+| Easy | 1,493 | Naked and hidden singles |
+| Medium | 1,570 | Locked candidates: pointing and claiming |
+| Hard | 997 | Naked and hidden subsets |
+| Expert | 256 | Wings, fish and uniqueness patterns |
+| Evil | 992 | Static forcing chains |
+| Nightmare | 192 | Dynamic chains and forcing convergence |
 
-Measured across the full bank on September 24, 2026; P90 uses nearest rank. Evil and Nightmare
-are ordered by increasing rating; Nightmare 3000 has the largest search-node
-rating in this bank. Easy–Expert are unordered. Released level positions are stable.
+Choose a higher level for a harder path under this policy. **Nightmare 192** is
+the highest-ranked current board; this is an engine-defined ordering, not a
+promise that every person will find it hardest. Clue count is not the ranking.
+See [bank revision 2](docs/bank-revision-2.md) for the exact order, transformation
+checks, boundaries and repeatable commands. The [independent validation](docs/bank-revision-2-validation.md) includes min/median/P90/max SE measurements for the new tiers. Content identities survive display
+reordering; the revision intentionally resets older numbered references and bank
+progress. No puzzle has been removed.
 
-The tiers overlap: Nightmare 1 rates at 19 search nodes, while Hard 82 rates at
-22 and Evil 500 at 122. Seventeen clues alone do not guarantee greater human
-difficulty. See the [technique report](docs/puzzle-rating.md) for deduction-based
-measurements and their limits; no levels have been reclassified.
-The [v4 maintenance assessment](docs/puzzle-assessment-v4.md) finishes **5,500/5,500**
-with checked deductions, including uniqueness rectangles and BUG+1, shorter-chain
-selection, opening measurements and bounded alternative paths. Its shared rules
-also power browser hints and imported-puzzle assessment with smaller work budgets.
-Candidate maps and detailed proofs are available inside the free hint preview.
-The seeded generator retains its documented v2 targeting policy for reproducibility.
-The [v4 SE comparison](docs/full-bank-se-comparison-v4.md) records an independent
-benchmark, not an interchangeable rating scale. Earlier v1–v3 reports remain available.
-The harder external benchmark explains 40/80 sampled boards; unresolved boards remain
-unranked. No levels have been reclassified.
+The [v4 assessment](docs/puzzle-assessment-v4.md) explains all 5,500 boards with
+checked deductions. Browser hints and imported-puzzle assessment share its rules
+with smaller work budgets, so an interactive assessment can reach its limit.
+Candidate maps and proof details are available in the free hint preview. The
+seeded generator retains its v2 targeting policy for reproducibility.
+The [independent SE comparison](docs/full-bank-se-comparison-v4.md) benchmarks
+technique bands; its scores are not interchangeable with ours. Earlier reports
+remain available with their original level references. The harder external
+benchmark explains 40/80 sampled boards; unresolved boards remain unranked.
 
-The separate [persistent-candidate assessment](docs/puzzle-assessment-v1.md)
-retains eliminations across steps and includes representative boards for review.
-Its [reproduction guide](docs/difficulty-assessment.md) preserves the earlier method
-and explains why unresolved puzzles remain unranked.
-The [engine and feature review](docs/sudoku-explainer-review.md) compares
-SudokuExplainer with this project, records the implemented 9×9 improvements,
-and separates the deferred board-size and variant work.
-The [broader adoption review](docs/sudoku-adoption-roadmap.md) compares other Sudoku
-projects, SE's size builds, rating features, and possible future improvements.
+The [engine review](docs/sudoku-explainer-review.md) and
+[adoption roadmap](docs/sudoku-adoption-roadmap.md) describe implemented techniques
+and future sizes, variants and practice features.
 
 The initial JavaScript entry stays below **30 KiB gzipped**. The puzzle bank and
-analysis worker are loaded on demand; the bank is about 115 kB gzipped. Tests cap
+analysis worker are loaded on demand; the bank is about 118 kB gzipped. Tests cap
 all compressed assets plus the service worker at **265 KiB**, including the bundled
 fonts. The service worker caches optional chunks and the bank too, so the complete
 first visit costs more than the initial entry script. HTML and icons add to that
@@ -141,8 +133,9 @@ availability. The disk build does not use a service worker.
 ## Credits and license
 
 The solving engine follows Peter Norvig's constraint-propagation approach.
-Nightmare draws from Gordon Royle's published 49,158-puzzle 17-clue catalogue;
-imports are checked for unique solvability.
+The bank includes 3,000 puzzles from Gordon Royle's published 49,158-puzzle
+17-clue catalogue, now distributed across technique tiers. Imports are checked
+for unique solvability.
 
 Application code is [MIT licensed](LICENSE). Bundled fonts use SIL OFL 1.1;
 see [third-party notices](THIRD_PARTY_NOTICES.md) and [full font licenses](public/licenses/).

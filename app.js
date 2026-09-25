@@ -8,6 +8,7 @@ import { SudokuSolver } from './solver.js';
 import { SudokuGenerator } from './generator.js';
 import { DIFFICULTY_LABELS, GAME_LABELS, BANK_SIZES, isDifficulty } from './difficulties.js';
 import { dailyPuzzle, formatDay } from './daily.js';
+import { puzzleId } from './puzzle-id.js';
 import { parseShareLink, bankLink, puzzleLink, gameLink, parseGameLink, copyToClipboard } from './share.js';
 import { candidatesFor, candidateGrid, peersOf, cellName, findNakedSingle, findHiddenSingle } from './techniques.js';
 import { formatTime, escapeHtml, formatPuzzle, parsePuzzleText } from './format.js';
@@ -1578,7 +1579,7 @@ function loadBank() {
         let link;
 
         if (mode === 'play' && currentLevel) {
-            link = bankLink(window.location.href, currentDifficulty, currentLevel);
+            link = bankLink(window.location.href, currentDifficulty, currentLevel, puzzleId(currentPuzzle));
         } else if (board !== '0'.repeat(81)) {
             link = puzzleLink(window.location.href, board, { play: mode === 'play' && currentDifficulty === 'imported' });
         } else {
@@ -1630,6 +1631,20 @@ function loadBank() {
     async function applySharedPuzzle(shared) {
         if (!shared) return;
 
+        if (shared.kind === 'outdated' || shared.kind === 'unavailable') {
+            setStatus(shared.kind === 'outdated' ? 'The puzzle bank has changed. Choose a new level or import the original grid.' : 'That puzzle link is unavailable.', 'error');
+            return;
+        }
+        if (shared.kind === 'identity') {
+            const request = gameRequest;
+            try {
+                const { ALL_PUZZLES } = await loadBank();
+                if (request !== gameRequest || mode !== 'play') return;
+                const match = ALL_PUZZLES.find(p => p.id === shared.id);
+                if (!match) { setStatus('That puzzle is not in this bank.', 'error'); return; }
+                shared = { kind: 'bank', difficulty: match.difficulty, level: match.level };
+            } catch { setStatus('Could not load puzzles — try again', 'error'); return; }
+        }
         if (shared.kind === 'daily') {
             startDaily(shared.dayKey);
             return;
@@ -2528,6 +2543,7 @@ function loadBank() {
         if (levelInput && levelMaxDisplay) {
             const max = BANK_SIZES[diff] || 500;
             levelInput.max = max;
+            levelInput.title = `Enter 1–${max}, or leave blank for a random level`;
             levelMaxDisplay.textContent = '/ ' + max;
             // Clear current selection on diff change unless empty
             levelInput.value = '';
@@ -3028,6 +3044,7 @@ function loadBank() {
                 hints: resultSnapshot.hints,
                 mistakes: resultSnapshot.mistakes,
                 level: currentLevel,
+                puzzleId: currentLevel ? puzzleId(currentPuzzle) : null,
                 autoNotes: resultSnapshot.autoNotes,
             });
 

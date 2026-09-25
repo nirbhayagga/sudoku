@@ -67,7 +67,7 @@ describe('shared proof records and assessment', () => {
     it('replays a full persistent path and audits every elimination across varied boards', () => {
         const failures = [];
         for (const [tier, puzzles] of Object.entries(PUZZLES)) {
-            for (const offset of [0, 1, 7, 24, 82, 97, 150, 250, 350, puzzles.length - 1]) {
+            for (const offset of Array.from({ length: 10 }, (_, i) => Math.floor(i * (puzzles.length - 1) / 9))) {
                 const puzzle = puzzles[offset].puzzle;
                 const answer = SudokuSolver.solveSudoku(puzzle).solution;
                 const run = runReasoning(puzzle, { trace: true });

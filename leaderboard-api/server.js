@@ -2,11 +2,13 @@ const express = require('express');
 const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
+const { version: BANK_VERSION, sizes: LEVEL_LIMITS } = require('./bank-meta.json');
+const BANK_IDS = require('./bank-ids.json');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 // Overridable so tests (and alternate deployments) can point at another store.
-const DATA_FILE = process.env.DATA_FILE || path.join(__dirname, 'data', 'leaderboard.json');
+const DATA_FILE = process.env.DATA_FILE || path.join(__dirname, 'data', `leaderboard-v${BANK_VERSION}.json`);
 
 app.use(cors({
     // Same-origin deployments need no CORS headers. Cross-origin clients must opt in.
@@ -132,21 +134,6 @@ const MAX_TIME_SECONDS = 24 * 60 * 60; // Leaderboard policy: only accept games 
 const MAX_HINTS = Number.MAX_SAFE_INTEGER;
 const MAX_MISTAKES = Number.MAX_SAFE_INTEGER;
 
-/**
- * Puzzles per tier — a level is a 1-based position in that tier's bank, so
- * anything past the end names no puzzle. Mirrors BANK_SIZES in difficulties.js,
- * which this package cannot import (it ships in its own container); a test in
- * the frontend suite asserts the two agree.
- *
- * Out of range is coerced to null rather than rejected: the client never sends
- * one, so it is either forged, where dropping the claim is enough, or a bank
- * that grew before this API was redeployed, where losing the score would be
- * the wrong outcome.
- */
-const LEVEL_LIMITS = {
-    easy: 500, medium: 500, hard: 500, expert: 500, evil: 500, nightmare: 3000,
-};
-
 // Extract plain text in one pass; never emit angle brackets, including from
 // malformed/nested tags. Output still must be escaped by HTML consumers.
 function cleanPlayerName(value) {
@@ -168,8 +155,10 @@ function validateData(data) {
     for (const [difficulty, entries] of Object.entries(data)) {
         if (!VALID_DIFFICULTIES.includes(difficulty) || !Array.isArray(entries)) fail();
         validated[difficulty] = entries.map(entry => {
+            if (entry && entry.bankVersion !== BANK_VERSION) throw new Error('Scores belong to another bank revision; configure a fresh DATA_FILE.');
             if (!entry || typeof entry !== 'object' || Array.isArray(entry)
                 || entry.difficulty !== difficulty
+                || entry.puzzleId !== (entry.level == null ? null : BANK_IDS[difficulty][entry.level - 1])
                 || typeof entry.name !== 'string' || !entry.name
                 || entry.name.length > 20 || !entry.name.trim()
                 || entry.name.includes('<') || entry.name.includes('>')
@@ -181,6 +170,7 @@ function validateData(data) {
                 || typeof entry.date !== 'string' || !Number.isFinite(Date.parse(entry.date))) fail();
             // Older clients did not record assistance or mistakes. Copy known fields only.
             return {
+                bankVersion: BANK_VERSION, puzzleId: entry.puzzleId,
                 name: entry.name, difficulty, time: entry.time, hints: entry.hints,
                 level: entry.level ?? null, mistakes: entry.mistakes ?? null,
                 autoNotes: entry.autoNotes ?? false, date: entry.date,
@@ -195,6 +185,7 @@ app.post('/api/leaderboard', rateLimit, (req, res) => {
         return res.status(400).json({ error: 'Invalid request body' });
     }
     const { name, difficulty, time, hints, level, autoNotes, mistakes } = req.body;
+    if (req.body.bankVersion !== BANK_VERSION) return res.status(409).json({ error: 'Puzzle bank changed; update the app.' });
 
     if (!name || !difficulty || time === undefined) {
         return res.status(400).json({ error: 'Missing required fields: name, difficulty, time' });
@@ -236,7 +227,10 @@ app.post('/api/leaderboard', rateLimit, (req, res) => {
         ? parsedLevel
         : null;
 
+    const id = cleanLevel === null ? null : BANK_IDS[difficulty][cleanLevel - 1];
+    if (req.body.puzzleId != null && req.body.puzzleId !== id) return res.status(400).json({ error: 'Puzzle identity does not match its level' });
     const entry = {
+        bankVersion: BANK_VERSION, puzzleId: id,
         name: cleanName,
         difficulty,
         time: Math.round(cleanTime),
@@ -266,7 +260,7 @@ app.post('/api/leaderboard', rateLimit, (req, res) => {
 
 // Health check
 app.get('/api/health', (req, res) => {
-    res.json({ status: 'ok' });
+    res.json({ status: 'ok', bankVersion: BANK_VERSION });
 });
 
 // Express's default error page includes HTML (and development stacks).

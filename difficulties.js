@@ -1,3 +1,6 @@
+import metadata from './leaderboard-api/bank-meta.json' with { type: 'json' };
+export const BANK_VERSION = metadata.version;
+
 /**
  * Difficulty metadata.
  *
@@ -21,14 +24,7 @@ export const DIFFICULTY_LABELS = {
  * than read from the bank so the level input can be set up before the bank has
  * loaded; a test asserts these match the bank exactly.
  */
-export const BANK_SIZES = {
-    easy: 500,
-    medium: 500,
-    hard: 500,
-    expert: 500,
-    evil: 500,
-    nightmare: 3000,
-};
+export const BANK_SIZES = Object.freeze(metadata.sizes);
 
 /** Accept only published difficulty keys, never inherited object properties. */
 export const isDifficulty = (value) => typeof value === 'string' && Object.hasOwn(BANK_SIZES, value);

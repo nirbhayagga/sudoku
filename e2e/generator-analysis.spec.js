@@ -76,11 +76,11 @@ test('cancels generation and reports unmet targets without replacing the grid', 
 });
 
 test('advanced proof is free, can be followed, and is invalidated by undo', async ({ page }) => {
-    const puzzle = PUZZLES.easy[97].puzzle;
+    const puzzle = '020600340100704056040030010006050403354060000270140000000310070031205690702406030';
     const solution = SudokuSolver.solveSudoku(puzzle).solution;
     const partial = [...puzzle];
     for (const step of runReasoning(puzzle, { familyCap: 0, trace: true }).trace) if (step.kind === 'placement') partial[step.idx] = step.digit;
-    await page.addInitScript(state => localStorage.setItem('sudoku_saved_game', JSON.stringify(state)), {
+    await page.addInitScript(state => localStorage.setItem('sudoku_saved_game_v2', JSON.stringify(state)), {
         puzzle, solution, userValues: partial.join(''), difficulty: 'easy', level: 98,
         notes: Array.from({ length: 81 }, () => []), timerSeconds: 0,
     });
@@ -106,16 +106,16 @@ test('closing an import cancels its pending Play request', async ({ page }) => {
     });
     await expect(page.locator('#modal-overlay')).not.toHaveClass(/active/);
     await expect(page.locator('#btn-new-game')).toBeVisible();
-    expect(await page.evaluate(() => localStorage.getItem('sudoku_saved_game'))).toBeNull();
+    expect(await page.evaluate(() => localStorage.getItem('sudoku_saved_game_v2'))).toBeNull();
 });
 
 test('simpler uniqueness deductions render a candidate map and reveal the correct value in a real worker', async ({ page }, testInfo) => {
-    const puzzle = PUZZLES.expert[444].puzzle;
+    const puzzle = '000070000010400372600005000006000000000030000200000408300090054050000007802041060';
     const solution = SudokuSolver.solveSudoku(puzzle).solution;
     const partial = [...puzzle];
     for (const step of runReasoning(puzzle, { trace: true }).trace) if (step.kind === 'placement') partial[step.idx] = step.digit;
-    await page.addInitScript(state => localStorage.setItem('sudoku_saved_game', JSON.stringify(state)), {
-        puzzle, solution, userValues: partial.join(''), difficulty: 'expert', level: 445,
+    await page.addInitScript(state => localStorage.setItem('sudoku_saved_game_v2', JSON.stringify(state)), {
+        puzzle, solution, userValues: partial.join(''), difficulty: 'imported', level: null,
         notes: Array.from({ length: 81 }, () => []), timerSeconds: 0,
     });
     await page.goto('/'); await page.locator('#btn-resume-yes').click();

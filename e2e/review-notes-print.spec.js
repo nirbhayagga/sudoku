@@ -36,7 +36,7 @@ async function enter(page, idx, digit, isMobile) {
 
 test('successive touch digits follow the visible selection', async ({ page, isMobile }) => {
     test.skip(!isMobile, 'Touch selection path');
-    await page.goto('/?d=easy&level=1');
+    await page.goto('/?bank=2&d=easy&level=1');
     await expect(page.locator('.cell-wrapper.locked').first()).toBeVisible();
     const first = puzzle.indexOf('0');
     await enter(page, first, '1', true);
@@ -49,7 +49,7 @@ test('successive touch digits follow the visible selection', async ({ page, isMo
 });
 
 test('generated notes undo back to manual notes and restore on redo', async ({ page, isMobile }) => {
-    await page.goto('/?d=easy&level=1');
+    await page.goto('/?bank=2&d=easy&level=1');
     await expect(page.locator('.cell-wrapper.locked').first()).toBeVisible();
     await page.locator(isMobile ? '#numpad-notes' : '#btn-notes-toggle').click();
     await enter(page, puzzle.indexOf('0'), '2', isMobile);
@@ -69,7 +69,7 @@ test('completion identifies, shares and exports the puzzle, and undo preserves o
     const idx = puzzle.indexOf('0');
     await page.addInitScript(({ puzzle, solution, idx }) => {
         if (!sessionStorage.getItem('review-seeded')) {
-            localStorage.setItem('sudoku_saved_game', JSON.stringify({
+            localStorage.setItem('sudoku_saved_game_v2', JSON.stringify({
                 puzzle, solution, difficulty: 'easy', level: 1,
                 userValues: solution.slice(0, idx) + '0' + solution.slice(idx + 1),
                 notes: Array.from({ length: 81 }, () => []), timerSeconds: 123,
@@ -89,7 +89,7 @@ test('completion identifies, shares and exports the puzzle, and undo preserves o
     await page.locator('#btn-export-close').click();
     await page.locator('#btn-results').click(); await page.locator('#btn-win-share').click();
     await expect.poll(() => page.evaluate(() => window.__sharedPuzzle)).toContain('level=1');
-    const won = () => page.evaluate(() => JSON.parse(localStorage.getItem('sudoku_stats')).easy.won);
+    const won = () => page.evaluate(() => JSON.parse(localStorage.getItem('sudoku_stats_v2')).easy.won);
     expect(await won()).toBe(1);
     await page.locator('#btn-undo').click(); await expect(page.locator('.cell-input').nth(idx)).toHaveValue('');
     await page.locator('#btn-redo').click(); await expect(page.locator('.cell-input').nth(idx)).toHaveValue(solution[idx]);
@@ -97,7 +97,7 @@ test('completion identifies, shares and exports the puzzle, and undo preserves o
 });
 
 test('bulk worksheet accepts a page total and consecutive levels without wrapping', async ({ page }) => {
-    await page.goto('/?d=easy&level=1');
+    await page.goto('/?bank=2&d=easy&level=1');
     await expect(page.locator('.cell-wrapper.locked').first()).toBeVisible();
     await page.locator('#btn-pause').click(); await page.locator('#btn-pause-export').click();
     await page.locator('.print-options summary').click();
@@ -107,28 +107,28 @@ test('bulk worksheet accepts a page total and consecutive levels without wrappin
     await page.locator('#print-unit').selectOption('pages');
     await page.locator('#print-count').fill('2');
     await page.locator('#print-layout').selectOption('4');
-    await page.locator('#print-start').fill('494');
+    await page.locator('#print-start').fill(String(PUZZLES.easy.length - 6));
     await expect(page.locator('#print-summary')).toContainText('Only 7 puzzles remain');
     await expect(page.locator('#btn-print')).toBeDisabled();
-    await page.locator('#print-start').fill('493');
+    await page.locator('#print-start').fill(String(PUZZLES.easy.length - 7));
     await page.locator('#print-answers').check();
     await expect(page.locator('#print-summary')).toHaveText('8 puzzles · 2 puzzle pages + 2 answer pages · 4 pages total.');
-    const stats = await page.evaluate(() => localStorage.getItem('sudoku_stats'));
+    const stats = await page.evaluate(() => localStorage.getItem('sudoku_stats_v2'));
     await page.evaluate(() => { window.print = () => { window.__printed = true; }; });
     await page.locator('#btn-print').click();
     await expect.poll(() => page.evaluate(() => window.__printed)).toBe(true);
     await expect(page.locator('.worksheet-page')).toHaveCount(4);
     expect(await page.locator('.worksheet-page h2').allTextContents()).toEqual(
-        Array.from({ length: 16 }, (_, i) => `Easy · Level ${493 + i % 8}`));
+        Array.from({ length: 16 }, (_, i) => `Easy · Level ${PUZZLES.easy.length - 7 + i % 8}`));
     const printedBoard = await page.locator('.worksheet-grid').first().locator('span').evaluateAll(cells => cells.map(cell => cell.textContent || '0').join(''));
-    expect(printedBoard).toBe(PUZZLES.easy[492].puzzle);
-    expect(await page.evaluate(() => localStorage.getItem('sudoku_stats'))).toBe(stats);
+    expect(printedBoard).toBe(PUZZLES.easy[PUZZLES.easy.length - 8].puzzle);
+    expect(await page.evaluate(() => localStorage.getItem('sudoku_stats_v2'))).toBe(stats);
 });
 
 for (const perPage of [1, 2, 4, 6]) {
     test(`worksheet layout ${perPage} has separate answer pages and no overflow`, async ({ page, browserName }, testInfo) => {
         test.skip(testInfo.project.name !== 'desktop', 'Print pagination uses desktop Chromium PDF output');
-        await page.goto('/?d=easy&level=1');
+        await page.goto('/?bank=2&d=easy&level=1');
         await page.locator('#btn-pause').click(); await page.locator('#btn-pause-export').click();
         await page.locator('.print-options summary').click();
         await page.locator('#print-source').selectOption('bank');

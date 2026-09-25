@@ -122,7 +122,7 @@ be saved and resumed in this browser; completed reviews do not support handoff.
 Reset explicitly starts a new attempt with fresh statistics and a running clock.
 
 
-Puzzle links carry a tier/level, an 81-cell grid, or a daily date. Handoff links
+Puzzle links carry a stable board identity, a versioned tier/level or daily date, or an 81-cell grid. Handoff links
 carry a snapshot including notes, hints, and elapsed time. Treat that link as
 shared game data; it is not a live connection or a backup of personal stats.
 
@@ -150,3 +150,18 @@ When a newly installed service worker takes control, **Update available** lets
 you reload deliberately. The app saves an active game before reloading and refuses
 to reload if that save fails. A handoff link carries a snapshot, not live sync;
 if automatic copying fails, your source save remains until you confirm copying.
+
+
+## Bank revision 2 (v1.1.0)
+
+All 5,500 boards now follow human-technique tiers, with increasing levels inside
+each tier. Nightmare has 192 boards; level 192 is highest under this policy.
+Easy uses singles, Medium locked candidates, Hard subsets, Expert wings and
+uniqueness, Evil static chains, and Nightmare dynamic chains.
+
+This revision deliberately starts fresh bank games, played lists, per-tier stats
+and daily completions. Theme, player name, shortcut preference and calendar streak
+remain. Previous storage is left under its old keys; there is no automatic
+conversion or old-backup restore. Older numbered/daily/handoff links display a
+bank-change notice rather than opening a different board. Raw grid links still
+work. New shared bank links carry a stable board identity.

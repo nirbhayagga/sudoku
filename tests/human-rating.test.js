@@ -1,7 +1,7 @@
+import { PUZZLES } from '../puzzle-bank.js';
 import { describe, expect, it } from 'vitest';
 import { assessHumanPuzzle, HUMAN_FAMILIES } from '../human-rating.js';
 import { assessPuzzle } from '../rating.js';
-import { PUZZLES } from '../puzzle-bank.js';
 import { SudokuSolver } from '../solver.js';
 import { candidateGrid, candidatesFor, peersOf, UNITS } from '../techniques.js';
 import * as techniques from '../techniques.js';
@@ -50,7 +50,7 @@ describe('persistent human assessment', () => {
         expect(result.trace.length).toBe(result.workload.totalSteps);
     });
     it('tries independent family caps, is repeatable, and omits answer spoilers by default', () => {
-        const puzzle = PUZZLES.nightmare[2999].puzzle;
+        const puzzle = '000000001000002003004050000000060050030000007080100000000300280006000000100007000';
         const result = assessHumanPuzzle(puzzle);
         expect(result).toEqual(assessHumanPuzzle(puzzle));
         expect(result).toMatchObject({ family: 'subsets', status: 'solved', clues: 17 });
@@ -61,7 +61,7 @@ describe('persistent human assessment', () => {
         expect(JSON.stringify(result)).not.toContain(SudokuSolver.solveSudoku(puzzle).solution);
     });
     it('keeps unsupported boards unresolved without assigning the hardest family', () => {
-        const result = assessHumanPuzzle(PUZZLES.expert[0].puzzle);
+        const result = assessHumanPuzzle('000000160000200003070000049200004000910006078003000400690010000300000500500003010');
         expect(result).toMatchObject({ status: 'unresolved', family: null });
         expect(result.remaining).toBeGreaterThan(0);
         expect(result.passes).toHaveLength(4);

@@ -111,3 +111,18 @@ security alerts and security-update PRs are separate repository settings.
 Lighthouse runs separately and does not certify every theme or browser state.
 Self-hosted Lighthouse runners need Chrome installed; a missing browser or failed
 assertion fails the job. Browser failure artifacts include screenshots and traces.
+
+
+## Bank revision 2
+
+Deploy matching v1.1.0 frontend and API images together. The optional API advertises
+its bank revision; a mismatched API is hidden by the frontend, and mismatched
+score submissions receive HTTP 409. Levels and stable puzzle identities are
+validated against the generated bank metadata shipped inside the API image.
+
+The default score file is now `data/leaderboard-v2.json` in the existing volume.
+`leaderboard.json` is left untouched. No score migration is necessary for static
+hosting, which has no backend. If a self-hosted deployment explicitly sets
+`DATA_FILE`, choose a fresh filename for this revision. An old-revision file at
+that path is preserved and requests fail with a generic error until reconfigured;
+it is not relabelled as corrupt or silently assigned to new puzzles.

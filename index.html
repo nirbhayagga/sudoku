@@ -39,7 +39,7 @@
   <meta property="og:site_name" content="Sudoku">
   <meta property="og:title" content="Sudoku">
   <meta property="og:description"
-    content="5,500 puzzles graded by measured solving effort, not clue count. Installable, plays offline, no tracking.">
+    content="5,500 puzzles ordered by verified human solving techniques. Installable, plays offline, no tracking.">
   <meta property="og:image" content="https://sudoku.nirbhay.dev/og-image.png">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
@@ -49,7 +49,7 @@
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Sudoku">
   <meta name="twitter:description"
-    content="5,500 puzzles graded by measured solving effort, not clue count. Installable, plays offline, no tracking.">
+    content="5,500 puzzles ordered by verified human solving techniques. Installable, plays offline, no tracking.">
   <meta name="twitter:image" content="https://sudoku.nirbhay.dev/og-image.png">
   <title>Sudoku</title>
   <link rel="stylesheet" href="/style.css">
@@ -153,19 +153,19 @@
            can use the height. #btn-setup-toggle brings it back. -->
       <div class="setup-controls" id="setup-controls">
       <div class="difficulty-selector" id="difficulty-selector">
-        <button class="diff-btn active" data-diff="easy">Easy</button>
-        <button class="diff-btn" data-diff="medium">Medium</button>
-        <button class="diff-btn" data-diff="hard">Hard</button>
-        <button class="diff-btn" data-diff="expert">Expert</button>
-        <button class="diff-btn" data-diff="evil">Evil</button>
-        <button class="diff-btn diff-nightmare" data-diff="nightmare">Nightmare</button>
+        <button class="diff-btn active" data-diff="easy" title="Singles: one possible digit in a cell or house">Easy</button>
+        <button class="diff-btn" data-diff="medium" title="Locked candidates: pointing and claiming">Medium</button>
+        <button class="diff-btn" data-diff="hard" title="Naked and hidden pairs, triples and quads">Hard</button>
+        <button class="diff-btn" data-diff="expert" title="Wings, fish and verified uniqueness patterns">Expert</button>
+        <button class="diff-btn" data-diff="evil" title="Static forcing chains">Evil</button>
+        <button class="diff-btn diff-nightmare" data-diff="nightmare" title="Dynamic chains and forcing convergence">Nightmare</button>
       </div>
       <div class="setup-row">
         <div class="level-selector" id="level-container">
           <label for="level-input">Level:</label>
-          <input type="number" id="level-input" min="1" max="500" placeholder="RND"
-            title="Enter 1-500, or leave blank for a random level">
-          <span class="level-max" id="level-max">/ 500</span>
+          <input type="number" id="level-input" min="1" max="1493" placeholder="RND"
+            title="Enter 1-1493, or leave blank for a random level">
+          <span class="level-max" id="level-max">/ 1493</span>
         </div>
         <button class="btn btn-daily" id="btn-daily" title="Today's puzzle — everyone gets the same one">Daily</button>
         <button class="btn" id="btn-random" title="Start a random unplayed puzzle">Random</button>
@@ -350,7 +350,7 @@
           <select id="print-order"><option value="random">Random, without repeats</option><option value="consecutive">Consecutive levels</option></select>
           <div id="print-start-row" hidden>
             <label for="print-start">Starting level</label>
-            <input id="print-start" type="number" min="1" max="500" value="1">
+            <input id="print-start" type="number" min="1" max="1493" value="1">
             <p>Follows the current bank order. Consecutive levels are not always progressively harder.</p>
           </div>
           <label for="print-unit">Choose total by</label>
@@ -432,12 +432,12 @@
     <div class="modal leaderboard-modal" role="dialog" aria-modal="true" aria-labelledby="lb-title">
       <h2 id="lb-title">Leaderboard</h2>
       <div class="leaderboard-tabs" id="leaderboard-tabs">
-        <button class="lb-tab active" data-diff="easy">Easy</button>
-        <button class="lb-tab" data-diff="medium">Medium</button>
-        <button class="lb-tab" data-diff="hard">Hard</button>
-        <button class="lb-tab" data-diff="expert">Expert</button>
-        <button class="lb-tab" data-diff="evil">Evil</button>
-        <button class="lb-tab" data-diff="nightmare">Night</button>
+        <button class="lb-tab active" data-diff="easy" title="Singles: one possible digit in a cell or house">Easy</button>
+        <button class="lb-tab" data-diff="medium" title="Locked candidates: pointing and claiming">Medium</button>
+        <button class="lb-tab" data-diff="hard" title="Naked and hidden pairs, triples and quads">Hard</button>
+        <button class="lb-tab" data-diff="expert" title="Wings, fish and verified uniqueness patterns">Expert</button>
+        <button class="lb-tab" data-diff="evil" title="Static forcing chains">Evil</button>
+        <button class="lb-tab" data-diff="nightmare" title="Dynamic chains and forcing convergence">Night</button>
       </div>
       <div id="leaderboard-content"></div>
       <div class="modal-actions">

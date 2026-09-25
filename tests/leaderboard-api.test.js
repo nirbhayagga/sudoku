@@ -49,10 +49,10 @@ const post = (base, body) =>
     fetch(`${base}/api/leaderboard`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+        body: JSON.stringify(body && typeof body === 'object' && !Array.isArray(body) ? { bankVersion: 2, ...body } : body),
     });
 
-const validScore = { name: 'Nirb', difficulty: 'easy', time: 120, hints: 0, level: 7 };
+const validScore = { bankVersion: 2, name: 'Nirb', difficulty: 'easy', time: 120, hints: 0, level: 7 };
 
 let server;
 beforeEach(async () => {
@@ -67,7 +67,7 @@ describe('GET /api/health', () => {
     it('reports ok — this is what gates the leaderboard UI', async () => {
         const resp = await fetch(`${server.base}/api/health`);
         expect(resp.status).toBe(200);
-        expect(await resp.json()).toEqual({ status: 'ok' });
+        expect(await resp.json()).toEqual({ status: 'ok', bankVersion: 2 });
     });
 });
 
@@ -279,8 +279,8 @@ describe('level bounds', () => {
     });
 
     it('keeps the last level in a tier', async () => {
-        const resp = await post(server.base, { ...validScore, difficulty: 'nightmare', level: 3000 });
-        expect((await resp.json()).entry.level).toBe(3000);
+        const resp = await post(server.base, { ...validScore, difficulty: 'nightmare', level: BANK_SIZES.nightmare });
+        expect((await resp.json()).entry.level).toBe(BANK_SIZES.nightmare);
     });
 });
 
@@ -614,7 +614,7 @@ describe('audit regressions', () => {
 
     it.each([
         { time: -1 }, { hints: '<b>1</b>' }, { name: '<b>Bob</b>' },
-        { difficulty: 'evil' }, { level: 501 }, { mistakes: Number.MAX_SAFE_INTEGER + 1 },
+        { difficulty: 'evil' }, { level: BANK_SIZES.easy + 1 }, { mistakes: Number.MAX_SAFE_INTEGER + 1 },
         { hints: Number.MAX_SAFE_INTEGER + 1 },
         { autoNotes: 'true' }, { date: null },
     ])('rejects invalid persisted entry fields (%#)', async fields => {
@@ -626,8 +626,9 @@ describe('audit regressions', () => {
         expect(fs.existsSync(server.dataFile)).toBe(false);
     });
 
-    it('loads and sorts legacy entries with unknown mistakes and no auto-notes', async () => {
-        const old = { ...validScore, date: '2026-09-19T00:00:00.000Z' };
+    it('loads and sorts current-bank entries with optional fields omitted', async () => {
+        const old = (await (await post(server.base, validScore)).json()).entry;
+        delete old.mistakes; delete old.autoNotes;
         fs.writeFileSync(server.dataFile, JSON.stringify({ easy: [old, { ...old, time: 10 }] }));
         const entries = await (await fetch(`${server.base}/api/leaderboard/easy`)).json();
         expect(entries.map(e => e.time)).toEqual([10, 120]);
@@ -734,5 +735,26 @@ describe('direct-run process shutdown', () => {
             upload?.request.destroy();
             await process.cleanup();
         }
+    });
+});
+
+
+describe('bank revision contract', () => {
+    it('rejects old or unversioned clients and mismatched board identities', async () => {
+        for (const bankVersion of [undefined, 1, 3, '2']) {
+            const response = await post(server.base, { ...validScore, bankVersion });
+            expect(response.status).toBe(409);
+        }
+        expect((await post(server.base, { ...validScore, puzzleId: 'p0000000000000000' })).status).toBe(400);
+        expect(server.readData()).toEqual({});
+    });
+    it('leaves an explicitly configured old-bank score file untouched', async () => {
+        const old = { easy: [{ name: 'Previous', difficulty: 'easy', time: 123, hints: 0, level: 1, date: '2026-09-01T00:00:00.000Z' }] };
+        const original = JSON.stringify(old);
+        fs.writeFileSync(server.dataFile, original);
+        expect((await fetch(`${server.base}/api/leaderboard/easy`)).status).toBe(500);
+        expect((await post(server.base, validScore)).status).toBe(500);
+        expect(fs.readFileSync(server.dataFile, 'utf8')).toBe(original);
+        expect(fs.readdirSync(path.dirname(server.dataFile)).some(f => f.includes('.corrupt-'))).toBe(false);
     });
 });

@@ -1,13 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { PUZZLES } from '../puzzle-bank.js';
 import { SudokuSolver } from '../solver.js';
 import { createReasoningState, applyDeduction } from '../reasoning.js';
 import { assessPuzzleEnhanced } from '../enhanced-assessment.js';
 import { nextEnhancedDeduction, replayEnhancedDeduction, establishUniqueness, proofComplexity } from '../enhanced-reasoning.js';
 
 describe('enhanced reasoning', () => {
-    it('finds a simpler uniqueness rectangle for Expert 445 and independently replays it', () => {
-        const puzzle = PUZZLES.expert[444].puzzle;
+    it('finds a simpler uniqueness rectangle for original Expert 445 and independently replays it', () => {
+        const puzzle = '000070000010400372600005000006000000000030000200000408300090054050000007802041060';
         const result = assessPuzzleEnhanced(puzzle, { trace: true });
         expect(result.family).toBe('uniqueness');
         expect(result.techniqueCounts['unique-rectangle-4']).toBeGreaterThan(0);
@@ -22,8 +21,7 @@ describe('enhanced reasoning', () => {
         expect(state.board.join('')).toBe(SudokuSolver.solveSudoku(puzzle).solution);
         expect(result.opening.firstPlacement.step).toBeGreaterThan(0);
     });
-    it.each([117, 165])('replays the remaining named uniqueness patterns on Medium %s', level => {
-        const puzzle = PUZZLES.medium[level - 1].puzzle;
+    it.each([[117, "000807000070500000400219008583002001020008000900071000100780056007100092600904100"], [165, "450020908080000050710006002800300090130200004000045200000070025560000000371902006"]])('replays named uniqueness patterns on original Medium %s', (level, puzzle) => {
         const result = assessPuzzleEnhanced(puzzle, { trace: true });
         const state = createReasoningState(puzzle);
         const named = result.trace.filter(step => step.uniqueness).map(step => step.type);
@@ -37,7 +35,7 @@ describe('enhanced reasoning', () => {
         expect(assessPuzzleEnhanced('0'.repeat(81)).status).toBe('multiple-solutions');
     });
     it('records bounded alternative paths, true proof sizes, and auditable moves', () => {
-        const puzzle = PUZZLES.expert[147].puzzle;
+        const puzzle = '000030029700009400080600007060000090030500000002000030500860070010000008300010000';
         const result = assessPuzzleEnhanced(puzzle, { trace: true });
         expect(result.status).toBe('solved');
         expect(result.passes.some(p => p.order === 'reverse')).toBe(true);
@@ -47,7 +45,7 @@ describe('enhanced reasoning', () => {
         expect(result.workload.deepestProof).toBe(Math.max(...result.trace.map(s => proofComplexity(s).depth)));
     });
     it('uses the same verified patterns on transformed imported boards in interactive mode', () => {
-        const puzzle = PUZZLES.expert[444].puzzle.replace(/[1-9]/g, d => String(10 - Number(d)));
+        const puzzle = '000070000010400372600005000006000000000030000200000408300090054050000007802041060'.replace(/[1-9]/g, d => String(10 - Number(d)));
         const state = createReasoningState(puzzle);
         establishUniqueness(state);
         const answer = SudokuSolver.solveSudoku(puzzle).solution;

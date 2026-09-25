@@ -7,7 +7,7 @@ test.use({ serviceWorkers: 'block' });
 test('optional leaderboard displays scores and the latest selected tier', async ({ page }) => {
     const errors = [];
     page.on('pageerror', error => errors.push(error.message));
-    await page.route('**/api/health', route => route.fulfill({ json: { status: 'ok' } }));
+    await page.route('**/api/health', route => route.fulfill({ json: { status: 'ok', bankVersion: 2 } }));
     const entry = name => ({ name, time: 123, hints: 2, mistakes: 3, autoNotes: true, date: '2026-09-24T00:00:00Z' });
     let releaseEasy;
     let requests = 0;

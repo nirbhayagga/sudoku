@@ -1,5 +1,8 @@
 # Expanded human difficulty assessment — v3
 
+> Historical assessment of the bank before revision 2. Level references below use that order.
+> See [the current bank definitions](bank-revision-2.md); the original measurements are preserved.
+
 **Assessment only. No bank positions, tiers, daily puzzles, scores or gameplay changed.**
 
 Policy: `human-v3.0`. Coverage: **5500 puzzles** (all).
