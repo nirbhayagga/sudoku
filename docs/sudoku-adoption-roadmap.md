@@ -247,3 +247,9 @@ of Nightmare are the first expansion candidates. Additions must pass uniqueness,
 identity/equivalence filtering and the same offline grading policy; no quota is
 filled with transformed duplicates or unresolved boards labelled hardest.
 16×16 and constraint variants remain a subsequent, separate pilot.
+
+The 1.2 scope does not include a full progression mode or technique practice.
+Small boards already retain completion progress and offer a manual Next challenge
+button. Keep navigation compact: one board-size selector now; if rule variants
+and additional activities are introduced later, use separate rules and play-option
+controls that show only relevant choices rather than a tab for every combination.
