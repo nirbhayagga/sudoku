@@ -1,6 +1,6 @@
 # Small classic boards
 
-Choose **4×4** or **6×6** in the board-size selector. Returning to 9×9 restores its
+Choose **Learn → Introduction** for 4×4 or **New game → Quick puzzle** for 6×6. Returning to Classic restores its
 view; an active 9×9 game is paused before switching. Each small size has its own
 saved game and content-ID completion list. Small-board progress and scores are
 separate from the 9×9 leaderboard.
@@ -39,9 +39,11 @@ challenges; minimality describes uniqueness, not human difficulty.
 
 ## Controls and interchange
 
-**Game setup…** opens the challenge number, rules and progression controls.
-They fold away during play, and completion reveals the next-challenge choices.
-**Import, export and print** has separate Puzzle text, Print and Backup panels,
+**New game → Quick puzzle** opens 6×6 numbered, random and progression choices.
+**Learn → Introduction** opens 4×4; Next example advances at your own pace.
+Earlier numbered links and progression saves still open their original boards.
+The chooser closes during play, and completion reveals the next-puzzle action.
+**Puzzle tools** has separate Puzzle text, Print and Backup panels,
 so opening one tool does not expose every form. The number pad and main play
 actions remain directly available. P (or Space) pauses, F fills notes, N toggles
 notes, A toggles auto-notes, and H previews/reveals; form fields keep normal keys.
@@ -61,11 +63,11 @@ Using Fill notes or Auto-notes marks assistance even after undo. Older saves
 preserve their saved counters; missing historical note assistance is labelled
 unknown rather than reconstructed.
 
-Play/Solver/Practice remain accessible. Practice pauses this game and returns to
-it; Solver opens the Classic 9×9 solver, keeping this game saved under its own
+Play, Learn and Tools remain accessible. Lessons pause this game and return to
+it; Tools → Classic 9×9 solver keeps this game saved under its own
 size and rules. Variant boards are never passed to the Classic solver.
 
-**Import, export and print** contains:
+**Puzzle tools** contains:
 
 - Text import into Play, after uniqueness validation.
 - Line, zero-line, rows and boxed-grid text exports; original/current sources.
@@ -75,12 +77,14 @@ size and rules. Variant boards are never passed to the Classic solver.
   count; the summary includes additional answer pages. Use the browser's PDF printer.
 - Generation and import checking in a cancellable worker, with the seed reported
   for generation. The browser stops work after 20 seconds.
-- A game-backup download and size/rule-checked restore, including that board's
-  progression path. Stats backups include all progression paths; small active
-  games still use their own backups. Neither backup includes ordinary small/variant
-  challenge completion totals. Clearing site data removes local progress.
+- A complete backup of all activities. The legacy single-game restore still
+  checks size/rules; use Tools → Statistics & complete backup to restore version 2.
+- A resume link with values, notes, assistance and time. Confirmed copying removes
+  this device's saved copy until another move is made here. Sharing an original
+  puzzle remains separate and does not remove progress.
 
-The Progression disclosure starts or resumes a dedicated path. Completing a
+
+New game → Quick puzzle → Continue progression starts or resumes a dedicated path. Completing a
 progression game records its identity once and enables an explicit Next action.
 Ordinary games still count toward the collection's completion total, but do not
 advance that path. See [activities](activities.md) for progression and variants.

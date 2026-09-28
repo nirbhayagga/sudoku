@@ -212,7 +212,7 @@ The `maintenance` profile allows 2,000,000 dynamic work operations per deduction
 for provenance and rating limits. Neither CLI changes the bank. The seeded
 generator remains on its v2 targeting policy so existing seeds/settings stay reproducible.
 
-The web generator is under Solver → Generate. Clue count and technique level
+The Classic web generator is under Tools → Generate puzzle. Clue count and technique level
 are independent requests; impossible or unachieved combinations return a labelled
 closest unique puzzle. A seed reproduces a completed run only with the same
 settings, attempt budget and engine/policy version. Cancelled/timed-out runs are
@@ -262,8 +262,8 @@ See [small-board maintenance and contracts](small-boards.md). Small saves and
 progress use separate versioned storage keys and never enter the 9×9 leaderboard.
 The [activities guide](activities.md) covers practice/variant curation and the
 offline correctness benchmark for newly added or imported puzzles. Build tests
-cap the initial JavaScript at 32 KiB gzip and all assets plus the service worker
-at 286 KiB, including fonts, banks, practice and the analysis worker.
+cap the initial JavaScript at 38 KiB gzip and all assets plus the service worker
+at 310 KiB, including fonts, banks, practice and the analysis worker.
 
 ## Visual regression coverage
 
@@ -286,3 +286,29 @@ while their setup and tools are closed; expanded tools may scroll normally.
 The inset tests substitute CSS environment values in Linux browsers. They are
 not real standalone iOS tests. Check cold/warm PWA launch, update, foreground,
 rotation, native keyboard and safe areas on an installed iPhone before release.
+
+
+## Shared player and learning UI (v1.4)
+
+`board-view.js` owns geometry-aware cell and fixed-position candidate scaffolding.
+`player-controls.js` groups the common actions; `navigation.js` owns the chooser,
+Learn and Tools dialogs. Classic keeps its optimized solver and controller;
+`small-app.js` adapts the generic engine to the shared view. State compatibility
+is preserved without forcing both engines through a single solver/state rewrite.
+
+`practice-coach.js` checks pattern premises and conclusions using candidate-only
+technique detectors. `practice-app.js` owns worked-example, guided and challenge
+stages, with reversible application on one board. `learning-history.js` validates
+bounded per-exercise attempt records. No arbitrary answer-compatible move earns
+credit. `activity-stats.js` displays other-mode results separately from Classic.
+
+`complete-backup.js` is lazy-loaded and builds on `storage.js`'s validated write
+plans and shared rollback transaction. Version 2 contains all four generic saves,
+completion IDs/results and practice history alongside the version 1 personal
+fields. Version 1 restores leave absent activity fields untouched. `sized-handoff.js`
+encodes a bounded, validated snapshot without undo history; it recomputes uniqueness
+at the import boundary and preserves the puzzle's geometry/rules. Only confirmed
+copying removes the source save. Raw puzzle links retain their previous format.
+
+Tests in `e2e/flows.js` use real chooser/dialog interactions. Keep navigation
+regressions visible rather than forcing clicks on hidden legacy controls.

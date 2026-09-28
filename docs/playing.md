@@ -1,12 +1,16 @@
 # Controls and sharing
 
-Play mode provides a bank level selector and date-derived daily puzzle. A daily
+**New game** opens the puzzle chooser. Classic provides difficulty, level, random,
+progression and date-derived daily choices. Quick 6×6, Diagonal and Hyper provide
+numbered, random and progression games. **Learn** holds the 4×4 introduction and
+technique lessons; **Tools** holds the Classic solver, generator and backup. A daily
 key represents a local calendar date. Scores from all levels in a difficulty
 share one leaderboard; there is no daily-only or per-level ranking.
 
 On desktop, select a cell and type. Touch devices use the on-screen numpad.
-On touch, the manual Notes toggle lives beside Erase; the action row keeps Fill
-notes and Auto-notes without duplicating that toggle.
+On touch, the manual Notes toggle lives beside Erase. **Notes options** explains
+one-time Fill notes and live Auto-notes. Undo/Redo, Check and Hint stay nearby.
+Pause sits beside the timer; **Puzzle tools** groups export, sharing and reset.
 Shortcuts are shown by default on keyboard devices and collapsed on touch.
 Show/Hide remembers your choice. Board shortcuts apply with a grid cell focused;
 form fields keep their normal editing behavior. Ctrl shortcuts also accept Cmd
@@ -96,7 +100,7 @@ dialog and adds no PDF library or network service.
 
 ## Generate your own puzzle
 
-Open **Solver → Generate**. Choose a technique level, clue symmetry and an
+Open **Tools → Generate puzzle** while Classic is active. Choose a technique level, clue symmetry and an
 automatic, exact or ranged clue count. These technique levels describe the
 explanation engine rather than the bank's Easy–Nightmare labels. Lower clue
 counts are not necessarily harder, and some combinations cannot be reached.
@@ -132,7 +136,7 @@ they are not a guarantee of accessibility in every browser or interaction state.
 
 ## Choosing the next puzzle
 
-Leave Level blank and use New Game for a random unplayed board, or type a level
+Open **New game**, leave Level blank and start for a random unplayed board, or type a level
 for a specific one. **Random** starts a random board even when Level is filled.
 The status line identifies the board being played; changing the next difficulty
 does not change the active game or its score. After a win, New Game draws again.
@@ -140,22 +144,20 @@ Daily status and completion both include the date, difficulty, and bank level.
 
 ## Backups and updates
 
-Open **Stats → Download backup** in Classic for a JSON file containing Classic
-personal stats, settings, recent daily completions, played levels, the Classic
-saved game (including imports), and all progression paths.
+Open **Tools → Statistics & complete backup → Download backup** for a version 2
+JSON file containing Classic statistics, settings, recent daily completions,
+played levels, every saved game (including imports), every progression path,
+other-board completion totals/results, and practice history. Each mode's results
+stay separate. Backups do not include server leaderboard data. Older completions
+without recorded times remain counted without invented results.
 
-For 4×4, 6×6, Diagonal or Hyper, open **Import, export and print → Backup** in
-that game. This saves the current game and the progression path for its size and
-rules. Download each game's backup separately. Neither kind of backup includes
-ordinary small-board/variant challenge completion totals; these are distinct
-from progression. There is currently no single backup covering every activity.
-
-**Restore backup** in Stats validates the file before replacing its included
-personal data and asks for confirmation. It leaves small/variant saved games
-alone. A game-backup restore checks the selected size and rules before replacing
-that game and its included progression path.
-Keep the file private if it contains a player name or game you do not want shared.
-A failed restore attempts to roll back the old values and reports if recovery fails.
+**Restore backup** validates the entire file before replacing any included data,
+asks for confirmation, and reloads the app after success. Version 1 personal
+backups leave the newer activity data alone. Legacy single-game files can still
+be restored from that game's **Puzzle tools → Backup → Restore older game backup**;
+the file must match its size and rules. A failed restore rolls back prior values
+and reports if recovery fails. Keep backup files private if they contain a name
+or game state you do not want shared.
 
 When a newly installed service worker takes control, **Update available** lets
 you reload deliberately. The app saves an active game before reloading and refuses
@@ -185,7 +187,7 @@ inserted in technique order, so a display level may move. Content-ID share links
 saved games and self-hosted stored scores still follow the same board. Daily uses
 its original pool, preserving existing dates. v1.1 stats and backups remain usable.
 
-Use the board-size selector for 4×4 or 6×6. Their controls include notes, hints,
+Use **Learn → Introduction** for 4×4 or **New game → Quick puzzle** for 6×6. Their controls include notes, hints,
 generation, imports, exports and bulk printing; see [small boards](small-boards.md).
 v1.3 adds full progression, 56 technique lessons, and Diagonal/Hyper rules.
 See [activities](activities.md) for controls and the distinction between ordinary
@@ -193,12 +195,20 @@ completion totals and each separate progression path.
 
 ## Display and menus
 
-Saved 9×9 games offer Resume above the board, with difficulty, level and time.
-Practice is beside the Play/Solver switch. Long dialogs keep their heading and
-Close action visible while their contents scroll; closing restores the page's
-previous position. The native selectors follow the chosen theme. Reduce Motion
-changes animation without reducing the available board size.
+Saved Classic games offer Resume above the board, with difficulty, level and time.
+**New game → Resume a saved game** lists the saved Classic, Quick, introductory,
+Diagonal and Hyper games by size, rules and puzzle. Switching activities pauses
+and saves the current game. Cancelling a chooser leaves it paused.
 
-On small boards and variants, Game setup contains challenge selection, rules
-and progression. Import/export, print and backup controls are separated into
-panels. Board size and rules still use the existing selectors.
+Long dialogs keep their heading and Close action visible while their contents
+scroll; closing restores the page's previous position. Theme selectors and
+new-game controls follow the chosen theme. Reduce Motion changes animation
+without reducing the available board size. On a small screen the lesson response
+controls stay visible while its contents scroll. Keyboard users can move around
+the learning board with arrows and answer with digits. On very short windows,
+the response controls scroll with the lesson so they cannot cover the board.
+
+Every player uses shared board/candidate presentation and action grouping. The
+optimized Classic solver and the geometry-aware engine remain separate. Generic
+hints currently cover a smaller technique set than Classic and clearly label
+verified-answer fallback offers. See [activities](activities.md) for lesson modes.

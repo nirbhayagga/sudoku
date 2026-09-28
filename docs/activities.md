@@ -6,38 +6,54 @@ remain unchanged from v1.2.
 
 ## Progression
 
-Open **Progression → Continue progression** in 9×9 Play. The path
+Open **New game → Classic → Progression → Continue progression**. The path
 starts at Easy 1 and follows the ordered bank through Nightmare. Completing a
 puzzle records its content identity once. **Next progression puzzle** offers the
 next unfinished challenge; no date or completion automatically replaces a board.
 Daily, random games, imports and ordinary numbered games do not advance this path.
 Replay any completed board using its difficulty and level.
 
-4×4, 6×6, Diagonal and Hyper have independent progression paths in their own
-**Game setup → Progression** section. Their ordinary completion totals include other bank
-games; the separate progression total includes only progression games.
+Quick 6×6, Diagonal and Hyper have independent progression choices in **New game**.
+Their ordinary completion totals also include numbered/random bank games; the
+progression path counts only games explicitly started in progression. Older 4×4
+progression saves remain resumable, while its normal entry is now a beginner
+introduction under Learn.
 
 The active game remembers whether it belongs to progression. Undo/recompletion
-does not count twice. Stats backups contain all progression paths. Small/variant
-game backups also contain that board's progression path. Old backups lacking a
-progression field leave the existing path alone. Ordinary small/variant challenge
-completion totals are not included in either backup. As with other local data, clearing
-site storage removes progress; backups transfer only their included data. A game handoff
-link includes the current activity, not the complete progression history.
+does not count twice. Complete backups include all paths, saved games and ordinary
+completion totals. Older backups lacking a field leave that data alone. Handoff
+links include the current game and activity, not the complete progression history.
 
 ## Technique practice
 
-Choose **Practice** beside Play/Solver. Practice pauses the active game and
-opens a separate lesson, with no changes to game statistics or progression.
-The initial set contains **56 positions across 14 techniques**, four per technique.
-They come from our own bank and are reconstructed through verified deductions.
-Candidates are logical state, not the player's notes or solution digits.
+Choose **Learn → Technique lessons & practice**. The active game pauses while a
+separate lesson opens. The collection still contains **56 positions across 14
+techniques**, four per technique, reconstructed from verified deductions in our
+own bank. Candidates are logical state, not personal notes or solution digits.
 
-Outlined cells identify the pattern being taught. Select an empty cell and use
-the digit buttons to identify a placement or exclusion. Any of the recorded
-pattern's exclusions is accepted. Feedback describes this particular pattern;
-it does not claim every other deduction on the board is invalid. **Show explanation**
-opens the text and candidate map. Choose Next exercise when ready.
+- **Learn:** read the rule and step through evidence, consequence and updated
+  candidates on the same board. Previous step reverses the view.
+- **Guided practice:** select the pattern's cells and digits, check its premises,
+  then identify a consequence. Guidance reveals a region, evidence and a target
+  progressively. A subset with extra candidates or cells outside one house gets
+  a specific explanation of that failed premise.
+- **Challenge:** find the deduction with no outlined evidence or preselected
+  answer. Assistance remains available and is recorded separately.
+
+Every recorded exclusion of the chosen pattern is accepted. Other deductions
+are acknowledged only when the bounded technique detectors verify them; matching
+the solution alone is never sufficient. These detectors do not enumerate every
+possible alternative pattern, so unrecognized moves are not declared impossible.
+Correct answers apply the deduction to the board; **Show before/after** compares
+it without switching to a second diagram. **Play the full source puzzle** starts
+from its original givens, before the deductions leading to the lesson position.
+
+History records completed attempts by exercise identity. A correct challenge
+without guidance or incorrect attempts counts as independent; guided/corrected
+attempts count as assisted. **Review assisted exercises** offers another attempt.
+Reading a worked example does not count as completing a challenge. “Practised”
+is not a mastery percentage. Arrows move the selected cell; digits answer. In a
+guided pattern, Space toggles a cell and digits toggle its proposed digits.
 
 Only techniques with curated examples appear. Hidden quads and Jellyfish had no
 selected examples under this curation path; chains and uniqueness lessons are
@@ -57,8 +73,7 @@ and independently audits the deduction against the puzzle's unique solution.
 
 ## Diagonal and Hyper
 
-Choose the **Rules** selector while using 9×9. On short screens, open **Game setup**
-during a classic game to show it:
+Choose **New game → Diagonal** or **New game → Hyper**:
 
 - **Diagonal:** ordinary rows, columns and boxes, plus both marked diagonals
   contain 1–9 once each.

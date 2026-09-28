@@ -270,6 +270,20 @@ The v1.3.0 progression implementation follows this scope:
 - Keep completed challenges replayable and show current progress without adding
   a separate top-level tab for each size.
 
-Navigation uses one board-size selector and a separate rules selector for 9×9.
-Progression and practice are grouped in a disclosure; practice opens a technique
+The original v1.3 navigation used one board-size selector and a separate rules
+selector for 9×9. Progression and practice were grouped in a disclosure; practice opened a technique
 lesson without exposing offline maintenance controls in ordinary play.
+
+### Player and learning consistency in v1.4.0
+
+Play, Learn and Tools now separate the activities, with one New game chooser.
+Classic stays the default, 6×6 is a quick puzzle, and 4×4 introduces the rules
+under Learn. Shared cells, candidate positions and action groups align their
+presentation while preserving the separate optimized and geometry-aware engines.
+
+Lessons now offer worked examples, guided pattern identification and unmarked
+challenges. Verified candidate deductions update the same board, with before/after
+comparison, source-puzzle transfer and independent/assisted attempt history.
+Complete backups include all games, results, progression and learning history.
+This release changes neither the puzzle collections nor their rating policy.
+16×16, further rule variants and larger practice collections remain future work.

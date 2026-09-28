@@ -38,15 +38,18 @@ it contains separate CSS, fonts, icons, and license files alongside the script.
 
 ## Play and solve
 
-The board-size selector also offers **36 distinct 4×4 puzzle classes** and
-**120 curated 6×6 challenges**, with separate saves/progress, imports, hints,
-notes, text/PNG export and printable worksheets. See [small boards](docs/small-boards.md)
-for their geometry, grading and reproducible curation. 16×16 play is deferred.
+**Play** keeps Classic 9×9 as the default. **New game** offers Classic,
+Diagonal, Hyper and a **Quick 6×6** puzzle. Daily, numbered, random and
+self-paced progression choices appear where supported. Diagonal and Hyper each
+have 24 curated puzzles; Quick has 120. **Learn** includes a short 4×4
+introduction with 36 examples and technique lessons.
 
-**Progression and practice** offers a saved, self-paced path and 56 lessons across
-14 techniques. The 9×9 **Rules** selector adds Diagonal and Hyper, with 24 curated
-puzzles each. See [activities](docs/activities.md) for rules, backups, provenance
-and repeatable curation tools.
+The 56 verified lesson positions cover 14 techniques. Work through an example,
+identify its pattern in guided practice, or find a deduction in an unmarked
+challenge. Compare the candidates before and after, then play the full source
+puzzle. Practice history distinguishes independent and assisted completed attempts;
+it does not claim mastery. See [activities](docs/activities.md) and
+[small boards](docs/small-boards.md) for rules and reproducible curation.
 
 - Play a bank level, draw a random puzzle, choose a daily puzzle, or share a link.
 - Use manual notes, Fill notes for one-time candidates, or live Auto-notes.
@@ -58,7 +61,7 @@ and repeatable curation tools.
   Snapshots do not synchronize subsequent moves between devices.
 - In Solver mode, enter or paste a grid. Export as a line, rows, a boxed grid, or
   keycap emoji. Emoji alignment varies by app, font, and available width.
-- Generate a unique 9×9 puzzle in Solver → Generate: technique target, symmetry,
+- Generate a unique 9×9 puzzle in Tools → Generate puzzle: technique target, symmetry,
   automatic/exact/ranged clue count, seed, progress and cancellation. Preview before playing.
 - Export a fixed-layout PNG image for messaging, alongside the text formats and printable worksheets.
 - Import a unique puzzle directly into Play, with a technique assessment, saving,
@@ -118,9 +121,9 @@ The [engine review](docs/sudoku-explainer-review.md) and
 [adoption roadmap](docs/sudoku-adoption-roadmap.md) describe implemented techniques
 and future sizes, variants and practice features.
 
-The initial JavaScript entry stays below **32 KiB gzipped**. The puzzle bank and
+The initial JavaScript entry stays below **38 KiB gzipped**. The puzzle bank and
 analysis worker are loaded on demand; the bank is about 123 kB gzipped. Tests cap
-all compressed assets plus the service worker at **286 KiB**, including the bundled
+all compressed assets plus the service worker at **310 KiB**, including the bundled
 fonts. The service worker caches optional chunks and the bank too, so the complete
 first visit costs more than the initial entry script. HTML and icons add to that
 transfer; actual compression depends on the server.
@@ -129,10 +132,10 @@ transfer; actual compression depends on the server.
 
 Games, settings, played levels, and personal stats stay in this browser's
 localStorage. Clearing site data removes them; storage can also be evicted.
-Use Stats → Download backup / Restore backup for Classic personal data, its
-saved game (including imports), and all progression paths. Small boards and
-variants have separate game backups. Ordinary small/variant challenge completion
-totals are not included in either backup; see [backup coverage](docs/playing.md#backups-and-updates).
+Use **Tools → Statistics & complete backup** to download or restore one JSON
+file containing all saved games, personal statistics, completion results,
+progression paths, settings and practice history. Earlier personal backups and
+single-game files remain readable; see [backup coverage](docs/playing.md#backups-and-updates).
 There is no account or cloud synchronization. Submitting a leaderboard score
 sends the chosen name and game statistics to the configured API. Game handoff
 links contain the game state and can be read by anyone with the link.
