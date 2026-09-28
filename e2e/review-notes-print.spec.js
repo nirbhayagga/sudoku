@@ -17,7 +17,7 @@ test('imports a playable board, previews hints for free and resumes as Imported'
     await page.locator('.cell-wrapper:not(.locked)').first().click();
     const before = await page.locator('.cell-input').evaluateAll(cells => cells.map(cell => cell.value));
     await page.locator('#btn-hint').click();
-    await expect(page.locator('#btn-hint')).toHaveText('Reveal (+1 hint)');
+    await expect(page.locator('#btn-hint')).toHaveText('Reveal number');
     expect(await page.locator('.cell-input').evaluateAll(cells => cells.map(cell => cell.value))).toEqual(before);
     await page.locator('#btn-hint').click();
     await expect(page.locator('.cell-wrapper.hint')).toHaveCount(1);

@@ -65,7 +65,7 @@ test('small boards work from the standalone disk build', async ({page}) => {
     await page.locator('#board-size').selectOption('6');
     await expect(page.locator('.small-cell')).toHaveCount(36);
     await page.locator('#small-hint').click();
-    await expect(page.locator('#small-status')).toContainText('free');
+    await expect(page.locator('#small-status')).toContainText('Revealing adds 1 to your hint count');
 });
 
 test('small boards remain reachable on narrow and landscape screens', async ({page}, info) => {

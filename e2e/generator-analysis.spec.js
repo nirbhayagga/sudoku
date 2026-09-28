@@ -86,7 +86,7 @@ test('advanced proof is free, can be followed, and is invalidated by undo', asyn
     });
     await page.goto('/'); await page.locator('#btn-resume-yes').click();
     await page.locator('#btn-hint').click();
-    await expect(page.locator('#status')).toContainText('Explained hint — free');
+    await expect(page.locator('#status')).toContainText('Explained hint.');
     await expect(page.locator('#hint-details')).toBeVisible();
     await page.locator('#hint-details > summary').click();
     await expect(page.locator('#hint-steps')).toContainText('Assume:');
@@ -120,7 +120,7 @@ test('simpler uniqueness deductions render a candidate map and reveal the correc
     });
     await page.goto('/'); await page.locator('#btn-resume-yes').click();
     await page.locator('#btn-hint').click();
-    await expect(page.locator('#status')).toContainText('Explained hint — free', { timeout: 12000 });
+    await expect(page.locator('#status')).toContainText('Explained hint.', { timeout: 12000 });
     await page.locator('#hint-details > summary').click();
     await expect(page.locator('#hint-steps')).toContainText('verified to have one solution');
     await page.locator('#hint-steps details > summary').first().click();

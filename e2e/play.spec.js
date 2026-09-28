@@ -90,7 +90,7 @@ test.describe('playing', () => {
         await page.locator('.cell-wrapper:not(.locked)').first().click();
         await page.locator('#btn-hint').click();
         await expect(page.locator('.cell-wrapper.hint')).toHaveCount(0);
-        await expect(page.locator('#btn-hint')).toHaveText('Reveal (+1 hint)');
+        await expect(page.locator('#btn-hint')).toHaveText('Reveal number');
         await page.locator('#btn-hint').click();
 
         await expect(page.locator('.cell-wrapper.hint')).toHaveCount(1);
@@ -132,7 +132,7 @@ test.describe('explaining hints', () => {
         await page.locator('#btn-hint').click();
 
         await expect(page.locator('.cell-wrapper.hint-target')).toHaveCount(1);
-        await expect(page.locator('#btn-hint')).toHaveText('Reveal (+1 hint)');
+        await expect(page.locator('#btn-hint')).toHaveText('Reveal number');
 
         // The dimming is CSS, so only a real browser can confirm it applied.
         // Polled rather than sampled once: opacity is transitioned, so an
@@ -147,7 +147,7 @@ test.describe('explaining hints', () => {
 
         await page.locator('#btn-hint').click();
         await expect(page.locator('.cell-wrapper.hint')).toHaveCount(1);
-        await expect(page.locator('#btn-hint')).toHaveText('Hint (free)');
+        await expect(page.locator('#btn-hint')).toHaveText('Hint');
 
         await expect
             .poll(async () => Number(await dimmed.evaluate((el) => getComputedStyle(el).opacity)))

@@ -118,7 +118,7 @@
   <div class="mode-navigation">
   <div class="mode-toggle" id="mode-toggle">
     <button class="mode-tab active" data-mode="play" id="tab-play">Play</button>
-    <button class="mode-tab" data-mode="solver" id="tab-solver">Solver</button>
+    <button class="mode-tab" data-mode="solver" id="tab-solver" title="Classic 9×9 solver">Solver</button>
     <div class="mode-indicator" id="mode-indicator"></div>
   </div>
   <button class="btn" id="btn-practice" title="Practise a Sudoku technique">Practice</button>
@@ -193,7 +193,7 @@
            the row wraps on a phone, so the wrap points mean something. -->
       <div class="play-buttons">
         <div class="btn-group" role="group" aria-label="Board">
-          <button class="btn btn-hint" id="btn-hint" title="Preview an explanation or answer offer for free (H)">Hint (free)</button>
+          <button class="btn btn-hint" id="btn-hint" title="Preview an explanation or answer offer (H)">Hint</button>
           <button class="btn" id="btn-check" title="Check for errors (Enter)">Check</button>
           <button class="btn" id="btn-undo" title="Undo (Ctrl/Cmd+Z)">Undo</button>
           <button class="btn" id="btn-redo" title="Redo (Ctrl/Cmd+Shift+Z or Ctrl+Y)">Redo</button>
@@ -440,9 +440,10 @@
       <div class="modal-body">
       <div id="stats-content"></div>
       <p id="backup-status" role="status"></p>
+      <p id="backup-scope">Includes Classic statistics, settings, played levels, daily history, the Classic saved game (including imports), and every progression path. Small-board and variant saved games need their own game backups; their ordinary challenge completion totals are not backed up.</p>
       <div class="modal-actions">
-        <button class="btn" id="btn-backup">Download backup</button>
-        <button class="btn" id="btn-restore">Restore backup</button>
+        <button class="btn" id="btn-backup" aria-describedby="backup-scope">Download backup</button>
+        <button class="btn" id="btn-restore" aria-describedby="backup-scope">Restore backup</button>
         <input id="backup-file" type="file" accept="application/json,.json" hidden>
       </div>
       <div class="modal-actions">
@@ -482,7 +483,7 @@
       <span class="shortcut"><kbd>N</kbd> Toggle notes</span>
       <span class="shortcut"><kbd>A</kbd> Auto-notes</span>
       <span class="shortcut"><kbd>F</kbd> Fill notes once</span>
-      <span class="shortcut"><kbd>H</kbd> Free preview / Reveal (+1)</span>
+      <span class="shortcut"><kbd>H</kbd> Hint preview / Reveal number</span>
       <span class="shortcut"><kbd>P</kbd> Pause / Resume</span>
       <span class="shortcut"><kbd>Ctrl/Cmd+Z</kbd> Undo</span>
       <span class="shortcut"><kbd>Ctrl/Cmd+Shift+Z</kbd> / <kbd>Ctrl+Y</kbd> Redo</span>

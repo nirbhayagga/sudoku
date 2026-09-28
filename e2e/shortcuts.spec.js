@@ -29,8 +29,8 @@ test('keyboard preview, notes, undo/redo, pause and Escape are safe', async ({ p
     await page.keyboard.press('p'); await expect(page.locator('#pause-panel')).toBeVisible();
     await page.keyboard.press('9'); await expect(cell).toHaveValue('2');
     await page.keyboard.press('p'); await expect(page.locator('#pause-panel')).toBeHidden();
-    await page.keyboard.press('h'); await expect(page.locator('#btn-hint')).toHaveText('Reveal (+1 hint)');
-    await page.keyboard.press('Escape'); await expect(page.locator('#btn-hint')).toHaveText('Hint (free)');
+    await page.keyboard.press('h'); await expect(page.locator('#btn-hint')).toHaveText('Reveal number');
+    await page.keyboard.press('Escape'); await expect(page.locator('#btn-hint')).toHaveText('Hint');
     await cell.click(); await page.keyboard.press('Control+i');
     await expect(page.locator('#modal-overlay')).toHaveClass(/active/);
     await expect(page.getByRole('dialog')).toHaveCount(1);

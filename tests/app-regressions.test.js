@@ -50,8 +50,8 @@ describe('audit gameplay regressions', () => {
         app.press(a, 'F'); expect(save(app).autoNotesUsed).toBe(true);
         app.press(a, 'P'); expect(app.$('#pause-panel').hidden).toBe(false);
         app.press(a, 'P'); expect(app.$('#pause-panel').hidden).toBe(true);
-        app.press(a, 'H'); expect(app.$('#btn-hint').textContent).toBe('Reveal (+1 hint)');
-        app.press(a, 'Escape'); expect(app.$('#btn-hint').textContent).toBe('Hint (free)');
+        app.press(a, 'H'); expect(app.$('#btn-hint').textContent).toBe('Reveal number');
+        app.press(a, 'Escape'); expect(app.$('#btn-hint').textContent).toBe('Hint');
         expect(save(app).hintsUsed).toBe(0);
     });
     it('plays imported puzzles with separate stats, notes, hints, resume and share', async () => {
@@ -63,7 +63,7 @@ describe('audit gameplay regressions', () => {
         expect(app.$('#status').textContent).toContain('Imported puzzle');
         expect(JSON.parse(app.window.localStorage.getItem('sudoku_stats_v2')).imported.started).toBe(1);
         app.click('#btn-fill-notes'); app.click('#btn-hint');
-        expect(app.$('#status').textContent).toContain('free');
+        expect(app.$('#status').textContent).toContain('Revealing adds 1 to your hint count');
         expect(save(app).hintsUsed).toBe(0);
         app.click('#btn-hint'); const snapshot = save(app);
         expect(snapshot.hintsUsed).toBe(1);

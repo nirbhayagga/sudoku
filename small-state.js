@@ -6,7 +6,14 @@ export function newSmallGame(puzzle, g, { id = 'imported', level = null, progres
     if (solved.status === 'budget-exhausted') throw new Error('Puzzle validation reached its work limit. Try a different puzzle.');
     if (solved.status !== 'solved' || solved.count !== 1 || !puzzle.includes('0')) throw new Error('Choose an incomplete puzzle with exactly one solution.');
     return { version: 1, size: g.size, geometry: g.key, puzzle, board: puzzle, id, level, progression,
-        notes: Array(g.count).fill(0), auto: false, hints: 0, elapsedMs: 0, recorded: false, undo: [], redo: [] };
+        notes: Array(g.count).fill(0), auto: false, generatedNotesUsed: false,
+        hints: 0, elapsedMs: 0, recorded: false, completion: null, undo: [], redo: [] };
+}
+// Review edits and undo snapshots never replace the first result.
+export function recordSmallCompletion(s) {
+    s.completion ??= { elapsedMs: s.elapsedMs, hints: s.hints, generatedNotesUsed: s.generatedNotesUsed };
+    s.recorded = true;
+    return s.completion;
 }
 export function validateSmallGame(s) {
     const g = [...Object.values(SMALL_GEOMETRIES), ...Object.values(VARIANT_GEOMETRIES)].find(g => g.key === s?.geometry && g.size === s?.size);
@@ -17,12 +24,25 @@ export function validateSmallGame(s) {
         || !(s.level === null || Number.isInteger(s.level) && s.level >= 1 && s.level <= 10000)
         || !Number.isSafeInteger(s.elapsedMs) || s.elapsedMs < 0 || s.elapsedMs > 31536000000
         || !Number.isSafeInteger(s.hints) || s.hints < 0 || s.hints > 100000 || typeof s.recorded !== 'boolean'
+        || (s.generatedNotesUsed != null && typeof s.generatedNotesUsed !== 'boolean')
+        || (s.completion != null && (!s.recorded
+            || !Number.isSafeInteger(s.completion.elapsedMs) || s.completion.elapsedMs < 0 || s.completion.elapsedMs > s.elapsedMs
+            || !Number.isSafeInteger(s.completion.hints) || s.completion.hints < 0 || s.completion.hints > s.hints
+            || ![true, false, null].includes(s.completion.generatedNotesUsed)))
         || ![s.undo, s.redo].every(stack => Array.isArray(stack) && stack.length <= 200 && stack.every(validSnapshot))) return null;
     const solved = solveSized(s.puzzle, g, { maxNodes: 20000 });
-    return solved.status === 'solved' && solved.count === 1 ? structuredClone(s) : null;
+    if (solved.status !== 'solved' || solved.count !== 1) return null;
+    const restored = structuredClone(s);
+    // Older games did not record generated-note assistance or a first result.
+    // Preserve their saved counters; do not invent missing historical data.
+    restored.generatedNotesUsed ??= restored.auto ? true : null;
+    restored.completion ??= null;
+    if (restored.recorded) recordSmallCompletion(restored);
+    return restored;
 }
-export function editSmallGame(s, g, mutate) {
+export function editSmallGame(s, g, mutate, { generatedNotes = false } = {}) {
     const before = snapshot(s); mutate(s);
+    if (generatedNotes || s.auto) s.generatedNotesUsed = true;
     if (s.auto) s.notes = [...sizedCandidates(s.board, g)];
     if (JSON.stringify(before) === JSON.stringify(snapshot(s))) return false;
     s.undo.push(before); if (s.undo.length > 200) s.undo.shift(); s.redo = [];

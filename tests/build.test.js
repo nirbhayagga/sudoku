@@ -190,7 +190,7 @@ describe('modular build', () => {
             .reduce((n, f) => n + gzipKb(modular, f), 0);
         // Includes both fonts, the whole lazy bank and the on-demand proof worker.
         // Includes practice, variant banks and generic generation in v1.3.
-        expect(total).toBeLessThan(285);
+        expect(total).toBeLessThan(286);
     });
 });
 

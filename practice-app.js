@@ -4,12 +4,13 @@ import { createHintDiagram } from './hint-diagram.js';
 import { cellName } from './techniques.js';
 
 export function createPracticeApp(root) {
-    root.innerHTML = `<label>Technique <select id="practice-technique"></select></label>
-      <p id="practice-task"></p><div class="practice-grid" id="practice-grid" role="group" aria-label="Technique practice board"></div>
+    root.innerHTML = `<label class="practice-technique">Technique <select id="practice-technique"></select></label>
+      <div class="practice-workspace"><div class="practice-puzzle"><p id="practice-task"></p><div class="practice-grid" id="practice-grid" role="group" aria-label="Technique practice board"></div></div>
+      <div class="practice-response">
       <p id="practice-selection"></p><div class="practice-pad" id="practice-pad" role="group" aria-label="Choose a candidate"></div>
       <p id="practice-status" role="status"></p><div class="modal-actions"><button class="btn" id="practice-explain">Show explanation</button><button class="btn" id="practice-next">Next exercise</button></div>
-      <details id="practice-proof" hidden><summary>Candidate explanation</summary><div></div></details>
-      <p>Candidate marks come from the puzzle and its preceding verified deductions. This lesson does not affect your game, statistics or progression.</p>`;
+      </div></div><details id="practice-proof" hidden><summary>Candidate explanation</summary><div></div></details>
+      <details class="practice-about"><summary>About this exercise</summary><p>Outlined cells support the pattern. Candidate marks come from the puzzle and its preceding verified deductions. This lesson does not affect your game, statistics or progression.</p></details>`;
     const $ = id => root.querySelector(`#practice-${id}`), label = type => type.replaceAll('-', ' ');
     let position = 0, prepared, exercise, selected, completed = false;
     for (const type of Object.keys(PRACTICE_BANK.groups)) {
@@ -26,14 +27,14 @@ export function createPracticeApp(root) {
             button.classList.toggle('practice-selected', Number(button.dataset.cell) === cell);
             button.setAttribute('aria-pressed', String(Number(button.dataset.cell) === cell));
         }
-        $('selection').textContent = `${cellName(cell)} — ${prepared.step.kind === 'placement' ? 'which digit must go here?' : 'which candidate can be excluded?'} Choose a digit below.`;
+        $('selection').textContent = `${cellName(cell)} — ${prepared.step.kind === 'placement' ? 'choose the digit to place' : 'choose a candidate to exclude'}.`;
         for (const b of $('pad').children) b.disabled = completed || !prepared.state.candidates[cell]?.has(b.dataset.digit);
     }
     function load() {
         const items = PRACTICE_BANK.groups[$('technique').value];
         exercise = items[position % items.length]; prepared = prepareExercise(exercise); completed = false;
         const { state, step } = prepared;
-        $('task').textContent = `Exercise ${position % items.length + 1} of ${items.length}: use ${label(step.type)} to ${step.kind === 'placement' ? 'place a digit' : 'exclude a candidate'}. Outlined cells support this pattern.`;
+        $('task').textContent = `Exercise ${position % items.length + 1} of ${items.length}: ${step.kind === 'placement' ? 'place a digit' : 'exclude a candidate'} using the outlined ${label(step.type)} pattern.`;
         $('status').textContent = ''; $('proof').hidden = true; $('proof').open = false; $('proof').querySelector('div').replaceChildren(); $('grid').replaceChildren();
         for (let cell = 0; cell < 81; cell++) {
             const b = document.createElement('button'); b.className = 'practice-cell'; b.dataset.cell = cell;

@@ -2568,7 +2568,7 @@ kbd {
 
 .board-size-control { width: 75px; flex-shrink: 0; }
 #board-size { width: 75px; min-height: 44px; padding: .4rem; border-radius: var(--radius); border: 1px solid var(--border-box); color: var(--text-primary); background-color: var(--bg-secondary); font: inherit; }
-.small-board-active #app, .small-board-active #mode-toggle, .small-board-active .shortcuts, #small-app[hidden] { display: none; }
+.small-board-active #app, .small-board-active .shortcuts, #small-app[hidden] { display: none; }
 #small-app { display: block; width: min(94vw, 520px); max-width: 520px; padding: 1rem; }
 .small-heading { display: flex; gap: 1rem; justify-content: space-between; align-items: center; }
 .small-heading h2 { font-size: 1.3rem; }
@@ -2584,11 +2584,11 @@ kbd {
 .small-selected { outline: 3px solid var(--accent-text); outline-offset: -4px; }
 .small-pencil { font: 12px 'JetBrains Mono', monospace; color: var(--text-primary); display: block; padding: 3px; }
 .small-actions, .small-pad, .small-setup { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; margin: .65rem 0; }
-#small-app .btn { min-height: 44px; }
+#small-app .btn { min-width: 44px; min-height: 44px; }
 .small-actions > .btn-group { flex-wrap: wrap; }
 .small-pad { display: grid; grid-template-columns: repeat(var(--small-size), minmax(0, 1fr)); }
 .small-pad .btn { padding: .4rem; min-width: 44px; }
-.small-pad .btn:last-child { grid-column: 1 / -1; }
+.small-pad:not([data-size="9"]) .btn:last-child { grid-column: 1 / -1; }
 @media (max-width: 380px) {
     .small-pad[data-size="6"] { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
@@ -2687,7 +2687,7 @@ body.dialog-open { position: fixed; width: 100%; overflow: hidden; }
 #small-setup-toggle { margin-bottom: .5rem; }
 #small-grid { margin: 0 auto; max-width: 100%; }
 .small-pad .btn { text-align: center; font-size: 1rem; font-weight: 600; }
-.small-pad[data-size="9"] { grid-template-columns: repeat(9, minmax(0, 1fr)); }
+.small-pad[data-size="9"] { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 .small-pad[data-size="9"] .btn { min-width: 0; }
 .small-actions { justify-content: center; }
 #small-app .small-actions .btn { font-size: .8rem; }
@@ -2705,7 +2705,6 @@ body.dialog-open { position: fixed; width: 100%; overflow: hidden; }
 .mode-navigation { display: flex; align-items: center; gap: .6rem; margin-bottom: .5rem; }
 .mode-navigation .mode-toggle { margin-bottom: 0; }
 .mode-navigation > .btn { min-height: 36px; }
-.small-board-active .mode-navigation { display: none; }
 
 @media print { body.dialog-open { position: static; top: auto !important; width: auto; } }
 
@@ -2716,3 +2715,37 @@ body.dialog-open { position: fixed; width: 100%; overflow: hidden; }
 .small-pad .btn { justify-content: center; }
 #small-clock { white-space: nowrap; font-variant-numeric: tabular-nums; }
 @media (min-width: 1000px) and (min-height: 861px) { body { padding-top: 1rem; padding-bottom: 1rem; } }
+
+/* Keep a readable board beside controls when there is room for both. */
+.small-play-layout, .small-play-controls { min-width: 0; }
+.small-game-summary { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: .4rem; margin: .4rem 0; }
+#small-app .small-game-summary p, .small-game-summary #small-setup-toggle { margin: 0; }
+@media (min-width: 700px) {
+    #small-app { width: min(100%, 960px); max-width: 960px; }
+    .small-play-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(240px, .65fr); gap: 1rem; align-items: start; }
+    .small-play-controls .small-pad { margin-top: 0; }
+    .small-play-controls .small-pad[data-size="6"] { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+/* Compact the existing lesson; teaching modes remain a separate redesign. */
+.practice-technique { display: flex; align-items: center; gap: .5rem; }
+.practice-technique select { flex: 1; min-width: 0; min-height: 44px; }
+#practice-technique { padding: .5rem 2rem .5rem .5rem; font: inherit; color: var(--text-primary); background-color: var(--bg-secondary); border: 1px solid var(--border-box); border-radius: var(--radius); }
+.practice-pad .btn { justify-content: center; font-size: 1rem; font-weight: 600; }
+#practice-task, #practice-selection, #practice-status { margin: .4rem 0; font-size: .85rem; line-height: 1.4; }
+#practice-status:empty { display: none; }
+.practice-grid { width: min(100%, 304px); margin: .4rem auto; }
+.practice-response .modal-actions { margin-top: .5rem; }
+.practice-about { margin-top: .5rem; font-size: .85rem; }
+.practice-about summary { min-height: 36px; align-content: center; cursor: pointer; }
+.practice-about p { line-height: 1.5; }
+@media (max-width: 699px) {
+    .practice-modal { max-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - .5rem); }
+    .practice-modal .modal-body { padding: .5rem; }
+    .practice-modal .modal-header { padding: .5rem; }
+}
+@media (min-width: 700px) {
+    .practice-modal { width: min(95vw, 900px); max-width: 900px; }
+    .practice-workspace { display: grid; grid-template-columns: minmax(0, 1fr) minmax(220px, .65fr); gap: 1rem; align-items: center; }
+    .practice-grid { width: min(100%, 450px); }
+}

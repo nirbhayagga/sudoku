@@ -1,9 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { geometry, SMALL_GEOMETRIES, formatSizedPuzzle, parseSizedPuzzle } from '../geometry.js';
+import { geometry, SMALL_GEOMETRIES, VARIANT_GEOMETRIES, formatSizedPuzzle, parseSizedPuzzle } from '../geometry.js';
 import { solveSized, assessSized, sizedCandidates } from '../sized-solver.js';
 import { SMALL_BANK, SMALL_BANK_REPORT } from '../small-bank.js';
 import { canonicalSized, generateSized } from '../sized-generation.js';
-import { newSmallGame, validateSmallGame, editSmallGame, smallDigit, smallUndo, smallHint } from '../small-state.js';
+import { newSmallGame, validateSmallGame, recordSmallCompletion, editSmallGame, smallDigit, smallUndo, smallHint } from '../small-state.js';
+import { VARIANT_BANK } from '../variant-bank.js';
 import { sizedLink, parseSizedLink, sizedSheet } from '../sized-export.js';
 import { PUZZLES } from '../puzzle-bank.js';
 import { SudokuSolver } from '../solver.js';
@@ -57,6 +58,33 @@ describe('curated small banks', () => {
 });
 
 describe('small game state and formats', () => {
+    it.each([
+        [SMALL_GEOMETRIES[4], SMALL_BANK[4][0]], [SMALL_GEOMETRIES[6], SMALL_BANK[6][0]],
+        [VARIANT_GEOMETRIES.diagonal, VARIANT_BANK.diagonal[0]], [VARIANT_GEOMETRIES.hyper, VARIANT_BANK.hyper[0]],
+    ])('preserves the first result through review edits, undo and save/restore for $0.key', (g, item) => {
+        const s = newSmallGame(item.puzzle, g), answer = solveSized(item.puzzle, g).solutions[0];
+        editSmallGame(s, g, x => { x.notes = [...sizedCandidates(x.board, g)]; }, { generatedNotes: true });
+        smallUndo(s);
+        expect(s.generatedNotesUsed).toBe(true);
+        for (let i = 0; i < g.count; i++) if (s.puzzle[i] === '0') smallDigit(s, g, i, answer[i]);
+        s.elapsedMs = 42000; s.hints = 2;
+        const result = { elapsedMs: 42000, hints: 2, generatedNotesUsed: true };
+        expect(recordSmallCompletion(s)).toEqual(result);
+        smallUndo(s); s.hints++; smallUndo(s, true);
+        expect(recordSmallCompletion(s)).toEqual(result);
+        expect(validateSmallGame(JSON.parse(JSON.stringify(s)))).toEqual(s);
+        expect(validateSmallGame({ ...s, completion: { ...result, elapsedMs: -1 } })).toBeNull();
+        expect(validateSmallGame({ ...s, completion: { ...result, hints: 100001 } })).toBeNull();
+        expect(validateSmallGame({ ...s, completion: { ...result, generatedNotesUsed: 'yes' } })).toBeNull();
+        expect(validateSmallGame({ ...s, recorded: false })).toBeNull();
+    });
+    it('keeps legacy saves usable without claiming unknown historical assistance', () => {
+        const s = newSmallGame(SMALL_BANK[4][0].puzzle, SMALL_GEOMETRIES[4]);
+        delete s.completion; delete s.generatedNotesUsed;
+        expect(validateSmallGame(s)).toMatchObject({ completion: null, generatedNotesUsed: null });
+        s.recorded = true; s.elapsedMs = 12000; s.hints = 3;
+        expect(validateSmallGame(s).completion).toEqual({ elapsedMs: 12000, hints: 3, generatedNotesUsed: null });
+    });
     it.each([4,6])('round-trips %s formats, geometry links and print sheets', size => {
         const g = SMALL_GEOMETRIES[size], board = SMALL_BANK[size][0].puzzle;
         for (const style of ['line','zeros','rows','grid']) expect(parseSizedPuzzle(formatSizedPuzzle(board,g,style),g)).toBe(board);

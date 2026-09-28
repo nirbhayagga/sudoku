@@ -1814,7 +1814,8 @@ function loadBank() {
         hintContinuation = null;
         hintWorking = false;
         btnHint.removeAttribute('aria-busy');
-        btnHint.textContent = 'Hint (free)';
+        btnHint.textContent = 'Hint';
+        btnHint.title = 'Preview an explanation or answer offer (H)';
         hintDetails.hidden = true;
         hintSteps.replaceChildren();
         if (!pendingHint) return;
@@ -1823,8 +1824,8 @@ function loadBank() {
         gridEl.classList.remove('hint-explaining');
         pendingHint = null;
         if (btnHint) {
-            btnHint.textContent = 'Hint (free)';
-            btnHint.title = 'Preview an explanation or answer offer for free (H)';
+            btnHint.textContent = 'Hint';
+            btnHint.title = 'Preview an explanation or answer offer (H)';
         }
     }
 
@@ -1839,7 +1840,7 @@ function loadBank() {
         for (const i of candidate.evidence) wrappers[i].classList.add('hint-evidence');
 
         if (btnHint) {
-            btnHint.textContent = 'Reveal (+1 hint)';
+            btnHint.textContent = 'Reveal number';
             btnHint.title = 'Fill the highlighted cell; adds one hint to this game (H)';
         }
         if (candidate.trace?.length) {
@@ -1887,7 +1888,7 @@ function loadBank() {
             }
         }
         const kind = candidate.answerBased ? 'Answer preview' : 'Explained hint';
-        setStatus(`${kind} — free. ${candidate.nudge} Press again to reveal (+1 hint).`);
+        setStatus(`${kind}. ${candidate.nudge} Revealing adds 1 to your hint count.`);
     }
 
     async function giveHint() {
@@ -2659,6 +2660,7 @@ function loadBank() {
             document.getElementById('small-app').hidden = true;
             scheduleFit(); return;
         }
+        if (mode !== 'play') switchMode('play');
         if (gameActive) { setPaused(true); saveGame(); }
         clearHintNudge();
         try {
@@ -2692,7 +2694,18 @@ function loadBank() {
         && [...linkedBoard].every(d => ('0' + '123456789'.slice(0, Number(linkedSize))).includes(d))
         && [...sizeParams.keys()].every(key => sizeParams.getAll(key).length === 1);
 
-    tabSolver.addEventListener('click', () => switchMode('solver'));
+    tabSolver.addEventListener('click', () => {
+        const leavingOtherBoard = document.body.classList.contains('small-board-active');
+        if (leavingOtherBoard) {
+            boardSize.value = '9';
+            changeBoardSize('9', null, 'classic');
+        }
+        switchMode('solver');
+        if (leavingOtherBoard) {
+            // The classic solver must never receive a board with extra rules.
+            setStatus('Classic 9×9 solver. Your other game is saved; choose its size and rules to resume.');
+        }
+    });
     tabPlay.addEventListener('click', () => switchMode('play'));
 
     btnSolve.addEventListener('click', solve);
@@ -2830,7 +2843,7 @@ function loadBank() {
             backupStatus.textContent = 'That file is too large for a Sudoku backup.';
             return;
         }
-        if (!window.confirm('Replace your saved game, statistics and settings with this backup?')) return;
+        if (!window.confirm('Replace your Classic saved game, statistics, settings and included progression paths with this backup? Small-board and variant saved games are unchanged.')) return;
         try {
             const result = store.restoreBackup(await file.text());
             if (!result.success) {

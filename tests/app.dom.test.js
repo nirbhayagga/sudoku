@@ -2055,7 +2055,7 @@ describe('hints', () => {
 
             expect(hintedIndex()).toBe(-1);
             expect(app.readGrid()).toBe(EASY_PUZZLE);
-            expect(app.$('#status').textContent).toMatch(/press again to reveal/i);
+            expect(app.$('#status').textContent).toMatch(/Revealing adds 1 to your hint count/);
         });
 
         it('marks the cell and the evidence behind it', () => {
@@ -2087,11 +2087,11 @@ describe('hints', () => {
 
         it('relabels the button so the next press is obvious', () => {
             deselect();
-            expect(app.$('#btn-hint').textContent).toBe('Hint (free)');
+            expect(app.$('#btn-hint').textContent).toBe('Hint');
             app.click('#btn-hint');
-            expect(app.$('#btn-hint').textContent).toBe('Reveal (+1 hint)');
+            expect(app.$('#btn-hint').textContent).toBe('Reveal number');
             app.click('#btn-hint');
-            expect(app.$('#btn-hint').textContent).toBe('Hint (free)');
+            expect(app.$('#btn-hint').textContent).toBe('Hint');
         });
 
         // The deduction may not survive a change, so a stale nudge must go.
@@ -2104,7 +2104,7 @@ describe('hints', () => {
             app.type(empty, EASY_SOLUTION[empty]);
 
             expect(app.$$('.cell-wrapper.hint-target')).toHaveLength(0);
-            expect(app.$('#btn-hint').textContent).toBe('Hint (free)');
+            expect(app.$('#btn-hint').textContent).toBe('Hint');
         });
 
         it('drops it on undo too', () => {
@@ -2243,8 +2243,8 @@ describe('hints', () => {
         app.click('#btn-hint');
         expect(hintedIndex()).toBe(-1);
         expect(app.readGrid()).toBe(EASY_PUZZLE);
-        expect(app.$('#status').textContent).toMatch(/Answer preview — free/);
-        expect(app.$('#btn-hint').textContent).toBe('Reveal (+1 hint)');
+        expect(app.$('#status').textContent).toMatch(/Answer preview./);
+        expect(app.$('#btn-hint').textContent).toBe('Reveal number');
         app.click('#btn-hint');
         expect(hintedIndex()).toBe(empty[3]);
     });
