@@ -82,6 +82,12 @@ that every same-origin response is valid application content.
 | `variant-bank.js`, `variant-tools.js` | Curated Diagonal/Hyper collections and rule-preserving equivalence checks |
 | `sw-template.js`, `vite.config.js` | Offline strategy and generated builds |
 
+Small/variant saves retain their version-1 envelope with optional completion and
+generated-note assistance fields. Validation upgrades older saves in memory using
+their saved counters and leaves unknown assistance as `null`. Undo snapshots do
+not include assistance or the first result, so neither can be erased by review.
+The first completion stops the game clock; later reveals do not replace that result.
+
 Classic 9×9 boards are 81-character strings with `0` for empties. The solver uses candidate
 bitmasks internally. Its `rateDifficulty` counts explored search nodes; it is an
 algorithm-specific measure, not proof that a person must guess. The current
@@ -257,7 +263,7 @@ progress use separate versioned storage keys and never enter the 9×9 leaderboar
 The [activities guide](activities.md) covers practice/variant curation and the
 offline correctness benchmark for newly added or imported puzzles. Build tests
 cap the initial JavaScript at 32 KiB gzip and all assets plus the service worker
-at 285 KiB, including fonts, banks, practice and the analysis worker.
+at 286 KiB, including fonts, banks, practice and the analysis worker.
 
 ## Visual regression coverage
 

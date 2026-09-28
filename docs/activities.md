@@ -20,8 +20,9 @@ games; the separate progression total includes only progression games.
 The active game remembers whether it belongs to progression. Undo/recompletion
 does not count twice. Stats backups contain all progression paths. Small/variant
 game backups also contain that board's progression path. Old backups lacking a
-progression field leave the existing path alone. As with other local data, clearing
-site storage removes progress; backups are the way to transfer it. A game handoff
+progression field leave the existing path alone. Ordinary small/variant challenge
+completion totals are not included in either backup. As with other local data, clearing
+site storage removes progress; backups transfer only their included data. A game handoff
 link includes the current activity, not the complete progression history.
 
 ## Technique practice

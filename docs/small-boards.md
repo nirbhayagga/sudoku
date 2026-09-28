@@ -51,10 +51,19 @@ entered digits use the theme's readable accent. Notes and live Auto-notes suppor
 undo/redo; value entry prunes peer notes, which undo restores. Fill notes populates
 candidates once. All candidates come from the visible board.
 
-Hint first previews a deduction or clearly identified answer offer for free.
-Reveal applies the value and increments the hint count. Pause hides the values
+Hint first previews a deduction or clearly identified answer offer without filling a cell.
+**Reveal number** applies the value and increments the hint count. Pause hides the values
 and blocks entry, notes, hints and undo. Completion identifies the puzzle; undo
-remains available, and the first completion is recorded only once.
+remains available, and the first completion is recorded only once. The first
+result keeps its elapsed time, revealed-hint count and generated-note assistance
+through undo, review, re-solving and backup/restore. Review time is not counted.
+Using Fill notes or Auto-notes marks assistance even after undo. Older saves
+preserve their saved counters; missing historical note assistance is labelled
+unknown rather than reconstructed.
+
+Play/Solver/Practice remain accessible. Practice pauses this game and returns to
+it; Solver opens the Classic 9×9 solver, keeping this game saved under its own
+size and rules. Variant boards are never passed to the Classic solver.
 
 **Import, export and print** contains:
 
@@ -68,7 +77,8 @@ remains available, and the first completion is recorded only once.
   for generation. The browser stops work after 20 seconds.
 - A game-backup download and size/rule-checked restore, including that board's
   progression path. Stats backups include all progression paths; small active
-  games still use their own backups. Clearing site data removes local progress.
+  games still use their own backups. Neither backup includes ordinary small/variant
+  challenge completion totals. Clearing site data removes local progress.
 
 The Progression disclosure starts or resumes a dedicated path. Completing a
 progression game records its identity once and enables an explicit Next action.

@@ -115,7 +115,7 @@ assertion fails the job. Browser failure artifacts include screenshots and trace
 
 ## Bank revision 2
 
-Deploy matching v1.1.0 frontend and API images together. The optional API advertises
+Deploy frontend and API images from the same release together. The optional API advertises
 its bank revision; a mismatched API is hidden by the frontend, and mismatched
 score submissions receive HTTP 409. Levels and stable puzzle identities are
 validated against the generated bank metadata shipped inside the API image.

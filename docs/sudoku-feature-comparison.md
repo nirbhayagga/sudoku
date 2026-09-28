@@ -63,7 +63,7 @@ Local evidence: [solver.js](../solver.js), [techniques.js](../techniques.js),
 | Live auto-notes | Visible-board candidates, undoable mode changes | Editable solver candidate state | Do not merge our notes with logical proof state |
 | Undo / redo | Both, including affected peer notes | Grid-snapshot undo; no comparable redo path found | Keep ours; extend to future logical state |
 | Free hint preview / explicit reveal | Yes, with answer-based correction labelled | Clues, explanations and apply actions | Keep clear assistance accounting |
-| Small clue → more detail → full proof | Free preview and expandable deduction/chain steps | Yes, progressive clues and detailed HTML | Keep labels and explicit Reveal action |
+| Small clue → more detail → full proof | Hint preview and expandable deduction/chain steps | Yes, progressive clues and detailed HTML | Keep labels and explicit Reveal action |
 | Candidate/chain diagram | Cell evidence highlighting; no chain graph | Candidate-level colors, links, views | Add after proof model; test all themes/accessibility |
 | Alternative hint tree | No | Yes, filtering duplicate outcomes | Optional Solver/Learn view |
 | Technique configuration | Fixed project policy | Technique selection dialog | Developer/advanced option first; record profile with ratings |

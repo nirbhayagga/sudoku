@@ -241,7 +241,7 @@ and a complete solution path. Its
 [controller](https://github.com/1to9only/SudokuExplainer/blob/b1f9ed4dd28dc3a7ad51975d4a8b9dd1d74d6a0e/diuf/sudoku/gui/SudokuExplainer.java)
 filters repeated outcomes and snapshots candidate state for undo.
 
-Keep our free explanation preview and explicit **Reveal (+1)**. Add optional
+Keep our explanation preview and explicit **Reveal number** action. Add optional
 progressive detail: technique → supporting cells/candidates → full proof. Keep
 wrong-entry correction explicitly answer-based. A technique selection panel and
 alternative-hint browser belong in an advanced Solver/Learn view, not the normal

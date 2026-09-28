@@ -1,7 +1,7 @@
 {
   "name": "Sudoku",
   "short_name": "Sudoku",
-  "description": "Sudoku player and solver with 5,500 puzzles across six difficulties.",
+  "description": "Sudoku player and solver with 5,692 classic puzzles across six difficulties, plus small boards, variants and technique practice.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

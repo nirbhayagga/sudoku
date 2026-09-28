@@ -51,8 +51,9 @@ and repeatable curation tools.
 - Play a bank level, draw a random puzzle, choose a daily puzzle, or share a link.
 - Use manual notes, Fill notes for one-time candidates, or live Auto-notes.
   Generated notes and digit changes support undo/redo, including peer notes.
-- **Hint (free)** previews a deduction or clearly labelled verified-answer offer.
-  **Reveal (+1 hint)** fills the cell. A selected cell also gets a free preview.
+- **Hint** previews a deduction or clearly labelled verified-answer offer.
+  **Reveal number** fills the cell and adds one to your hint count. A selected
+  cell also gets a preview before anything is filled.
 - Pause, resume a saved game, or carry a game snapshot to another device by link.
   Snapshots do not synchronize subsequent moves between devices.
 - In Solver mode, enter or paste a grid. Export as a line, rows, a boxed grid, or
@@ -106,7 +107,7 @@ The [v4 assessment](docs/puzzle-assessment-v4.md) explains the original 5,500 bo
 with checked deductions; the same engine verifies every added board. Browser
 hints and imported-puzzle assessment share its rules
 with smaller work budgets, so an interactive assessment can reach its limit.
-Candidate maps and proof details are available in the free hint preview. The
+Candidate maps and proof details are available in the hint preview. The
 seeded generator retains its v2 targeting policy for reproducibility.
 The [independent SE comparison](docs/full-bank-se-comparison-v4.md) benchmarks
 technique bands; its scores are not interchangeable with ours. Earlier reports
@@ -119,7 +120,7 @@ and future sizes, variants and practice features.
 
 The initial JavaScript entry stays below **32 KiB gzipped**. The puzzle bank and
 analysis worker are loaded on demand; the bank is about 123 kB gzipped. Tests cap
-all compressed assets plus the service worker at **285 KiB**, including the bundled
+all compressed assets plus the service worker at **286 KiB**, including the bundled
 fonts. The service worker caches optional chunks and the bank too, so the complete
 first visit costs more than the initial entry script. HTML and icons add to that
 transfer; actual compression depends on the server.
@@ -128,7 +129,10 @@ transfer; actual compression depends on the server.
 
 Games, settings, played levels, and personal stats stay in this browser's
 localStorage. Clearing site data removes them; storage can also be evicted.
-Use Stats → Download backup / Restore backup to keep a personal JSON backup.
+Use Stats → Download backup / Restore backup for Classic personal data, its
+saved game (including imports), and all progression paths. Small boards and
+variants have separate game backups. Ordinary small/variant challenge completion
+totals are not included in either backup; see [backup coverage](docs/playing.md#backups-and-updates).
 There is no account or cloud synchronization. Submitting a leaderboard score
 sends the chosen name and game statistics to the configured API. Game handoff
 links contain the game state and can be read by anyone with the link.

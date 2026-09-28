@@ -22,7 +22,7 @@ on macOS. Modified digits are left to the browser or operating system.
 | N | — | Toggle notes |
 | A | — | Toggle auto-notes |
 | F | — | Fill notes once |
-| H | — | Free preview / reveal (+1 hint) |
+| H | — | Hint preview / Reveal number |
 | P | — | Pause / resume |
 | Ctrl+Z | — | Undo |
 | Ctrl+Y / Ctrl+Shift+Z | — | Redo |
@@ -45,10 +45,10 @@ Using either generated-notes option marks the game as assisted even after undo.
 Hint explanations use visible candidates. If an earlier entry is wrong, the
 hint offers a verified correction instead of reasoning from that mistake. When
 no supported deduction is available, it explicitly offers the verified answer.
-**Hint (free)** always previews before filling anything, including for a selected
+**Hint** always previews before filling anything, including for a selected
 cell. The status says **Explained hint** when there is a deduction, or **Answer
 preview** when the offer uses the verified solution without that explanation.
-**Reveal (+1 hint)** is the only step that fills the cell and increments the hint
+**Reveal number** is the only step that fills the cell and increments the hint
 count, even if you later undo it. Selecting another cell cancels the old preview.
 On touch, tap the status text to clear selection and let the engine choose a cell.
 Advanced searches show a cancel action and run without blocking the page.
@@ -140,9 +140,20 @@ Daily status and completion both include the date, difficulty, and bank level.
 
 ## Backups and updates
 
-Open **Stats → Download backup** to save a JSON file containing personal stats,
-settings, recent daily completions, played levels, and any saved game. **Restore
-backup** validates that file before replacing local data and asks for confirmation.
+Open **Stats → Download backup** in Classic for a JSON file containing Classic
+personal stats, settings, recent daily completions, played levels, the Classic
+saved game (including imports), and all progression paths.
+
+For 4×4, 6×6, Diagonal or Hyper, open **Import, export and print → Backup** in
+that game. This saves the current game and the progression path for its size and
+rules. Download each game's backup separately. Neither kind of backup includes
+ordinary small-board/variant challenge completion totals; these are distinct
+from progression. There is currently no single backup covering every activity.
+
+**Restore backup** in Stats validates the file before replacing its included
+personal data and asks for confirmation. It leaves small/variant saved games
+alone. A game-backup restore checks the selected size and rules before replacing
+that game and its included progression path.
 Keep the file private if it contains a player name or game you do not want shared.
 A failed restore attempts to roll back the old values and reports if recovery fails.
 
