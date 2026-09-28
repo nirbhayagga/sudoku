@@ -1,3 +1,4 @@
+import { setup } from './flows.js';
 import { test as base, expect } from '@playwright/test';
 import { offlineHost } from './offline-host.js';
 
@@ -111,7 +112,7 @@ test.describe('network unavailable', () => {
         await waitForServiceWorker(page);
 
         // Pull the bank into the cache before going offline.
-        await page.locator('#btn-new-game').click();
+        await setup(page); await page.locator('#btn-new-game').click();
         await expect(page.locator('.cell-wrapper.locked').first()).toBeVisible();
 
         await offlineSite.disconnect();
@@ -119,9 +120,9 @@ test.describe('network unavailable', () => {
 
         await expect(page.locator('.cell-wrapper')).toHaveCount(81);
 
-        await page.locator('.diff-btn[data-diff="easy"]').click();
-        await page.locator('#level-input').fill('3');
-        await page.locator('#btn-new-game').click();
+        await setup(page); await page.locator('.diff-btn[data-diff="easy"]').click();
+        await setup(page); await page.locator('#level-input').fill('3');
+        await setup(page); await page.locator('#btn-new-game').click();
         await expect(page.locator('.cell-wrapper.locked').first()).toBeVisible();
 
         const empty = page.locator('.cell-wrapper:not(.locked) .cell-input').first();
@@ -146,9 +147,9 @@ test.describe('network unavailable', () => {
         await page.goto(offlineSite.url);
         await waitForServiceWorker(page);
 
-        await page.locator('.diff-btn[data-diff="easy"]').click();
-        await page.locator('#level-input').fill('1');
-        await page.locator('#btn-new-game').click();
+        await setup(page); await page.locator('.diff-btn[data-diff="easy"]').click();
+        await setup(page); await page.locator('#level-input').fill('1');
+        await setup(page); await page.locator('#btn-new-game').click();
         await expect(page.locator('.cell-wrapper.locked').first()).toBeVisible();
 
         const empty = page.locator('.cell-wrapper:not(.locked) .cell-input').first();

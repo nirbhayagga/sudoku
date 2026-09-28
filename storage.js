@@ -145,7 +145,8 @@ function writeJson(key, value) {
 function remove(key) {
     try {
         localStorage.removeItem(key);
-    } catch (e) { /* nothing to do */ }
+        return true;
+    } catch (e) { return false; }
 }
 
 // ── Saved game ─────────────────────────────────────────────────────────
@@ -434,41 +435,45 @@ export function exportBackup({ includeSavedGame = true } = {}) {
 }
 
 /** Validate the complete document before touching storage; roll back failed writes. */
-export function restoreBackup(raw) {
-    let writes;
-    try {
-        if (typeof raw !== 'string') throw new Error('Expected backup JSON text.');
-        const backup = JSON.parse(raw);
-        if (!isRecord(backup) || backup.format !== 'sudoku-backup' || (backup.version !== 1 || backup.bankVersion !== BANK_VERSION)) throw new Error('Unsupported backup format or version.');
-        const { stats, settings, played, streak, dailyDone } = backup;
-        if (!isRecord(stats) || !sameData(stats, normalizeStats(stats)) ||
-            !isRecord(settings) || !sameData(settings, { theme: settings.theme, playerName: settings.playerName,
-                ...(Object.hasOwn(settings, 'shortcutsOpen') ? { shortcutsOpen: settings.shortcutsOpen } : {}) }) ||
-            (settings.shortcutsOpen != null && typeof settings.shortcutsOpen !== 'boolean') ||
-            (settings.theme !== null && !THEMES.includes(settings.theme)) ||
-            typeof settings.playerName !== 'string' || settings.playerName.length > 20 ||
-            !isRecord(played) || !sameData(played, Object.fromEntries(DIFFICULTIES.map(d => [d, normalizePlayed(played[d], d)]))) ||
-            !sameData(streak, normalizeStreak(streak)) || !sameData(dailyDone, normalizeDaily(dailyDone))) throw new Error('Invalid personal data in backup.');
-        writes = [
-            [STATS_KEY, JSON.stringify(stats)], [STREAK_KEY, JSON.stringify(streak)],
-            [DAILY_KEY, JSON.stringify(dailyDone)], [THEME_KEY, settings.theme], [NAME_KEY, settings.playerName],
-            ...DIFFICULTIES.map(d => [playedKey(d), JSON.stringify(played[d])]),
-        ];
-        // Old backups leave newer progression alone; new ones validate before
-        // the existing atomic/rollback write path touches any personal data.
-        if (Object.hasOwn(backup, 'progression')) {
-            if (!sameData(backup.progression, normalizeProgress(backup.progression))) throw new Error('Invalid progression data.');
-            writes.push([PROGRESSION_KEY, JSON.stringify(backup.progression)]);
-        }
-        if (Object.hasOwn(settings, 'shortcutsOpen')) writes.push([SHORTCUTS_KEY, settings.shortcutsOpen === null ? null : JSON.stringify(settings.shortcutsOpen)]);
-        if (Object.hasOwn(backup, 'savedGame')) {
-            const game = backup.savedGame === null ? null : validateGameState(backup.savedGame);
-            if (backup.savedGame !== null && game === null) throw new Error('Invalid saved game in backup.');
-            writes.push([SAVE_KEY, game === null ? null : JSON.stringify(game)]);
-        }
-    } catch (e) {
-        return { success: false, error: e instanceof SyntaxError ? 'Invalid backup JSON.' : e.message };
+export function backupWrites(raw) {
+    if (typeof raw !== 'string') throw new Error('Expected backup JSON text.');
+    const backup = JSON.parse(raw);
+    if (!isRecord(backup) || backup.format !== 'sudoku-backup' || (backup.version !== 1 || backup.bankVersion !== BANK_VERSION)) throw new Error('Unsupported backup format or version.');
+    const { stats, settings, played, streak, dailyDone } = backup;
+    if (!isRecord(stats) || !sameData(stats, normalizeStats(stats)) ||
+        !isRecord(settings) || !sameData(settings, { theme: settings.theme, playerName: settings.playerName,
+            ...(Object.hasOwn(settings, 'shortcutsOpen') ? { shortcutsOpen: settings.shortcutsOpen } : {}) }) ||
+        (settings.shortcutsOpen != null && typeof settings.shortcutsOpen !== 'boolean') ||
+        (settings.theme !== null && !THEMES.includes(settings.theme)) ||
+        typeof settings.playerName !== 'string' || settings.playerName.length > 20 ||
+        !isRecord(played) || !sameData(played, Object.fromEntries(DIFFICULTIES.map(d => [d, normalizePlayed(played[d], d)]))) ||
+        !sameData(streak, normalizeStreak(streak)) || !sameData(dailyDone, normalizeDaily(dailyDone))) throw new Error('Invalid personal data in backup.');
+    const writes = [
+        [STATS_KEY, JSON.stringify(stats)], [STREAK_KEY, JSON.stringify(streak)],
+        [DAILY_KEY, JSON.stringify(dailyDone)], [THEME_KEY, settings.theme], [NAME_KEY, settings.playerName],
+        ...DIFFICULTIES.map(d => [playedKey(d), JSON.stringify(played[d])]),
+    ];
+    // Old backups leave newer progression alone; new ones validate before
+    // the existing atomic/rollback write path touches any personal data.
+    if (Object.hasOwn(backup, 'progression')) {
+        if (!sameData(backup.progression, normalizeProgress(backup.progression))) throw new Error('Invalid progression data.');
+        writes.push([PROGRESSION_KEY, JSON.stringify(backup.progression)]);
     }
+    if (Object.hasOwn(settings, 'shortcutsOpen')) writes.push([SHORTCUTS_KEY, settings.shortcutsOpen === null ? null : JSON.stringify(settings.shortcutsOpen)]);
+    if (Object.hasOwn(backup, 'savedGame')) {
+        const game = backup.savedGame === null ? null : validateGameState(backup.savedGame);
+        if (backup.savedGame !== null && game === null) throw new Error('Invalid saved game in backup.');
+        writes.push([SAVE_KEY, game === null ? null : JSON.stringify(game)]);
+    }
+    return writes;
+}
+export function restoreBackup(raw) {
+    try { return applyStorageWrites(backupWrites(raw)); }
+    catch (e) { return { success: false, error: e instanceof SyntaxError ? 'Invalid backup JSON.' : e.message }; }
+}
+
+/** All multi-key restores share one transaction and rollback boundary. */
+export function applyStorageWrites(writes) {
     const previous = new Map();
     const changed = [];
     const write = (key, value) => value === null ? localStorage.removeItem(key) : localStorage.setItem(key, value);
@@ -519,3 +524,21 @@ export function smallProgress() {
 export function recordSmallWin(id) {
     if (/^(?:[46]|9-(?:diagonal|hyper))-[a-f0-9]{16}$/.test(id)) writeJson('sudoku_small_progress_v1', [...new Set([...smallProgress(), id])]);
 }
+
+// Auxiliary data is allowlisted; complete backups must fail on unreadable JSON.
+export const AUX_KEYS = Object.freeze({
+    games: Object.freeze(Object.fromEntries(['4', '6', '9-diagonal', '9-hyper'].map(t => [t, `sudoku_small_v1_${t}`]))),
+    completed: 'sudoku_small_progress_v1', practice: 'sudoku_practice_v1', results: 'sudoku_mode_results_v1',
+});
+export function readAuxiliary(key, { strict = false } = {}) {
+    if (![...Object.values(AUX_KEYS.games), AUX_KEYS.completed, AUX_KEYS.practice, AUX_KEYS.results].includes(key)) throw new Error('Unknown data key');
+    if (!strict) return readJson(key, null);
+    const raw = localStorage.getItem(key);
+    return raw === null ? null : JSON.parse(raw);
+}
+export function writeAuxiliary(key, value) {
+    if (![AUX_KEYS.practice, AUX_KEYS.results].includes(key)) return false;
+    return writeJson(key, value);
+}
+
+export const deleteSmallData = track => Object.hasOwn(AUX_KEYS.games, track) && remove(AUX_KEYS.games[track]);

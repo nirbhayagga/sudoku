@@ -1,3 +1,4 @@
+import { setup, solver } from './flows.js';
 import { test, expect } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
@@ -7,7 +8,7 @@ import { SudokuSolver } from '../solver.js';
 import { runReasoning } from '../reasoning.js';
 
 async function generate(page) {
-    await page.locator('#tab-solver').click();
+    await solver(page);
     await page.locator('#btn-generate').click();
     await page.locator('#generator-family').selectOption('singles');
     await page.locator('#generator-symmetry').selectOption('rotate180');
@@ -56,7 +57,7 @@ test('keeps a generated preview after export and plays that exact board', async 
 
 test('cancels generation and reports unmet targets without replacing the grid', async ({ page }) => {
     await page.goto('/');
-    await page.locator('#tab-solver').click(); await page.locator('#btn-generate').click();
+    await solver(page); await page.locator('#btn-generate').click();
     await page.locator('#generator-family').selectOption('chains');
     await page.locator('#generator-clue-mode').selectOption('exact');
     await page.locator('#generator-min').fill('17');
@@ -98,14 +99,14 @@ test('advanced proof is free, can be followed, and is invalidated by undo', asyn
 });
 
 test('closing an import cancels its pending Play request', async ({ page }) => {
-    await page.goto('/'); await page.locator('#btn-import-play').click();
+    await page.goto('/'); await setup(page); await page.locator('#btn-import-play').click();
     await page.locator('#import-text').fill(PUZZLES.evil.at(-1).puzzle);
     await page.evaluate(() => {
         document.getElementById('btn-modal-play').click();
         document.getElementById('btn-modal-cancel').click();
     });
     await expect(page.locator('#modal-overlay')).not.toHaveClass(/active/);
-    await expect(page.locator('#btn-new-game')).toBeVisible();
+    await expect(page.locator('#nav-new-game')).toBeVisible();
     expect(await page.evaluate(() => localStorage.getItem('sudoku_saved_game_v2'))).toBeNull();
 });
 

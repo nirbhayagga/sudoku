@@ -2749,3 +2749,98 @@ body.dialog-open { position: fixed; width: 100%; overflow: hidden; }
     .practice-workspace { display: grid; grid-template-columns: minmax(0, 1fr) minmax(220px, .65fr); gap: 1rem; align-items: center; }
     .practice-grid { width: min(100%, 450px); }
 }
+
+/* 1.4 shared player and activity hierarchy. */
+[hidden] { display: none !important; }
+.mode-navigation { width: min(100%, 620px); justify-content: center; flex-wrap: wrap; }
+.mode-navigation .btn { min-height: 44px; }
+.mode-navigation #nav-new-game { margin-left: auto; }
+.activity-modal { width: min(94vw, 620px); }
+.activity-list { display: grid; gap: .6rem; }
+.activity-list .btn { justify-content: flex-start; min-height: 44px; text-align: left; }
+.activity-list p { margin: 0 0 .4rem; }
+.activity-field { display: flex; align-items: center; flex-wrap: wrap; gap: .6rem; margin: .6rem 0; }
+.activity-field select, .activity-field input, .lesson-options select { min-height: 44px; min-width: 0; max-width: 100%; padding: .4rem .6rem; color: var(--text-primary); background: var(--bg-secondary); border: 1px solid var(--border-box); border-radius: var(--radius); font: inherit; }
+#resume-choices { margin-top: 1rem; }
+#resume-choices summary, .notes-options summary { cursor: pointer; min-height: 44px; align-content: center; }
+#setup-controls { width: 100%; }
+#new-game-overlay .setup-row { justify-content: flex-start; }
+.player-actions { display: flex; flex-direction: column; align-items: stretch; gap: .4rem; width: 100%; }
+.player-primary { display: flex; flex-wrap: wrap; justify-content: center; gap: .35rem; }
+.player-primary .btn { min-height: 44px; }
+.player-more { display: flex; justify-content: center; gap: .5rem; }
+.player-clock { display: flex; align-items: center; gap: .5rem; }
+.player-clock .btn { min-height: 44px; }
+.notes-options { text-align: left; font-size: .85rem; color: var(--text-secondary); }
+.notes-options p { line-height: 1.5; margin: .3rem 0; }
+.notes-options .btn { margin: .2rem; }
+#small-tools { border: 0; }
+#small-tools > summary { display: none; }
+#small-tools textarea { width: 100%; box-sizing: border-box; }
+#small-tools label { display: block; margin: .7rem 0; }
+#small-tools select, #small-tools input, #small-tools textarea { max-width: 100%; min-height: 44px; color: var(--text-primary); background: var(--bg-secondary); border: 1px solid var(--border-box); font: inherit; padding: .4rem; }
+#small-tools fieldset { padding: .7rem; border: 1px solid var(--border-box); }
+#small-tool-status { font-size: .85rem; line-height: 1.5; }
+.board-cell { position: relative; }
+.board-notes { display: grid; grid-template-columns: repeat(var(--note-cols, 3), 1fr); color: var(--text-note); font: 500 clamp(9px, 2.25vw, 13px) 'JetBrains Mono', monospace; padding: 2px; }
+.board-notes > span { min-height: 1em; text-align: center; }
+.board-cell:not(.cell-wrapper) .board-value { color: var(--text-entry); font-variant-numeric: tabular-nums; }
+.board-given { background: var(--bg-cell-given); }
+.board-given .board-value { color: var(--text-given); font-weight: 600; }
+.board-peer:not(.board-given) { background: var(--bg-cell-hover); }
+.board-same-digit { box-shadow: inset 0 0 0 2px var(--accent-text); }
+.board-selected { background: var(--bg-cell-focus); outline: 2px solid var(--accent-text); outline-offset: -3px; }
+.board-error .board-value { color: var(--text-error); }
+.small-cell .board-notes, .practice-cell .board-notes { width: 100%; }
+.small-cell .board-value, .practice-cell .board-value { position: relative; z-index: 1; }
+.small-cell { color: var(--text-entry); }
+#small-grid[data-rule] .small-cell { font: 500 clamp(20px, 4vw, 32px) 'JetBrains Mono', monospace; }
+#small-app .small-game-summary { margin-bottom: .6rem; }
+.practice-cell { color: var(--text-primary); cursor: pointer; }
+.practice-cell .board-notes { font-size: clamp(9px, 2.2vw, 13px); }
+.practice-grid { width: min(100%, 450px); }
+.practice-legend, #practice-history { color: var(--text-secondary); font-size: .75rem; line-height: 1.4; }
+#practice-rule { line-height: 1.5; font-size: .9rem; }
+.lesson-options { display: grid; gap: .4rem; }
+.lesson-options label { margin: 0; }
+.practice-pattern-cell { outline: 2px dashed var(--text-primary); outline-offset: -4px; }
+.practice-consequence { background: var(--bg-cell-focus); }
+.practice-region { background: var(--bg-cell-hover); }
+#practice-proof { line-height: 1.5; font-size: .85rem; }
+.practice-pad .btn[aria-pressed="true"] { background: var(--accent-surface); color: var(--accent-on); }
+@media (max-width: 699px) {
+    .practice-modal { width: 100%; max-width: 100%; height: 100dvh; max-height: 100dvh; border-radius: 0; padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom); }
+    .practice-modal .modal-body { padding: .5rem .75rem; }
+    .practice-response { position: relative; }
+}
+.mode-navigation > .mode-tab { flex: 0 0 auto; }
+#tools-list > .mode-tab { width: 100%; flex: none; }
+.player-secondary { display: flex; justify-content: space-between; align-items: flex-start; gap: .5rem; }
+.player-secondary .notes-options { flex: 1; }
+.player-secondary .player-more { padding-top: .1rem; }
+.board-cell.board-given .board-value { color: var(--text-given); }
+@media (max-width: 699px) {
+    .practice-grid { width: min(100%, max(260px, calc(100dvh - 390px))); }
+    .practice-response { position: sticky; bottom: -.5rem; padding: .4rem 0; background: var(--bg-secondary); z-index: 3; }
+    .practice-response .modal-actions { margin-top: .25rem; }
+    #practice-history { margin: .3rem 0; }
+    #practice-rule { margin: .4rem 0; font-size: .8rem; }
+    .practice-legend { margin: .25rem 0; }
+}
+.activity-statistics { margin-top: 1rem; }
+.activity-statistics h3 { font-size: 1rem; }
+.activity-statistics p { color: var(--text-secondary); font-size: .8rem; line-height: 1.5; margin-top: .7rem; }
+/* Candidate content must never determine a row's height. */
+.practice-grid { aspect-ratio: 1; grid-auto-rows: minmax(0, 1fr); }
+.practice-cell, .small-cell { min-height: 0; height: 100%; display: grid; place-items: center; }
+.practice-cell .board-notes, .small-cell .board-notes { position: absolute; inset: 1px; width: auto; padding: 0; grid-auto-rows: minmax(0, 1fr); align-items: center; }
+.practice-cell .board-notes > span, .small-cell .board-notes > span { min-height: 0; line-height: 1; }
+.practice-response.practice-finished { position: static; }
+@media (max-width: 699px) {
+    .practice-grid { width: min(100%, max(260px, calc(100dvh - 420px))); }
+}
+
+@media (max-height: 580px) {
+    /* Very short windows need scrolling; a pinned keypad would cover the board. */
+    .practice-response { position: static; }
+}

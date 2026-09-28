@@ -1,3 +1,4 @@
+import { setup, notesOptions } from './flows.js';
 import { test, expect } from '@playwright/test';
 import { mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -9,7 +10,7 @@ const solution = SudokuSolver.solveSudoku(puzzle).solution;
 
 test('imports a playable board, previews hints for free and resumes as Imported', async ({ page }) => {
     await page.goto('/');
-    await page.locator('#btn-import-play').click();
+    await setup(page); await page.locator('#btn-import-play').click();
     await page.locator('#import-text').fill(puzzle);
     await expect(page.locator('#import-assessment')).toContainText('Solved with singles');
     await page.locator('#btn-modal-play').click();
@@ -55,7 +56,7 @@ test('generated notes undo back to manual notes and restore on redo', async ({ p
     await enter(page, puzzle.indexOf('0'), '2', isMobile);
     const notes = () => page.locator('.note-digit.visible').evaluateAll(els => els.map(el => `${el.closest('.cell-wrapper').dataset.idx}:${el.dataset.digit}`));
     const manual = await notes();
-    await page.locator('#btn-auto-notes').click(); const generated = await notes();
+    await notesOptions(page); await page.locator('#btn-auto-notes').click(); const generated = await notes();
     expect(generated.length).toBeGreaterThan(manual.length);
     await page.locator('#btn-undo').click(); expect(await notes()).toEqual(manual);
     await expect(page.locator('#btn-auto-notes')).toHaveAttribute('aria-pressed', 'false');

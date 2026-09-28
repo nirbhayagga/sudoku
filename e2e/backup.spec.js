@@ -1,3 +1,4 @@
+import { setup } from './flows.js';
 import { test, expect } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 
@@ -6,8 +7,8 @@ test('downloads a backup, rejects invalid JSON, then restores settings and the s
     await page.goto('/');
     await page.locator('#theme-toggle').click();
     await page.locator('.theme-option[data-theme="forest"]').click();
-    await page.locator('#level-input').fill('1');
-    await page.locator('#btn-new-game').click();
+    await setup(page); await page.locator('#level-input').fill('1');
+    await setup(page); await page.locator('#btn-new-game').click();
     await expect(page.locator('.cell-wrapper.locked').first()).toBeVisible();
     const empty = page.locator('.cell-wrapper:not(.locked) input').first();
     await empty.click();
@@ -23,7 +24,7 @@ test('downloads a backup, rejects invalid JSON, then restores settings and the s
     expect(download.suggestedFilename()).toMatch(/^sudoku-backup-\d{4}-\d{2}-\d{2}\.json$/);
     const bytes = await readFile(await download.path());
     const backup = JSON.parse(bytes.toString());
-    expect(backup).toMatchObject({ format: 'sudoku-backup', version: 1, settings: { theme: 'forest' } });
+    expect(backup).toMatchObject({ format: 'sudoku-backup', version: 2, settings: { theme: 'forest' } });
     expect(backup.savedGame).toBeTruthy();
     const originalSave = await page.evaluate(() => JSON.parse(localStorage.getItem('sudoku_saved_game_v2')));
 

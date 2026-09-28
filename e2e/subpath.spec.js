@@ -1,3 +1,4 @@
+import { setup, puzzleTools } from './flows.js';
 import { test, expect } from '@playwright/test';
 
 /**
@@ -18,9 +19,9 @@ test.describe('served from a subpath', () => {
         await page.goto(SUBPATH);
         await expect(page.locator('.cell-wrapper')).toHaveCount(81);
 
-        await page.locator('.diff-btn[data-diff="easy"]').click();
-        await page.locator('#level-input').fill('1');
-        await page.locator('#btn-new-game').click();
+        await setup(page); await page.locator('.diff-btn[data-diff="easy"]').click();
+        await setup(page); await page.locator('#level-input').fill('1');
+        await setup(page); await page.locator('#btn-new-game').click();
         await expect(page.locator('.cell-wrapper.locked').first()).toBeVisible();
     });
 
@@ -78,12 +79,12 @@ test.describe('served from a subpath', () => {
         });
 
         await page.goto(SUBPATH);
-        await page.locator('.diff-btn[data-diff="easy"]').click();
-        await page.locator('#level-input').fill('9');
-        await page.locator('#btn-new-game').click();
+        await setup(page); await page.locator('.diff-btn[data-diff="easy"]').click();
+        await setup(page); await page.locator('#level-input').fill('9');
+        await setup(page); await page.locator('#btn-new-game').click();
         await expect(page.locator('.cell-wrapper.locked').first()).toBeVisible();
 
-        await page.locator('#btn-share').click();
+        await puzzleTools(page); await page.locator('#btn-share').click();
         await page.waitForTimeout(300);
 
         const link = await page.evaluate(() => window.__copied || document.getElementById('share-text').value);

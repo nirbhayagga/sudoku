@@ -1,11 +1,12 @@
+import { setup } from './flows.js';
 import { test, expect } from '@playwright/test';
 
 /** Start a specific bank puzzle so assertions are deterministic. */
 async function startGame(page, { difficulty = 'easy', level = 1 } = {}) {
     await page.goto('/');
-    await page.locator(`.diff-btn[data-diff="${difficulty}"]`).click();
-    await page.locator('#level-input').fill(String(level));
-    await page.locator('#btn-new-game').click();
+    await setup(page); await page.locator(`.diff-btn[data-diff="${difficulty}"]`).click();
+    await setup(page); await page.locator('#level-input').fill(String(level));
+    await setup(page); await page.locator('#btn-new-game').click();
     await expect(page.locator('.cell-wrapper.locked').first()).toBeVisible();
 }
 

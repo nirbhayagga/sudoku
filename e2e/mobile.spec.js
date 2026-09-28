@@ -1,3 +1,4 @@
+import { setup } from './flows.js';
 import { test, expect } from '@playwright/test';
 import { SudokuSolver } from '../solver.js';
 
@@ -14,9 +15,9 @@ test.beforeEach(({ isMobile }) => {
 test.describe('touch input', () => {
     test.beforeEach(async ({ page }) => {
         await page.goto('/');
-        await page.locator('.diff-btn[data-diff="easy"]').click();
-        await page.locator('#level-input').fill('1');
-        await page.locator('#btn-new-game').click();
+        await setup(page); await page.locator('.diff-btn[data-diff="easy"]').click();
+        await setup(page); await page.locator('#level-input').fill('1');
+        await setup(page); await page.locator('#btn-new-game').click();
         await expect(page.locator('.cell-wrapper.locked').first()).toBeVisible();
     });
 

@@ -1,3 +1,7 @@
+import { renderResultSummary } from './result-view.js';
+import { createNavigation } from './navigation.js';
+import { createBoardCell } from './board-view.js';
+import { arrangePlayerControls } from './player-controls.js';
 import { createHintDiagram } from './hint-diagram.js';
 /**
  * Sudoku — UI Controller
@@ -82,7 +86,6 @@ function loadBank() {
     const levelMaxDisplay = document.getElementById('level-max');
     const btnStats = document.getElementById('btn-stats');
     const btnDaily = document.getElementById('btn-daily');
-    const setupControls = document.getElementById('setup-controls');
     const btnSetupToggle = document.getElementById('btn-setup-toggle');
     const btnShare = document.getElementById('btn-share');
     const shareOverlay = document.getElementById('share-overlay');
@@ -205,10 +208,6 @@ function loadBank() {
     let currentDaily = null;
     // Set during init when the URL names a puzzle; suppresses the resume offer.
     let sharedPuzzleLoaded = false;
-    // Whether the setup panel is showing. It folds away during a game so the
-    // board can use the height, and the toggle brings it back.
-    let setupOpen = true;
-
     /**
      * While paused the timer is frozen and the grid is blurred, so accepting
      * input would let a player solve at leisure and submit a near-zero time.
@@ -255,43 +254,15 @@ function loadBank() {
             const row = Math.floor(i / 9);
             const col = i % 9;
 
-            // Wrapper div
-            const wrapper = document.createElement('div');
-            wrapper.className = 'cell-wrapper';
-            wrapper.dataset.row = row;
-            wrapper.dataset.col = col;
-            wrapper.dataset.idx = i;
-
-            // Input
-            const input = document.createElement('input');
-            input.type = 'text';
-            input.maxLength = 1;
-            input.className = 'cell-input';
+            const view = createBoardCell({ index: i, input: true });
+            const { cell: wrapper, value: input, notes: notesGrid, marks: noteSpans } = view;
+            wrapper.classList.add('cell-wrapper');
+            wrapper.dataset.row = row; wrapper.dataset.col = col; wrapper.dataset.idx = i;
+            input.classList.add('cell-input');
             input.setAttribute('aria-label', `Row ${row + 1}, Column ${col + 1}`);
-
-            // On touch devices, suppress virtual keyboard — use on-screen numpad
-            if (isTouchDevice) {
-                input.readOnly = true;
-                input.inputMode = 'none';
-            } else {
-                input.inputMode = 'numeric';
-            }
-
-            // Notes grid (3x3 mini-grid for pencil marks)
-            const notesGrid = document.createElement('div');
-            notesGrid.className = 'notes-grid';
-            const noteSpans = [];
-            for (let d = 1; d <= 9; d++) {
-                const span = document.createElement('span');
-                span.className = 'note-digit';
-                span.textContent = d;
-                span.dataset.digit = d;
-                notesGrid.appendChild(span);
-                noteSpans.push(span);
-            }
-
-            wrapper.appendChild(notesGrid);
-            wrapper.appendChild(input);
+            input.readOnly = isTouchDevice; input.inputMode = isTouchDevice ? 'none' : 'numeric';
+            notesGrid.classList.add('notes-grid');
+            noteSpans.forEach((span, d) => { span.className = 'note-digit'; span.textContent = d + 1; });
             gridEl.appendChild(wrapper);
 
             wrappers.push(wrapper);
@@ -1572,7 +1543,7 @@ function loadBank() {
             }
 
             store.recordStart(currentDifficulty);
-            setupOpen = false;
+
             refreshLayout();
             refreshAutoNotes();
             store.deleteSavedGame();
@@ -2099,11 +2070,9 @@ function loadBank() {
         if (!completion) return;
         document.getElementById('btn-win-next').hidden = !currentProgression;
         updateProgressionUi();
-        document.getElementById('win-puzzle').textContent = puzzleIdentity();
-        const clues = [...currentPuzzle].filter(digit => digit !== '0').length;
-        const hintText = completion.hints ? `${completion.hints} hint${completion.hints === 1 ? '' : 's'} used` : 'No hints used';
-        const mistakeText = completion.mistakes ? `${completion.mistakes} mistake${completion.mistakes === 1 ? '' : 's'}` : 'no mistakes';
-        winDetails.textContent = `Time: ${formatTime(completion.time)} — ${hintText} — ${mistakeText} — ${clues} clues — ${completion.autoNotes ? 'generated notes used' : 'no generated notes'}`;
+        renderResultSummary({ identityElement: document.getElementById('win-puzzle'), detailsElement: winDetails,
+            identity: puzzleIdentity(), ...completion, clues: [...currentPuzzle].filter(d => d !== '0').length,
+            generatedNotesUsed: completion.autoNotes });
         document.getElementById('win-review-hint').textContent = 'Review or undo freely. Your original completion time and statistics stay recorded.';
         if (btnWinSubmit) {
             if (winSubmit) winSubmit.style.display = leaderboard.isAvailable() && isDifficulty(currentDifficulty) ? 'flex' : 'none';
@@ -2138,9 +2107,6 @@ function loadBank() {
                 wrappers[i].classList.add('win-anim');
                 wrappers[i].style.animationDelay = `${(i % 9) * 20 + Math.floor(i / 9) * 20}ms`;
             }
-
-            // The game is over; offering setup again is what the player wants.
-            setupOpen = true;
 
             const firstCompletion = !completion;
             if (firstCompletion) completion = { time: timerSeconds, hints: hintsUsed, mistakes, autoNotes: autoNotesUsed, submitted: false };
@@ -2384,7 +2350,7 @@ function loadBank() {
         }
 
         gameActive = true;
-        setupOpen = false;
+
         runTimer(state.timerSeconds || 0);
         if (completion) stopTimer();
 
@@ -2507,10 +2473,11 @@ function loadBank() {
         statsContent.innerHTML = html;
     }
 
-    function openStats() {
+    async function openStats() {
         document.getElementById('backup-status').textContent = '';
         renderStats();
         dialogs.open(statsOverlay);
+        try { const { activityStats } = await import('./activity-stats.js'); statsContent.querySelector('.activity-statistics')?.remove(); statsContent.append(activityStats(document)); } catch { /* Classic statistics remain available offline. */ }
     }
 
     function closeStats() { dialogs.close(statsOverlay); }
@@ -2653,7 +2620,7 @@ function loadBank() {
         const request = ++sizeRequest;
         if (size !== '9') rule = 'classic';
         boardRule.value = rule;
-        document.getElementById('board-rules-control').hidden = size !== '9';
+        document.getElementById('board-rules-control').hidden = true;
         if (size === '9' && rule === 'classic') {
             smallApp?.deactivate();
             document.body.classList.remove('small-board-active');
@@ -2666,17 +2633,17 @@ function loadBank() {
         try {
             const { createSmallApp } = await import('./small-app.js');
             if (request !== sizeRequest) return;
-            smallApp ||= createSmallApp(document.getElementById('small-app'));
+            smallApp ||= createSmallApp(document.getElementById('small-app'), { openNewGame: () => navigation.openNewGame(), openTools: () => navigation.openPuzzleTools(), showResult: result => navigation.showResult(result), openStats });
             document.body.classList.add('small-board-active');
             document.getElementById('small-app').hidden = false;
-            document.getElementById('board-rules-control').hidden = size !== '9';
+            document.getElementById('board-rules-control').hidden = true;
             subtitleEl.textContent = '';
             smallApp.activate(size, linkedPuzzle, rule);
         } catch (error) {
             boardSize.value = '9'; boardRule.value = 'classic';
             smallApp?.deactivate(); document.body.classList.remove('small-board-active');
             document.getElementById('small-app').hidden = true;
-            document.getElementById('board-rules-control').hidden = false;
+            document.getElementById('board-rules-control').hidden = true;
             setStatus(`Board could not load: ${error.message}`);
         }
     }
@@ -2758,8 +2725,7 @@ function loadBank() {
     }
     if (btnSetupToggle) {
         btnSetupToggle.addEventListener('click', () => {
-            setupOpen = true;
-            refreshLayout();
+            navigation.openNewGame();
         });
         btnSetupToggle.addEventListener('mousedown', (e) => e.preventDefault());
     }
@@ -2813,13 +2779,17 @@ function loadBank() {
 
     const backupStatus = document.getElementById('backup-status');
     const backupFile = document.getElementById('backup-file');
-    document.getElementById('btn-backup').addEventListener('click', () => {
+    document.getElementById('btn-backup').addEventListener('click', async () => {
         if (gameActive && !handedOff && !store.saveGameState(buildSaveState())) {
             backupStatus.textContent = 'Could not save your current game. Free some storage and try again.';
             return;
         }
         let json;
-        try { json = store.exportBackup(); } catch (e) {
+        try {
+            smallApp?.flush();
+            const { exportCompleteBackup } = await import('./complete-backup.js');
+            json = exportCompleteBackup();
+        } catch (e) {
             backupStatus.textContent = e.message;
             return;
         }
@@ -2839,13 +2809,14 @@ function loadBank() {
         const file = backupFile.files?.[0];
         backupFile.value = '';
         if (!file) return;
-        if (file.size > 1024 * 1024) {
+        if (file.size > 4 * 1024 * 1024) {
             backupStatus.textContent = 'That file is too large for a Sudoku backup.';
             return;
         }
-        if (!window.confirm('Replace your Classic saved game, statistics, settings and included progression paths with this backup? Small-board and variant saved games are unchanged.')) return;
+        if (!window.confirm('Replace the saved games, results, learning history and settings included in this backup? Older backups only replace the data they contain.')) return;
         try {
-            const result = store.restoreBackup(await file.text());
+            const { restoreCompleteBackup } = await import('./complete-backup.js');
+            const result = restoreCompleteBackup(await file.text());
             if (!result.success) {
                 backupStatus.textContent = result.error || 'Could not restore that backup.';
                 return;
@@ -2853,6 +2824,7 @@ function loadBank() {
             if (saveTimeout) clearTimeout(saveTimeout);
             saveTimeout = null;
             gameActive = false;
+            smallApp?.discard();
             stopTimer();
             window.location.reload();
         } catch (e) {
@@ -2870,7 +2842,7 @@ function loadBank() {
     });
     document.getElementById('btn-progression').addEventListener('click', continueProgression);
     let practiceLoaded = false;
-    document.getElementById('btn-practice').addEventListener('click', async () => {
+    async function openPractice() {
         if (gameActive) { setPaused(true); saveGame(); }
         if (document.body.classList.contains('small-board-active')) smallApp?.pause();
         const request = gameRequest;
@@ -2878,10 +2850,11 @@ function loadBank() {
         try {
             const { createPracticeApp } = await import('./practice-app.js');
             if (request !== gameRequest || boardRequest !== sizeRequest) return;
-            if (!practiceLoaded) { createPracticeApp(document.getElementById('practice-content')); practiceLoaded = true; }
+            if (!practiceLoaded) { createPracticeApp(document.getElementById('practice-content'), { transfer: async puzzle => { dialogs.close(document.getElementById('practice-overlay')); await changeBoardSize('9', null, 'classic'); switchMode('play'); await startImportedPuzzle(puzzle); } }); practiceLoaded = true; }
             dialogs.open(document.getElementById('practice-overlay'));
         } catch { setStatus('Could not load practice. Try again.', 'error'); }
-    });
+    }
+    document.getElementById('btn-practice').addEventListener('click', openPractice);
     document.getElementById('btn-practice-close').addEventListener('click', () => dialogs.close(document.getElementById('practice-overlay')));
     document.getElementById('btn-win-next').addEventListener('click', continueProgression);
     document.getElementById('progression-controls').addEventListener('toggle', async event => {
@@ -3202,60 +3175,48 @@ function loadBank() {
     });
     window.addEventListener('pagehide', flushSave);
 
-    /**
-     * Show setup between games, fold it away during one.
-     *
-     * Difficulty, level and New Game are decided once and then take up room for
-     * the rest of the puzzle. Folding them recovers ~120px, which on a phone is
-     * the difference between a 26px cell and a 37px one.
-     */
-    function setSetupFolded(folded) {
-        if (!setupControls || !btnSetupToggle) return;
-        setupControls.style.display = folded ? 'none' : '';
-        document.getElementById('board-rules-control').hidden = folded;
-        btnSetupToggle.style.display = folded ? '' : 'none';
-        btnSetupToggle.setAttribute('aria-expanded', String(!folded));
-    }
-
-    /**
-     * Fold setup away, size the board, and unfold again if folding bought
-     * nothing.
-     *
-     * Folding only helps when height is what limits the board. On a desktop
-     * there is room to spare, so hiding the difficulty buttons mid-game would
-     * be a loss for no gain — the board is already at its maximum size.
-     */
+    // Setup lives in its own dialog; fitting measures only the active player.
     function refreshLayout() {
         if (dialogs.isOpen()) return;
         if (document.body.classList.contains('small-board-active')) { smallApp?.refreshLayout(); return; }
         document.getElementById('btn-results').style.display = completion ? '' : 'none';
         if (btnHandoff) btnHandoff.style.display = completion ? 'none' : '';
-        const playing = mode === 'play' && gameActive && !gameWon && !setupOpen;
-
-        if (!playing) {
-            setSetupFolded(false);
-            fitBoardSettled();
-            return;
-        }
-
-        setSetupFolded(false);
-        const open = fitBoardSettled();
-        const viewport = window.visualViewport?.height || window.innerHeight;
-        const openOverflow = document.body.scrollHeight - viewport;
-        if (open.atMax && openOverflow <= 1) return;
-
-        setSetupFolded(true);
-        const folded = fitBoardSettled();
-        const reducesOverflow = openOverflow > 1 && document.body.scrollHeight - viewport < openOverflow;
-
-        // Only stay folded if it actually bought something. Hiding the
-        // difficulty buttons to gain a pixel is a straight loss.
-        if (folded.size - open.size < MEANINGFUL_GAIN && !reducesOverflow) {
-            setSetupFolded(false);
-            fitBoardSettled();
-        }
-        positionPausePanel();
+        fitBoardSettled();
     }
+
+    const navigation = createNavigation({
+        dialogs,
+        pause: () => { if (gameActive) { setPaused(true); saveGame(); } smallApp?.pause(); },
+        current: () => document.body.classList.contains('small-board-active') ? smallApp.identity() : mode === 'solver' ? 'Classic 9×9 solver' : currentPuzzle ? `Classic 9×9 · ${puzzleIdentity()}` : 'Classic 9×9',
+        resume: async track => {
+            if (track === 'classic') {
+                boardSize.value = '9'; await changeBoardSize('9', null, 'classic'); switchMode('play');
+                const saved = store.loadSavedGame(); if (saved) resumeGame(saved);
+            } else { const size = track.startsWith('9-') ? '9' : track; boardSize.value = size; await changeBoardSize(size, null, track.startsWith('9-') ? track.slice(2) : 'classic'); }
+        },
+        classic: {
+            solver: tabSolver,
+            activate: () => { boardSize.value = '9'; changeBoardSize('9', null, 'classic'); switchMode('play'); },
+            import: () => { if (document.body.classList.contains('small-board-active')) navigation.openPuzzleTools(); else document.getElementById('btn-import-play').click(); },
+            generate: () => { if (document.body.classList.contains('small-board-active')) navigation.openPuzzleTools(); else document.getElementById('btn-generate').click(); },
+            stats: openStats, export: openExportDialog, share: shareCurrentPuzzle, handoff: handOffGame, reset: () => btnReset.click(),
+        },
+        other: {
+            tools: host => smallApp.openTools(host),
+            start: async (kind, selection, level) => {
+                const size = kind === '6' ? '6' : '9'; boardSize.value = size;
+                await changeBoardSize(size, null, kind === '6' ? 'classic' : kind);
+                smallApp?.startSelection(selection, level);
+            },
+        },
+    });
+    document.querySelector('.board-size-control').hidden = true;
+    document.getElementById('board-rules-control').hidden = true;
+    btnSetupToggle.hidden = true;
+    arrangePlayerControls({ root: document.getElementById('app'), actions: document.querySelector('.play-buttons'),
+        timer: gameTimerEl, hint: btnHint, check: btnCheck, undo: btnUndo, redo: btnRedo,
+        notes: btnNotesToggle, fill: document.getElementById('btn-fill-notes'), auto: btnAutoNotes,
+        pause: btnPause, tools: () => navigation.openPuzzleTools(), result: document.getElementById('btn-results') });
 
     // ── Fitting the board to the screen ────────────────────────────────
     //
@@ -3271,8 +3232,6 @@ function loadBank() {
     /** Below this a cell is too small to tap, so the page scrolls instead. */
     const MIN_CELL = 26;
 
-    /** Folding setup away has to earn its keep, in pixels per cell. */
-    const MEANINGFUL_GAIN = 4;
 
     /**
      * @returns {{size: number, atMax: boolean}} atMax true means the board is

@@ -1,3 +1,4 @@
+import { setup } from './flows.js';
 import { test, expect } from '@playwright/test';
 
 test('shortcut visibility follows the device and preserves an explicit choice', async ({ page, isMobile }) => {
@@ -41,6 +42,6 @@ test('keyboard preview, notes, undo/redo, pause and Escape are safe', async ({ p
 });
 
 test('daily status identifies its bank level during play', async ({ page }) => {
-    await page.goto('/'); await page.locator('#btn-daily').click();
+    await page.goto('/'); await setup(page); await page.locator('#btn-daily').click();
     await expect(page.locator('#status')).toHaveText(/Daily puzzle — .+ · (Easy|Medium|Hard|Expert|Evil|Nightmare) #\d+/);
 });

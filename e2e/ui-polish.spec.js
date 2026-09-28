@@ -1,3 +1,4 @@
+import { setup, chooseBoard, learn, solver, puzzleTools, notesOptions, closeActivity } from './flows.js';
 import { test, expect } from '@playwright/test';
 import { PUZZLES } from '../puzzle-bank.js';
 
@@ -69,7 +70,7 @@ test('resume is above the board and visible on a short phone', async ({ browser 
 test('dialog header stays visible, background stays still, and focus excludes closed details', async ({ browser }) => {
     const { context, page } = await phone(browser, { height: 664 });
     await page.goto('/'); await ready(page);
-    await page.locator('#tab-solver').click();
+    await solver(page);
     await page.locator('#btn-generate').click();
     const original = await page.evaluate(() => ({ top: document.body.style.top, position: getComputedStyle(document.body).position }));
     expect(original.position).toBe('fixed');
@@ -92,11 +93,13 @@ test('dialog header stays visible, background stays still, and focus excludes cl
 });
 
 test('native select painted surface follows every theme', async ({ page }) => {
+    test.slow(); // Ten themed chooser screenshots plus real menu interactions on mobile WebKit.
     await page.goto('/'); await ready(page);
     for (const theme of ['light','dark','midnight','sakura','ocean','forest','arctic','peony','matcha','vino']) {
         await page.locator('#theme-toggle').click();
         await page.locator(`.theme-option[data-theme="${theme}"]`).click();
-        const select = page.locator('#board-size');
+        await setup(page);
+        const select = page.locator('#game-kind');
         const png = await select.screenshot();
         // Inspect a real painted pixel, so native WebKit chrome cannot pass
         // just by reporting a CSS background it does not actually paint.
@@ -105,32 +108,34 @@ test('native select painted surface follows every theme', async ({ page }) => {
             const canvas = document.createElement('canvas'); canvas.width = img.width; canvas.height = img.height;
             const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0);
             const pixel = [...ctx.getImageData(Math.floor(img.width / 2), Math.floor(img.height * .15), 1, 1).data].slice(0, 3);
-            const expected = getComputedStyle(document.querySelector('#board-size')).backgroundColor.match(/[\d.]+/g).slice(0, 3).map(Number);
+            const expected = getComputedStyle(document.querySelector('#game-kind')).backgroundColor.match(/[\d.]+/g).slice(0, 3).map(Number);
             return { pixel, expected };
         }, png.toString('base64'));
         expect(painted.pixel.every((v, i) => Math.abs(v - painted.expected[i]) <= 3), theme).toBe(true);
+        await closeActivity(page);
     }
 });
 
 test('variant setup folds and its keypad stays readable on phones', async ({ browser }) => {
     const { context, page } = await phone(browser);
     await page.goto('/'); await ready(page);
-    await page.locator('#board-rule').selectOption('hyper');
+    await chooseBoard(page, 'hyper');
     await expect(page.locator('.small-cell')).toHaveCount(81);
     await expect(page.locator('#small-setup-options')).toBeHidden();
     await expect(page.locator('#small-hint')).toBeInViewport();
     await expect(page.locator('#small-pause')).toBeInViewport();
     expect(await page.locator('#small-pad button').first().evaluate(el => parseFloat(getComputedStyle(el).fontSize))).toBeGreaterThanOrEqual(16);
-    await page.locator('#small-setup-toggle').click();
-    await expect(page.locator('#small-rules')).toBeVisible();
-    await page.locator('#small-setup-toggle').click();
-    await page.locator('#small-tools > summary').click();
+    await page.locator('#nav-new-game').click();
+    await page.locator('#game-kind').selectOption('hyper');
+    await expect(page.locator('#other-rules')).toBeVisible();
+    await closeActivity(page);
+    await puzzleTools(page);
     await page.locator('[data-tool="print"]').click();
     await expect(page.locator('#small-print-source')).toBeVisible();
     await expect(page.locator('#small-text')).toBeHidden();
-    await page.locator('#board-size').selectOption('6');
+    await chooseBoard(page, '6');
     await expect(page.locator('.small-cell')).toHaveCount(36);
-    await page.locator('#small-fill').click();
+    await notesOptions(page, true); await page.locator('#small-fill').click();
     const cells = await page.locator('.small-cell').evaluateAll(els => els.map(el => { const r = el.getBoundingClientRect(); return [r.width, r.height]; }));
     expect(cells.every(([w, h]) => w >= 43 && Math.abs(w - h) <= 1)).toBe(true);
     await context.close();
@@ -141,18 +146,18 @@ test('switching practice, variants and small sizes leaves buttons stable', async
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.goto('/'); await ready(page);
     await page.locator('#btn-update').evaluate(el => { el.style.display = ''; });
-    await page.locator('#btn-new-game').click();
+    await setup(page); await page.locator('#btn-new-game').click();
     await expect(page.locator('.cell-wrapper.locked').first()).toBeVisible();
-    await page.locator('#btn-practice').click();
+    await learn(page);
     await page.locator('#btn-practice-close').click();
     if (await page.locator('#btn-setup-toggle').isVisible()) await page.locator('#btn-setup-toggle').click();
     for (const rule of ['diagonal', 'hyper']) {
-        await page.locator('#board-rule').selectOption(rule);
-        await page.locator('#small-fill').click();
+        await chooseBoard(page, rule);
+        await notesOptions(page, true); await page.locator('#small-fill').click();
     }
-    await page.locator('#board-size').selectOption('6');
-    await page.locator('#small-fill').click();
-    await expect(page.locator('.small-pencil').first()).toBeVisible();
+    await chooseBoard(page, '6');
+    await notesOptions(page, true); await page.locator('#small-fill').click();
+    await expect(page.locator('.small-cell:not(.board-given) .board-notes').first()).toBeVisible();
     const fonts = await page.locator('.small-cell').first().evaluate(el => getComputedStyle(el).fontFamily);
     expect(fonts).toContain('JetBrains Mono');
 });

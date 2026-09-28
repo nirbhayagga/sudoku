@@ -1,3 +1,4 @@
+import { setup, chooseBoard, learn, puzzleTools, notesOptions } from './flows.js';
 import { test, expect } from '@playwright/test';
 
 /**
@@ -114,6 +115,9 @@ async function contrastFailures(page) {
 
 for (const theme of THEMES) {
     test(`${theme} populated controls and states pass solid-layer contrast`, async ({ page }, testInfo) => {
+        // Each theme visits every dialog and all three other-board players.
+        // WebKit touch interactions can legitimately take over 30 seconds.
+        test.slow();
         testInfo.annotations.push({ type: 'coverage', description: 'Computed solid backgrounds; gradients, blur and pseudo-elements require visual review.' });
         await page.emulateMedia({ reducedMotion: 'reduce' });
         await page.goto('/');
@@ -127,9 +131,9 @@ for (const theme of THEMES) {
         await page.locator('#theme-toggle').click();
 
         // Play state has the most on screen: locked givens, status, controls.
-        await page.locator('.diff-btn[data-diff="easy"]').click();
-        await page.locator('#level-input').fill('1');
-        await page.locator('#btn-new-game').click();
+        await setup(page); await page.locator('.diff-btn[data-diff="easy"]').click();
+        await setup(page); await page.locator('#level-input').fill('1');
+        await setup(page); await page.locator('#btn-new-game').click();
         await expect(page.locator('.cell-wrapper.locked').first()).toBeVisible();
 
         // State fixtures deliberately exercise CSS combinations independently of
@@ -169,20 +173,21 @@ for (const theme of THEMES) {
             await page.locator(`#${id}`).evaluate(el => el.classList.remove('active'));
         }
         if (await page.locator('#btn-setup-toggle').isVisible()) await page.locator('#btn-setup-toggle').click();
-        await page.locator('#progression-controls summary').click();
-        await page.locator('#btn-practice').click();
+        await setup(page); await page.locator('#progression-controls summary').click();
+        await learn(page);
         await page.locator('#practice-technique').selectOption('naked-pair');
-        await page.locator('#practice-explain').click();
+        await page.locator('#practice-mode').selectOption('challenge');
+        await page.locator('#practice-explain').click(); await page.locator('#practice-explain').click();
         expect(await contrastFailures(page), 'practice candidates, proof and controls').toEqual([]);
         await page.locator('#btn-practice-close').click();
         for (const rule of ['diagonal', 'hyper']) {
-            await page.locator('#board-rule').selectOption(rule);
-            await page.locator('#small-fill').click();
+            await chooseBoard(page, rule);
+            await notesOptions(page, true); await page.locator('#small-fill').click();
             expect(await contrastFailures(page), `${rule} shaded houses and notes`).toEqual([]);
         }
-        await page.locator('#board-size').selectOption('6');
-        await page.locator('#small-fill').click();
-        await page.locator('#small-tools summary').click();
+        await chooseBoard(page, '6');
+        await notesOptions(page, true); await page.locator('#small-fill').click();
+        await puzzleTools(page);
         expect(await contrastFailures(page), 'small board, candidates and export controls').toEqual([]);
         for (const tool of ['print', 'backup']) {
             await page.locator(`[data-tool="${tool}"]`).click();
@@ -195,7 +200,7 @@ test('the landing state passes solid-layer contrast', async ({ page }) => {
     // Lighthouse audits the page as loaded, before any game starts — a
     // different set of controls is on screen than in play.
     await page.goto('/');
-    await expect(page.locator('#btn-new-game')).toBeVisible();
+    await expect(page.locator('#nav-new-game')).toBeVisible();
     expect(await contrastFailures(page)).toEqual([]);
 });
 

@@ -1,3 +1,9 @@
+import { sizedGameLink, parseSizedGameLink } from './sized-handoff.js';
+import { deleteSmallData } from './storage.js';
+import { createBoardCell, renderBoardCell, arrowCell } from './board-view.js';
+import { arrangePlayerControls } from './player-controls.js';
+import { AUX_KEYS, readAuxiliary, writeAuxiliary } from './storage.js';
+import { validateModeResults } from './complete-backup.js';
 import { SMALL_GEOMETRIES, VARIANT_GEOMETRIES, RULE_LABELS, RULE_DESCRIPTIONS, cellLabel, parseSizedPuzzle } from './geometry.js';
 import { SMALL_BANK } from './small-bank.js';
 import { VARIANT_BANK } from './variant-bank.js';
@@ -12,7 +18,7 @@ import { formatTime } from './format.js';
 import { planWorksheet } from './printing.js';
 import { fitToViewport } from './layout.js';
 
-export function createSmallApp(root) {
+export function createSmallApp(root, { openNewGame, openTools, showResult, openStats } = {}) {
     root.innerHTML = `<div class="small-heading"><h2 id="small-title"></h2><span id="small-clock"></span></div>
       <div class="small-game-summary"><p id="small-identity"></p>
       <button class="btn" id="small-setup-toggle" aria-expanded="false" aria-controls="small-setup-options">Game setup…</button></div>
@@ -46,19 +52,74 @@ export function createSmallApp(root) {
       <label>Amount <input id="small-print-count" type="number" min="1" max="24" value="4"></label></div>
       <label>Per page <select id="small-per-page"><option>1</option><option>2</option><option selected>4</option><option>6</option></select></label>
       <label><input id="small-answers" type="checkbox"> Include separate answers</label><p id="small-print-summary" role="status"></p><button class="btn" id="small-print">Print / Save PDF</button></fieldset>
-      <div id="small-tool-backup" hidden><p id="small-backup-scope">Includes this game and the progression path for its size and rules. Other saved games, settings, Classic statistics and ordinary challenge completion totals are not included. Download those games separately; use Classic Stats for personal data and all progression paths.</p><button class="btn" id="small-backup" aria-describedby="small-backup-scope">Download game backup</button><label>Restore game backup <input id="small-restore" type="file" accept="application/json,.json" aria-describedby="small-backup-scope"></label>
+      <div id="small-tool-backup" hidden><p id="small-backup-scope">Includes every saved game, statistics, settings, progression and practice history. Use Statistics & complete backup to restore a complete backup. Older single-game files can still be restored here.</p><button class="btn" id="small-backup" aria-describedby="small-backup-scope">Download complete backup</button><label>Restore older game backup <input id="small-restore" type="file" accept="application/json,.json" aria-describedby="small-backup-scope"></label>
       </div></details><details><summary>Board shortcuts</summary><p>Digits enter a value; arrows select a cell; Delete erases. N toggles notes, A auto-notes, F fills notes, H previews/reveals, P or Space pauses. Ctrl/Cmd+Z undoes; Ctrl/Cmd+Shift+Z redoes. Undo also works after completion.</p></details>`;
-    const $ = id => root.querySelector(`#small-${id}`);
+    const $ = id => document.getElementById(`small-${id}`);
+    const cellViews = [];
+    let errors = new Set(), handedOff = false, handoffOffer = null;
+    const check = document.createElement('button'); check.id = 'small-check'; check.className = 'btn'; check.textContent = 'Check';
+    check.onclick = () => {
+        if (paused) return;
+        settle(); clearHint();
+        if (errors.size) {
+            handedOff = false;
+            editSmallGame(state, g, s => { const board = [...s.board]; for (const i of errors) board[i] = '0'; s.board = board.join(''); });
+            errors.clear(); check.textContent = 'Check'; render(); message('Errors cleared. Undo restores the entries and notes.');
+        } else {
+            errors = new Set([...state.board].flatMap((d, i) => d !== '0' && d !== answer[i] && state.puzzle[i] === '0' ? [i] : []));
+            check.textContent = errors.size ? 'Clear errors' : 'Check'; render(); message(errors.size ? `${errors.size} incorrect entries marked.` : 'No incorrect entries.');
+        }
+    };
+    root.querySelector('.small-game-summary').append($('next'));
+    const resultButton = document.createElement('button'); resultButton.id = 'small-result'; resultButton.className = 'btn'; resultButton.textContent = 'Result'; resultButton.hidden = true;
+    resultButton.onclick = () => { if (state.completion) showResult?.({ identity: `${$('title').textContent} · ${$('identity').textContent}`,
+        time: Math.floor(state.completion.elapsedMs / 1000), hints: state.completion.hints,
+        generatedNotesUsed: state.completion.generatedNotesUsed, clues: [...state.puzzle].filter(d => d !== '0').length }); };
+    const toolContent = $('tools');
+    const toolStatus = document.createElement('p'); toolStatus.id = 'small-tool-status'; toolStatus.setAttribute('role', 'status'); toolContent.append(toolStatus);
+    const handoff = document.createElement('button'); handoff.id = 'small-handoff'; handoff.className = 'btn'; handoff.textContent = 'Continue on another device';
+    const confirmHandoff = document.createElement('button'); confirmHandoff.id = 'small-handoff-confirm'; confirmHandoff.className = 'btn'; confirmHandoff.textContent = 'I copied the resume link'; confirmHandoff.hidden = true;
+    function finishHandoff(offer = handoffOffer) {
+        if (!offer || offer !== handoffOffer || state !== offer.state || track !== offer.track || JSON.stringify(state) !== offer.snapshot || $('text').value !== offer.link) {
+            message('The game or link changed. Create a new resume link before removing this saved copy.'); return;
+        }
+        if (!deleteSmallData(track)) { message('The link is ready, but this device could not remove its saved copy.'); return; }
+        handedOff = true; handoffOffer = null; confirmHandoff.hidden = true;
+        message('Resume link ready. This device will not offer this game again unless you make another move here.');
+    }
+    handoff.onclick = async () => {
+        settle(); paused = true; clearHint(); render();
+        try {
+            const link = sizedGameLink(location.href, state, g); $('text').value = link;
+            const offer = handoffOffer = { state, track, snapshot: JSON.stringify(state), link };
+            const copied = await copyToClipboard(link);
+            if (offer !== handoffOffer) return;
+            if (copied) finishHandoff(offer);
+            else { confirmHandoff.hidden = false; message('Copy the resume link from Puzzle text, then confirm below.'); }
+        } catch (e) { message(e.message); }
+    };
+    confirmHandoff.onclick = () => finishHandoff(); toolContent.append(handoff, confirmHandoff);
+    const reset = document.createElement('button'); reset.className = 'btn btn-danger'; reset.textContent = 'Reset this puzzle';
+    reset.onclick = () => { if (window.confirm('Reset entries and notes for this puzzle? Your first completion result stays recorded.')) { settle(); clearHint(); handedOff = false; errors.clear(); check.textContent = 'Check'; editSmallGame(state, g, s => { s.board = s.puzzle; s.notes.fill(0); s.auto = false; }); render(); message('Entries reset. Undo restores them; your first result is kept.'); } };
+    toolContent.append(reset);
+    if (openStats) { const stats = document.createElement('button'); stats.className = 'btn'; stats.textContent = 'Statistics & complete backup'; stats.onclick = openStats; toolContent.append(stats); }
+    arrangePlayerControls({ root, actions: root.querySelector('.small-actions'), timer: $('clock'), hint: $('hint'), check,
+        undo: $('undo'), redo: $('redo'), notes: $('notes'), fill: $('fill'), auto: $('auto'), pause: $('pause'),
+        tools: () => openTools?.(), result: resultButton });
+    $('setup-toggle').textContent = 'New game'; $('setup-toggle').hidden = true;
+    // Current-player tools live in the shared dialog; legacy restore remains available.
+    toolContent.hidden = true;
+
     function showSetup(open) {
         $('setup-options').hidden = !open;
         $('setup-toggle').setAttribute('aria-expanded', String(open));
-        $('setup-toggle').textContent = open ? 'Close setup' : 'Game setup…';
+        $('setup-toggle').textContent = open ? 'Close setup' : 'New game';
         scheduleLayout();
     }
-    $('setup-toggle').onclick = () => showSetup($('setup-options').hidden);
-    for (const button of root.querySelectorAll('[data-tool]')) {
+    $('setup-toggle').onclick = () => openNewGame ? openNewGame() : showSetup($('setup-options').hidden);
+    for (const button of $('tools').querySelectorAll('[data-tool]')) {
         button.onclick = () => {
-            for (const choice of root.querySelectorAll('[data-tool]')) {
+            for (const choice of $('tools').querySelectorAll('[data-tool]')) {
                 const chosen = choice === button;
                 choice.setAttribute('aria-pressed', String(chosen));
                 $(`tool-${choice.dataset.tool}`).hidden = !chosen;
@@ -92,25 +153,29 @@ export function createSmallApp(root) {
         workSerial++; working = false; analysis.cancel();
         $('generate').textContent = 'Generate'; $('import').disabled = false;
     }
-    const message = text => { $('status').textContent = text; scheduleLayout(); };
+    const message = text => { $('status').textContent = text; toolStatus.textContent = text; scheduleLayout(); };
     const isWon = () => state?.board === answer;
     const settle = () => { if (state && active && !paused && !state.recorded && !isWon()) state.elapsedMs += Math.max(0, Date.now() - anchor); anchor = Date.now(); };
-    const save = () => { if (state) saveSmallData(track, state); };
+    const save = () => { if (state && !handedOff) saveSmallData(track, state); };
     const clearHint = () => { pending = null; $('hint').textContent = 'Hint'; $('hint').title = 'Preview an explanation or answer offer (H)'; $('proof').hidden = true; $('proof').querySelector('ol').replaceChildren(); };
     const updateClock = () => {
         const result = state.completion || state;
         $('clock').textContent = `${state.recorded ? 'Result · ' : ''}${formatTime(Math.floor(result.elapsedMs / 1000))} · ${result.hints} hints`;
     };
     function render() {
-        $('title').textContent = `${g.size} × ${g.size}${g.rule === 'classic' ? ' Sudoku' : ' · ' + RULE_LABELS[g.rule]}`;
+        $('title').textContent = g.size === 4 ? 'Introduction · 4 × 4' : g.size === 6 ? 'Quick puzzle · 6 × 6' : `9 × 9 · ${RULE_LABELS[g.rule]}`;
         $('rules').textContent = RULE_DESCRIPTIONS[g.rule];
         $('grid').dataset.rule = g.rule;
         $('identity').textContent = state.level ? `Challenge ${state.level} of ${bank.length}` : `Imported / generated puzzle`;
         if (isWon() && !state.recorded) {
-            showSetup(true);
+            showSetup(false);
             recordSmallWin(state.id);
             if (state.progression) recordProgression(track, state.id);
             recordSmallCompletion(state);
+            const results = validateModeResults(readAuxiliary(AUX_KEYS.results)) || {};
+            if (/^(?:[46]|9-(?:diagonal|hyper))-[a-f0-9]{16}$/.test(state.id) && !results[state.id]) {
+                results[state.id] = state.completion; writeAuxiliary(AUX_KEYS.results, results);
+            }
         }
         const path = progressionPosition(bank, getProgression()[track]);
         $('path-status').textContent = `${path.completed} of ${path.total} progression challenges completed. ` + (path.next ? `Next: challenge ${path.nextIndex + 1}. Only games started in progression count.` : 'Path complete! Replay any challenge by number.');
@@ -120,28 +185,24 @@ export function createSmallApp(root) {
         $('grid').style.setProperty('--small-size', g.size);
         $('grid').classList.toggle('small-paused', paused);
         $('grid').setAttribute('aria-label', paused ? 'Paused Sudoku board' : `${g.size} by ${g.size} Sudoku board`);
-        const cells = [...$('grid').children];
         for (let i = 0; i < g.count; i++) {
-            const button = cells[i], given = state.puzzle[i] !== '0';
-            button.className = 'small-cell' + (given ? ' small-given' : '') + (i === selected ? ' small-selected' : '') + (g.houses[i].some(u => ['diagonal', 'hyper region'].includes(u.kind)) ? ' variant-region' : '');
-            button.setAttribute('aria-label', paused ? `${cellLabel(g, i)}, paused` : `${cellLabel(g, i)}, ${state.board[i] === '0' ? 'empty' : state.board[i]}${given ? ', given' : ''}`);
-            button.setAttribute('aria-pressed', String(i === selected)); button.tabIndex = i === selected ? 0 : -1;
-            button.replaceChildren();
-            if (!paused && state.board[i] !== '0') {
-                const value = document.createElement('span'); value.className = 'small-value';
-                value.textContent = state.board[i]; button.append(value);
-            }
-            else if (!paused && state.notes[i]) {
-                const span = document.createElement('span'); span.className = 'small-pencil';
-                if (g.size === 9) {
-                    span.classList.add('small-pencil-grid');
-                    for (let d = 0; d < g.size; d++) { const mark = document.createElement('span'); mark.textContent = state.notes[i] & (1 << d) ? g.digits[d] : ''; span.append(mark); }
-                } else span.textContent = bits(state.notes[i]).map(d => g.digits[d]).join(' ');
-                button.append(span);
-            }
+            const view = cellViews[i], given = state.puzzle[i] !== '0';
+            renderBoardCell(view, { value: state.board[i], candidates: bits(state.notes[i]).map(d => g.digits[d]),
+                given, selected: i === selected, hidden: paused,
+                label: paused ? `${cellLabel(g, i)}, paused` : `${cellLabel(g, i)}, ${state.board[i] === '0' ? 'candidates ' + bits(state.notes[i]).map(d => g.digits[d]).join(', ') : state.board[i]}${given ? ', given' : ''}` });
+            view.cell.classList.toggle('small-given', given);
+            view.cell.classList.toggle('small-selected', i === selected);
+            view.cell.classList.toggle('variant-region', g.houses[i].some(u => ['diagonal', 'hyper region'].includes(u.kind)));
+            view.cell.classList.toggle('board-peer', i !== selected && g.peers[selected].includes(i));
+            view.cell.classList.toggle('board-same-digit', i !== selected && state.board[selected] !== '0' && state.board[selected] === state.board[i]);
+            view.cell.classList.toggle('board-error', errors.has(i));
+            view.cell.classList.toggle('practice-evidence', !paused && !!pending?.trace.some(s => s.evidence?.includes(i) || s.cells?.includes(i)));
         }
         $('notes').setAttribute('aria-pressed', String(notes)); $('auto').setAttribute('aria-pressed', String(state.auto));
         $('pause').textContent = paused ? 'Resume' : 'Pause';
+        resultButton.hidden = !state.completion;
+        $('next').hidden = g.size !== 4 && !state.completion;
+        $('next').textContent = g.size === 4 ? 'Next example' : state.progression ? 'Continue progression' : 'Next puzzle';
         $('next').disabled = state.progression ? !isWon() || !path.next : state.level === bank.length;
         $('undo').disabled = paused || !state.undo.length; $('redo').disabled = paused || !state.redo.length;
         updateClock();
@@ -158,11 +219,11 @@ export function createSmallApp(root) {
         $('grid').replaceChildren(); $('pad').replaceChildren();
         $('pad').style.setProperty('--small-size', g.size);
         $('pad').dataset.size = g.size;
+        cellViews.length = 0;
         for (let i = 0; i < g.count; i++) {
-            const b = document.createElement('button'); b.type = 'button'; b.dataset.cell = i;
-            if ((i % g.size + 1) % g.boxCols === 0 && i % g.size !== g.size - 1) b.style.borderRightWidth = '3px';
-            if ((Math.floor(i / g.size) + 1) % g.boxRows === 0 && Math.floor(i / g.size) !== g.size - 1) b.style.borderBottomWidth = '3px';
-            b.addEventListener('click', () => { selected = i; render(); }); $('grid').append(b);
+            const view = createBoardCell({ ...g, index: i }); view.cell.classList.add('small-cell');
+            view.cell.addEventListener('click', () => { selected = i; render(); });
+            cellViews.push(view); $('grid').append(view.cell);
         }
         for (const digit of g.digits + '0') {
             const b = document.createElement('button'); b.className = 'btn'; b.textContent = digit === '0' ? 'Erase' : digit;
@@ -182,7 +243,7 @@ export function createSmallApp(root) {
         cancelWork();
         const solution = verifiedAnswer || solveSized(next.puzzle, g, { limit: 1, maxNodes: 20000 }).solutions[0];
         if (!solution) throw new Error('Puzzle validation reached its work limit.');
-        settle(); if (savePrevious) save(); state = next; answer = solution;
+        settle(); if (savePrevious) save(); state = next; answer = solution; handedOff = false; handoffOffer = null; confirmHandoff.hidden = true; errors.clear(); check.textContent = 'Check';
         const index = bank.findIndex(p => p.puzzle === state.puzzle);
         state.level = index < 0 ? null : index + 1;
         state.id = index < 0 ? 'imported' : bank[index].id;
@@ -197,9 +258,16 @@ export function createSmallApp(root) {
     }
     function enter(digit) {
         if (!active || paused) return;
-        settle(); clearHint(); if (smallDigit(state, g, selected, digit, notes)) render();
+        settle(); clearHint(); errors.clear(); $('check').textContent = 'Check';
+        if (smallDigit(state, g, selected, digit, notes)) { handedOff = false; render(); }
     }
-    function action(fn) { if (!active || paused) return; settle(); clearHint(); fn(); render(); }
+    function action(fn) {
+        if (!active || paused) return;
+        settle(); clearHint(); errors.clear(); $('check').textContent = 'Check';
+        const before = JSON.stringify([state.board, state.notes, state.auto]); fn();
+        if (before !== JSON.stringify([state.board, state.notes, state.auto])) handedOff = false;
+        render();
+    }
     $('undo').onclick = () => action(() => smallUndo(state)); $('redo').onclick = () => action(() => smallUndo(state, true));
     $('notes').onclick = () => action(() => { notes = !notes; });
     $('auto').onclick = () => action(() => editSmallGame(state, g, s => { s.auto = !s.auto; }));
@@ -208,7 +276,7 @@ export function createSmallApp(root) {
     $('hint').onclick = () => {
         if (paused || isWon()) return;
         settle();
-        if (pending) { const hint = pending; clearHint(); smallDigit(state, g, hint.idx, hint.digit); state.hints++; selected = hint.idx; render(); return; }
+        if (pending) { const hint = pending; clearHint(); handedOff = false; errors.clear(); check.textContent = 'Check'; smallDigit(state, g, hint.idx, hint.digit); state.hints++; selected = hint.idx; render(); return; }
         pending = smallHint(state, g); if (!pending) return;
         selected = pending.idx; render();
         $('hint').textContent = 'Reveal number'; $('hint').title = 'Fill the highlighted cell; adds one hint to this game (H)';
@@ -248,7 +316,7 @@ export function createSmallApp(root) {
     $('share').onclick = async () => { const link = sizedLink(location.href, state.puzzle, g); $('text').value = link; message(await copyToClipboard(link) ? 'Puzzle link copied.' : 'Copy the puzzle link below.'); };
     function download(blob, name) { const url = URL.createObjectURL(blob), a = document.createElement('a'); a.href = url; a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(url), 10000); }
     $('png').onclick = async () => { try { download(await sizedPng(source(), g, document), `sudoku-${g.size}x${g.size}.png`); } catch (e) { message(e.message); } };
-    $('backup').onclick = () => { settle(); save(); download(new Blob([JSON.stringify({ ...state, progressionCompleted: getProgression()[track] })], { type: 'application/json' }), `sudoku-${g.size}x${g.size}-${g.rule}-save.json`); };
+    $('backup').onclick = async () => { try { settle(); if (!saveSmallData(track, state)) throw new Error('Could not save the current game.'); const { exportCompleteBackup } = await import('./complete-backup.js'); download(new Blob([exportCompleteBackup()], { type: 'application/json' }), 'sudoku-backup.json'); } catch (e) { message(e.message); } };
     $('restore').onchange = async () => {
         try { const file = $('restore').files[0]; if (!file) return; if (file.size > 1000000) throw new Error('Backup is too large.');
             const parsed = JSON.parse(await file.text()), next = validateSmallGame(parsed);
@@ -307,8 +375,8 @@ export function createSmallApp(root) {
         else if (g.digits.includes(key) && key.length === 1) enter(key);
         else if (['delete', 'backspace', '0'].includes(key)) enter('0');
         else if (key.startsWith('arrow')) {
-            const delta = { arrowleft: -1, arrowright: 1, arrowup: -g.size, arrowdown: g.size }[key];
-            if (delta) { selected = (selected + delta + g.count) % g.count; render(); $('grid').children[selected].focus({ preventScroll: true }); }
+            const next = arrowCell(e.key, selected, g.size);
+            if (next !== null) { selected = next; render(); cellViews[selected].cell.focus({ preventScroll: true }); }
         } else if ({ n: 'notes', a: 'auto', f: 'fill', h: 'hint', p: 'pause', ' ': 'pause' }[key]) $({ n: 'notes', a: 'auto', f: 'fill', h: 'hint', p: 'pause', ' ': 'pause' }[key]).click();
         else handled = false;
         if (handled) { e.preventDefault(); e.stopPropagation(); }
@@ -319,6 +387,14 @@ export function createSmallApp(root) {
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flush(); });
     return {
         refreshLayout,
+        flush() { settle(); if (state && !handedOff && !saveSmallData(track, state)) throw new Error('Could not save the current board.'); },
+        discard() { active = false; state = null; cancelWork(); },
+        identity() { return `${g.size}×${g.size} ${RULE_LABELS[g.rule]} · ${$('identity').textContent}`; },
+        openTools(host) { toolContent.hidden = false; toolContent.open = true; host.append(toolContent); },
+        startSelection(selection, level) {
+            if (selection === 'progression') continuePath();
+            else start(selection === 'random' ? Math.floor(Math.random() * bank.length) + 1 : level);
+        },
         pause() { if (active && !paused) $('pause').click(); },
         activate(size, puzzle = null, rule = 'classic') {
             settle(); save(); state = null; g = rule === 'classic' ? SMALL_GEOMETRIES[size] : VARIANT_GEOMETRIES[rule];
@@ -326,9 +402,15 @@ export function createSmallApp(root) {
             track = rule === 'classic' ? String(size) : `9-${rule}`; active = true;
             showSetup(false); $('tools').open = false;
             try {
-                if (puzzle) load(newSmallGame(puzzle, g));
+                if (puzzle && new URLSearchParams(location.search).has('resume')) {
+                    const incoming = parseSizedGameLink(location.search, g, puzzle);
+                    if (!incoming) throw new Error('This resume link is invalid. Your existing game has been kept.');
+                    load(incoming); history.replaceState(null, '', location.pathname + location.hash);
+                    message('Game continued from another device.');
+                }
+                else if (puzzle) load(newSmallGame(puzzle, g));
                 else { const saved = validateSmallGame(loadSmallData(track)); if (saved?.geometry === g.key) load(saved); else start(1); }
-            } catch (e) { start(1); message(e.message); }
+            } catch (e) { const saved = validateSmallGame(loadSmallData(track)); if (saved?.geometry === g.key) load(saved); else start(1); message(e.message); }
             scheduleLayout();
         },
         deactivate() { cancelWork(); settle(); save(); active = false; },

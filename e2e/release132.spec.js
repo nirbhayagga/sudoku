@@ -1,3 +1,4 @@
+import { chooseBoard, learn, solver, notesOptions } from './flows.js';
 import { test, expect } from '@playwright/test';
 import { SMALL_GEOMETRIES, VARIANT_GEOMETRIES } from '../geometry.js';
 import { SMALL_BANK } from '../small-bank.js';
@@ -18,8 +19,8 @@ for (const track of ['4', '9-hyper']) test(`${track} keeps its first result afte
         if (!localStorage.getItem(key)) localStorage.setItem(key, JSON.stringify(s));
     }, { key, s });
     const choose = async () => {
-        if (variant) await page.locator('#board-rule').selectOption('hyper');
-        else await page.locator('#board-size').selectOption('4');
+        if (variant) await chooseBoard(page, 'hyper');
+        else await chooseBoard(page, '4');
         await expect(page.locator('.small-cell')).toHaveCount(g.count);
     };
     await page.goto('/'); await choose();
@@ -43,27 +44,27 @@ for (const track of ['4', '9-hyper']) test(`${track} keeps its first result afte
 });
 
 test('Practice and Classic Solver are reachable from another board without losing its game', async ({ page }) => {
-    await page.goto('/'); await page.locator('#board-size').selectOption('6');
-    await page.locator('#small-fill').click();
+    await page.goto('/'); await chooseBoard(page, '6');
+    await notesOptions(page, true); await page.locator('#small-fill').click();
     const before = await page.locator('#small-grid').textContent();
-    await page.locator('#btn-practice').click();
+    await learn(page);
     await expect(page.locator('#practice-overlay')).toHaveClass(/active/);
     await page.locator('#btn-practice-close').click();
     await expect(page.locator('#small-pause')).toHaveText('Resume');
     await page.locator('#small-pause').click();
     await expect(page.locator('#small-grid')).toHaveText(before);
-    await page.locator('#tab-solver').click();
+    await solver(page);
     await expect(page.locator('#small-app')).toBeHidden();
     await expect(page.locator('#board-size')).toHaveValue('9');
     await expect(page.locator('#board-rule')).toHaveValue('classic');
     await expect(page.locator('#status')).toContainText('Classic 9×9 solver');
-    await page.locator('#board-size').selectOption('6');
+    await chooseBoard(page, '6');
     await expect(page.locator('#tab-play')).toHaveAttribute('aria-pressed', 'true');
     await expect(page.locator('#small-grid')).toHaveText(before);
 });
 
 test('variants keep readable boards and practice controls fit phone and desktop views', async ({ page }, info) => {
-    await page.goto('/'); await page.locator('#board-rule').selectOption('hyper');
+    await page.goto('/'); await chooseBoard(page, 'hyper');
     for (const viewport of [{ width: 1280, height: 800 }, { width: 820, height: 1180 }, { width: 393, height: 700 }, { width: 320, height: 480 }, { width: 740, height: 350 }]) {
         await page.setViewportSize(viewport);
         await expect.poll(async () => (await page.locator('#small-grid').boundingBox()).width).toBeGreaterThanOrEqual(viewport.width >= 820 ? 390 : 288);
@@ -73,8 +74,9 @@ test('variants keep readable boards and practice controls fit phone and desktop 
         await page.screenshot({ path: `e2e-results/132-hyper-${viewport.width}-${info.project.name}.png`, fullPage: true });
     }
     await page.setViewportSize({ width: 393, height: 700 });
-    await page.locator('#btn-practice').click();
+    await learn(page);
     await page.locator('#practice-technique').selectOption('naked-pair');
+    await page.locator('#practice-mode').selectOption('challenge');
     await expect(page.locator('#practice-grid')).toBeInViewport({ ratio: 1 });
     await expect(page.locator('#practice-pad')).toBeInViewport({ ratio: 1 });
     await page.screenshot({ path: `e2e-results/132-practice-${info.project.name}.png`, fullPage: true });

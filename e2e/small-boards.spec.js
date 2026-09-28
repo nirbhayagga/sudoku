@@ -1,12 +1,13 @@
+import { chooseBoard, puzzleTools, notesOptions, closeActivity } from './flows.js';
 import { test, expect } from '@playwright/test';
 import { SMALL_BANK } from '../small-bank.js';
 import { SMALL_GEOMETRIES } from '../geometry.js';
 import { solveSized } from '../sized-solver.js';
 
 test('plays, pauses, restores notes and resumes each board size separately', async ({page}) => {
-    await page.goto('/'); await page.locator('#board-size').selectOption('6');
+    await page.goto('/'); await chooseBoard(page, '6');
     await expect(page.locator('.small-cell')).toHaveCount(36);
-    await page.locator('#small-auto').click();
+    await notesOptions(page, true); await page.locator('#small-auto').click();
     await expect(page.locator('#small-auto')).toHaveAttribute('aria-pressed','true');
     await page.locator('#small-undo').click();
     await expect(page.locator('#small-auto')).toHaveAttribute('aria-pressed','false');
@@ -17,11 +18,11 @@ test('plays, pauses, restores notes and resumes each board size separately', asy
     await expect(page.locator(`.small-cell[data-cell="${cell}"]`)).toHaveText('');
     await page.locator('#small-pause').click();
     await page.locator(`#small-pad [data-digit="${answer[cell]}"]`).click();
-    await page.locator('#board-size').selectOption('4');
+    await chooseBoard(page, '4');
     await expect(page.locator('.small-cell')).toHaveCount(16);
-    await page.locator('#board-size').selectOption('6');
+    await chooseBoard(page, '6');
     await expect(page.locator(`.small-cell[data-cell="${cell}"]`)).toHaveText(answer[cell]);
-    await page.reload(); await page.locator('#board-size').selectOption('6');
+    await page.reload(); await chooseBoard(page, '6');
     await expect(page.locator(`.small-cell[data-cell="${cell}"]`)).toHaveText(answer[cell]);
 });
 
@@ -29,10 +30,11 @@ test('imports, completes, exports, shares and undoes a small puzzle', async ({pa
     const p=SMALL_BANK[4][0].puzzle, answer=solveSized(p,SMALL_GEOMETRIES[4]).solutions[0];
     await page.goto(`/?size=4&box=2x2&p=${p}`);
     await expect(page.locator('.small-cell')).toHaveCount(16);
-    await page.locator('#small-tools summary').click();
+    await puzzleTools(page);
     await page.locator('#small-text').fill('0'.repeat(16)); await page.locator('#small-import').click();
     await expect(page.locator('#small-status')).toContainText('exactly one solution');
     await page.locator('#small-text').fill(p); await page.locator('#small-import').click();
+    await expect(page.locator('#small-tool-status')).toContainText('Imported puzzle.'); await closeActivity(page);
     for(let i=0;i<16;i++) if(p[i]==='0') {
         await page.locator(`.small-cell[data-cell="${i}"]`).click();
         await page.locator(`#small-pad [data-digit="${answer[i]}"]`).click();
@@ -40,7 +42,7 @@ test('imports, completes, exports, shares and undoes a small puzzle', async ({pa
     await expect(page.locator('#small-status')).toContainText('Completed 4×4');
     await page.locator('#small-undo').click();
     expect(await page.locator('.small-cell').allTextContents()).toContain('');
-    await page.locator('#small-export').click();
+    await puzzleTools(page); await page.locator('#small-export').click();
     await expect(page.locator('#small-text')).toHaveValue(p.replaceAll('0','.').match(/.{4}/g).join('\n'));
     const downloaded=page.waitForEvent('download'); await page.locator('#small-png').click();
     await (await downloaded).saveAs(`e2e-results/small-${info.project.name}.png`);
@@ -53,7 +55,7 @@ test('imports, completes, exports, shares and undoes a small puzzle', async ({pa
     await page.locator('#small-answers').check(); await page.locator('#small-print').click();
     await expect(page.locator('#small-print-summary')).toContainText('4 pages total');
     await expect(page.frameLocator('.small-print-frame').locator('article')).toHaveCount(8);
-    await page.locator('#small-tools summary').click();
+    await puzzleTools(page);
     await page.screenshot({path:`e2e-results/small-board-${info.project.name}.png`,fullPage:true});
     expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
 });
@@ -62,18 +64,18 @@ test('small boards work from the standalone disk build', async ({page}) => {
     const { pathToFileURL } = await import('node:url');
     const { resolve } = await import('node:path');
     await page.goto(pathToFileURL(resolve('dist-standalone/index.html')).href);
-    await page.locator('#board-size').selectOption('6');
+    await chooseBoard(page, '6');
     await expect(page.locator('.small-cell')).toHaveCount(36);
     await page.locator('#small-hint').click();
     await expect(page.locator('#small-status')).toContainText('Revealing adds 1 to your hint count');
 });
 
 test('small boards remain reachable on narrow and landscape screens', async ({page}, info) => {
-    await page.goto('/'); await page.locator('#board-size').selectOption('6');
+    await page.goto('/'); await chooseBoard(page, '6');
     for(const viewport of [{width:320,height:480},{width:740,height:350}]) {
         await page.setViewportSize(viewport);
-        await page.locator('#small-tools summary').scrollIntoViewIfNeeded();
-        await expect(page.locator('#small-tools summary')).toBeInViewport();
+        await page.locator('#small-app').getByRole('button', { name: 'Puzzle tools', exact: true }).scrollIntoViewIfNeeded();
+        await expect(page.locator('#small-app').getByRole('button', { name: 'Puzzle tools', exact: true })).toBeInViewport();
         expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
         const targets = await page.locator('#small-pad button, #small-undo, #small-hint').evaluateAll(buttons => buttons.map(b => { const r = b.getBoundingClientRect(); return [r.width, r.height]; }));
         expect(targets.every(([width, height]) => width >= 44 && height >= 44)).toBe(true);
@@ -82,12 +84,9 @@ test('small boards remain reachable on narrow and landscape screens', async ({pa
 });
 
 test('the last challenge cannot be restarted through Next and backups use board identity', async ({page}) => {
-    await page.goto('/'); await page.locator('#board-size').selectOption('4');
-    await page.locator('#small-setup-toggle').click();
-    await page.locator('#small-level').fill(String(SMALL_BANK[4].length));
-    await page.locator('#small-start').click();
+    await page.goto(`/?size=4&box=2x2&p=${SMALL_BANK[4].at(-1).puzzle}`);
     await expect(page.locator('#small-next')).toBeDisabled();
-    await page.locator('#small-tools summary').click();
+    await puzzleTools(page);
     const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('sudoku_small_v1_4')));
     // A backup can carry an old display level; the puzzle itself is authoritative.
     if (!saved) throw new Error('Expected a saved small game');

@@ -1,3 +1,4 @@
+import { setup, solver } from './flows.js';
 import { test, expect } from '@playwright/test';
 
 const PUZZLE = '530070000600195000098000060800060003400803001700020006060000280000419005000080079';
@@ -11,7 +12,7 @@ async function enter(page, cell, digit, isMobile) {
 test('imports a puzzle, exports each format and imports it again', async ({ page }) => {
     test.slow(); // Five complete modal export/import roundtrips.
     await page.goto('/');
-    await page.locator('#tab-solver').click();
+    await solver(page);
     // The import button opens the real parser dialog.
     await page.locator('#btn-paste').click();
     await page.locator('#import-text').fill(PUZZLE);
@@ -33,8 +34,8 @@ test('imports a puzzle, exports each format and imports it again', async ({ page
 
 test('resumes saved digits and notes, then undo and redo work', async ({ page, isMobile }) => {
     await page.goto('/');
-    await page.locator('#level-input').fill('1');
-    await page.locator('#btn-new-game').click();
+    await setup(page); await page.locator('#level-input').fill('1');
+    await setup(page); await page.locator('#btn-new-game').click();
     await expect(page.locator('.cell-wrapper.locked').first()).toBeVisible();
     const cells = page.locator('.cell-wrapper:not(.locked)');
     await enter(page, cells.nth(0), '6', isMobile);
