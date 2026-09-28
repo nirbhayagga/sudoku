@@ -33,3 +33,8 @@ playwright-report
 .lighthouseci
 *.log
 *.zip
+
+# Local agent instructions, diagnostics and visual-review scripts.
+.agents
+.codex
+LOCAL-*

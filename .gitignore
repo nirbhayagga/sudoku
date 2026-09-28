@@ -35,7 +35,7 @@ CLAUDE.md
 dist-standalone/
 
 # Personal notes, not for the repo
-LOCAL-*.md
+LOCAL-*
 e2e-results/
 test-results/
 playwright-report/
