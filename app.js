@@ -3326,7 +3326,9 @@ function loadBank() {
         }
     }
     void initializeView();
-    document.fonts?.ready.then(scheduleFit);
+    // Apply final font metrics immediately; WebKit can defer a queued frame
+    // until the next resize, leaving the board fitted to its fallback font.
+    document.fonts?.ready.then(refreshLayout);
 
     // ── Offline support ────────────────────────────────────────────────
     // Registered only over http(s): service workers are unavailable on file://,
