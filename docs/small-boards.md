@@ -46,7 +46,13 @@ The chooser closes during play, and completion reveals the next-puzzle action.
 **Puzzle tools** has separate Puzzle text, Print and Backup panels,
 so opening one tool does not expose every form. The number pad and main play
 actions remain directly available. P (or Space) pauses, F fills notes, N toggles
-notes, A toggles auto-notes, and H previews/reveals; form fields keep normal keys.
+notes, A toggles auto-notes, and H previews/reveals. These shortcuts apply with a
+grid cell focused; forms and buttons keep their normal keys. Enter checks or
+clears marked errors; Escape cancels the preview and deselects. Ctrl/Cmd+Z undoes;
+Ctrl/Cmd+Shift+Z or Ctrl/Cmd+Y redoes. Arrows stop at board edges; Home/End move to
+the first/last cell in the row. Held action keys cannot repeatedly toggle modes
+or reveal a hint; release and press again, with no delay. Press **?** outside
+forms and dialogs for keyboard help, then Escape to return focus.
 
 Select a cell, then type a digit or use the on-screen keypad. Givens are bold;
 entered digits use the theme's readable accent. Notes and live Auto-notes support

@@ -19,23 +19,35 @@ Shortcuts are shown by default on keyboard devices and collapsed on touch.
 Show/Hide remembers your choice. Board shortcuts apply with a grid cell focused;
 form fields keep their normal editing behavior. Ctrl shortcuts also accept Cmd
 on macOS. Modified digits are left to the browser or operating system.
+Arrow keys stop at board edges and can be held to keep moving. Home/End move to
+the first/last cell in the current row, including given cells. Hint, Check, notes
+actions and pause ignore auto-repeat: there is no time delay, just release and
+press again for another action. Undo/redo retain their normal repeat behavior.
+Press **?** outside forms and other dialogs to open keyboard help; Escape closes
+it and restores focus. Opening help does not change the Show/Hide preference.
 
 | Key | Solver | Play |
 |---|---|---|
 | 1–9 | Enter digit | Enter digit / toggle note |
 | 0, Delete, Backspace | Clear cell | Clear cell / notes |
-| Arrow keys | Navigate | Navigate |
+| Arrow keys | Navigate without wrapping | Navigate without wrapping |
+| Home / End | First / last cell in row | First / last cell in row |
 | Enter | Solve | Check errors / clear marked errors |
 | Escape | Close dialog / deselect | Close dialog / cancel preview / deselect |
 | N | — | Toggle notes |
 | A | — | Toggle auto-notes |
 | F | — | Fill notes once |
 | H | — | Hint preview / Reveal number |
-| P | — | Pause / resume |
+| P / Space | — | Pause / resume |
 | Ctrl+Z | — | Undo |
 | Ctrl+Y / Ctrl+Shift+Z | — | Redo |
 | Ctrl+I | Import | Import |
 | Ctrl+V | Paste grid | — |
+| ? | Keyboard help | Keyboard help |
+
+The play shortcuts also apply to Quick, Introduction, Diagonal and Hyper games;
+Ctrl+I and solver paste remain Classic tools. On buttons, Enter and Space keep
+their normal activation behavior; letters do not operate the board.
 
 Escape never clears or resets a puzzle; use the labelled buttons for those actions.
 Escape closes an open dialog before applying a board shortcut. Auto-notes derive

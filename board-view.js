@@ -30,8 +30,3 @@ export function renderBoardCell(view, { value = '0', candidates = [], given = fa
     view.notes.hidden = hidden || value !== '0';
     for (const mark of view.marks) mark.textContent = !hidden && candidates.includes(mark.dataset.digit) ? mark.dataset.digit : '';
 }
-
-export function arrowCell(key, cell, size) {
-    const delta = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -size, ArrowDown: size }[key];
-    return delta ? (cell + delta + size * size) % (size * size) : null;
-}

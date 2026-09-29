@@ -52,7 +52,8 @@ History records completed attempts by exercise identity. A correct challenge
 without guidance or incorrect attempts counts as independent; guided/corrected
 attempts count as assisted. **Review assisted exercises** offers another attempt.
 Reading a worked example does not count as completing a challenge. “Practised”
-is not a mastery percentage. Arrows move the selected cell; digits answer. In a
+is not a mastery percentage. Arrows move the selected cell without wrapping;
+Home/End move to the first/last cell in its row; digits answer. In a
 guided pattern, Space toggles a cell and digits toggle its proposed digits.
 
 Only techniques with curated examples appear. Hidden quads and Jellyfish had no

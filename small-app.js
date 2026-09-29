@@ -1,6 +1,7 @@
 import { sizedGameLink, parseSizedGameLink } from './sized-handoff.js';
 import { deleteSmallData } from './storage.js';
-import { createBoardCell, renderBoardCell, arrowCell } from './board-view.js';
+import { createBoardCell, renderBoardCell } from './board-view.js';
+import { navigationCell, isRepeatedAction } from './keyboard.js';
 import { arrangePlayerControls } from './player-controls.js';
 import { AUX_KEYS, readAuxiliary, writeAuxiliary } from './storage.js';
 import { validateModeResults } from './complete-backup.js';
@@ -54,7 +55,7 @@ export function createSmallApp(root, { openNewGame, openTools, showResult, showS
       <label>Per page <select id="small-per-page"><option>1</option><option>2</option><option selected>4</option><option>6</option></select></label>
       <label><input id="small-answers" type="checkbox"> Include separate answers</label><p id="small-print-summary" role="status"></p><button class="btn" id="small-print">Print / Save PDF</button></fieldset>
       <div id="small-tool-backup" hidden><p id="small-backup-scope">Includes every saved game, statistics, settings, progression and practice history. Use Statistics & complete backup to restore a complete backup. Older single-game files can still be restored here.</p><button class="btn" id="small-backup" aria-describedby="small-backup-scope">Download complete backup</button><label>Restore older game backup <input id="small-restore" type="file" accept="application/json,.json" aria-describedby="small-backup-scope"></label>
-      </div></details><details><summary>Board shortcuts</summary><p>Digits enter a value; arrows select a cell; Delete erases. N toggles notes, A auto-notes, F fills notes, H previews/reveals, P or Space pauses. Ctrl/Cmd+Z undoes; Ctrl/Cmd+Shift+Z redoes. Undo also works after completion.</p></details>`;
+      </div></details><details><summary>Board shortcuts</summary><p>With a grid cell focused: digits enter a value; arrows select a cell without wrapping; Home/End select the first/last cell in its row. Delete erases, Enter checks, Escape cancels a hint and deselects. N toggles notes, A auto-notes, F fills notes, H previews/reveals, P or Space pauses. Ctrl/Cmd+Z undoes; Ctrl/Cmd+Shift+Z or Ctrl/Cmd+Y redoes. Undo also works after completion. Hold arrows to keep moving; other unmodified action keys run once per press. Press ? outside forms and dialogs for keyboard help.</p></details>`;
     const $ = id => document.getElementById(`small-${id}`);
     const cellViews = [];
     let errors = new Set(), handedOff = false, handoffOffer = null;
@@ -147,7 +148,7 @@ export function createSmallApp(root, { openNewGame, openTools, showResult, showS
         });
     }
     root.addEventListener('toggle', scheduleLayout, true);
-    let g, bank, track, state, selected = 0, notes = false, paused = false, active = false, anchor = Date.now(), pending = null, answer;
+    let g, bank, track, state, selected = 0, selectionActive = true, notes = false, paused = false, active = false, anchor = Date.now(), pending = null, answer;
     const analysis = createAnalysisClient();
     let workSerial = 0, working = false;
     function cancelWork() {
@@ -189,13 +190,15 @@ export function createSmallApp(root, { openNewGame, openTools, showResult, showS
         for (let i = 0; i < g.count; i++) {
             const view = cellViews[i], given = state.puzzle[i] !== '0';
             renderBoardCell(view, { value: state.board[i], candidates: bits(state.notes[i]).map(d => g.digits[d]),
-                given, selected: i === selected, hidden: paused,
+                given, selected: selectionActive && i === selected, hidden: paused,
                 label: paused ? `${cellLabel(g, i)}, paused` : `${cellLabel(g, i)}, ${state.board[i] === '0' ? 'candidates ' + bits(state.notes[i]).map(d => g.digits[d]).join(', ') : state.board[i]}${given ? ', given' : ''}` });
             view.cell.classList.toggle('small-given', given);
-            view.cell.classList.toggle('small-selected', i === selected);
+            // Keep one Tab entry point even after Escape clears selection.
+            view.cell.tabIndex = i === selected ? 0 : -1;
+            view.cell.classList.toggle('small-selected', selectionActive && i === selected);
             view.cell.classList.toggle('variant-region', g.houses[i].some(u => ['diagonal', 'hyper region'].includes(u.kind)));
-            view.cell.classList.toggle('board-peer', i !== selected && g.peers[selected].includes(i));
-            view.cell.classList.toggle('board-same-digit', i !== selected && state.board[selected] !== '0' && state.board[selected] === state.board[i]);
+            view.cell.classList.toggle('board-peer', selectionActive && i !== selected && g.peers[selected].includes(i));
+            view.cell.classList.toggle('board-same-digit', selectionActive && i !== selected && state.board[selected] !== '0' && state.board[selected] === state.board[i]);
             view.cell.classList.toggle('board-error', errors.has(i));
             view.cell.classList.toggle('practice-evidence', !paused && !!pending?.trace.some(s => s.evidence?.includes(i) || s.cells?.includes(i)));
         }
@@ -224,7 +227,8 @@ export function createSmallApp(root, { openNewGame, openTools, showResult, showS
         cellViews.length = 0;
         for (let i = 0; i < g.count; i++) {
             const view = createBoardCell({ ...g, index: i }); view.cell.classList.add('small-cell');
-            view.cell.addEventListener('click', () => { selected = i; render(); });
+            view.cell.addEventListener('click', () => selectCell(i));
+            view.cell.addEventListener('focus', () => selectCell(i));
             cellViews.push(view); $('grid').append(view.cell);
         }
         for (const digit of g.digits + '0') {
@@ -250,7 +254,7 @@ export function createSmallApp(root, { openNewGame, openTools, showResult, showS
         state.level = index < 0 ? null : index + 1;
         state.id = index < 0 ? 'imported' : bank[index].id;
         state.progression = index >= 0 && state.progression === true;
-        selected = Math.max(0, state.board.indexOf('0')); notes = false; paused = false; anchor = Date.now(); clearHint(); build(); render();
+        selected = Math.max(0, state.board.indexOf('0')); selectionActive = true; notes = false; paused = false; anchor = Date.now(); clearHint(); build(); render();
     }
     function start(level, progression = false) {
         const item = bank[level - 1];
@@ -259,9 +263,13 @@ export function createSmallApp(root, { openNewGame, openTools, showResult, showS
         load(newSmallGame(item.puzzle, g, { id: item.id, level, progression })); message('Select a cell and enter a digit.');
     }
     function enter(digit) {
-        if (!active || paused) return;
+        if (!active || paused || !selectionActive) return;
         settle(); clearHint(); errors.clear(); $('check').textContent = 'Check';
         if (smallDigit(state, g, selected, digit, notes)) { handedOff = false; render(); }
+    }
+    function selectCell(index) {
+        if (selectionActive && index === selected) return;
+        clearHint(); selected = index; selectionActive = true; render();
     }
     function action(fn) {
         if (!active || paused) return;
@@ -278,9 +286,9 @@ export function createSmallApp(root, { openNewGame, openTools, showResult, showS
     $('hint').onclick = () => {
         if (paused || isWon()) return;
         settle();
-        if (pending) { const hint = pending; clearHint(); handedOff = false; errors.clear(); check.textContent = 'Check'; smallDigit(state, g, hint.idx, hint.digit); state.hints++; selected = hint.idx; render(); return; }
+        if (pending) { const hint = pending; clearHint(); handedOff = false; errors.clear(); check.textContent = 'Check'; smallDigit(state, g, hint.idx, hint.digit); state.hints++; selected = hint.idx; selectionActive = true; render(); return; }
         pending = smallHint(state, g); if (!pending) return;
-        selected = pending.idx; render();
+        selected = pending.idx; selectionActive = true; render();
         $('hint').textContent = 'Reveal number'; $('hint').title = 'Fill the highlighted cell; adds one hint to this game (H)';
         message(`${pending.answerBased ? 'Answer offer' : 'Explained hint'}. ${pending.nudge} Revealing adds 1 to your hint count.`);
         $('proof').hidden = !pending.trace.length;
@@ -382,17 +390,23 @@ export function createSmallApp(root, { openNewGame, openTools, showResult, showS
         } catch (e) { message(e.message); }
     };
     root.addEventListener('keydown', e => {
-        if (!active || e.target.closest('textarea,input,select') || e.altKey || e.isComposing) return;
+        if (!active || !e.target.closest('#small-grid .small-cell') || e.altKey || e.isComposing) return;
+        if (isRepeatedAction(e)) { e.preventDefault(); return; }
         const key = e.key.toLowerCase(); let handled = true;
-        if (key === ' ' && !e.target.closest('.small-cell')) return;
-        if ((e.ctrlKey || e.metaKey) && key === 'z') action(() => smallUndo(state, e.shiftKey));
+        const next = navigationCell(e.key, selected, g.size);
+        if ((e.ctrlKey || e.metaKey) && (key === 'z' || key === 'y')) action(() => smallUndo(state, key === 'y' || e.shiftKey));
         else if (e.ctrlKey || e.metaKey) return;
         else if (g.digits.includes(key) && key.length === 1) enter(key);
         else if (['delete', 'backspace', '0'].includes(key)) enter('0');
-        else if (key.startsWith('arrow')) {
-            const next = arrowCell(e.key, selected, g.size);
-            if (next !== null) { selected = next; render(); cellViews[selected].cell.focus({ preventScroll: true }); }
-        } else if ({ n: 'notes', a: 'auto', f: 'fill', h: 'hint', p: 'pause', ' ': 'pause' }[key]) $({ n: 'notes', a: 'auto', f: 'fill', h: 'hint', p: 'pause', ' ': 'pause' }[key]).click();
+        else if (next !== null) {
+            selectCell(next); cellViews[selected].cell.focus({ preventScroll: true });
+        } else if (key === 'escape') {
+            clearHint(); selectionActive = false; render(); e.target.blur();
+        } else if (key === 'enter') check.click();
+        else if ({ n: 'notes', a: 'auto', f: 'fill', h: 'hint', p: 'pause', ' ': 'pause' }[key]) {
+            $({ n: 'notes', a: 'auto', f: 'fill', h: 'hint', p: 'pause', ' ': 'pause' }[key]).click();
+            if (key === 'h') cellViews[selected].cell.focus({ preventScroll: true });
+        }
         else handled = false;
         if (handled) { e.preventDefault(); e.stopPropagation(); }
     });

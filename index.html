@@ -472,23 +472,36 @@
     </div>
   </div>
 
+  <div id="keyboard-help-overlay" class="modal-overlay">
+    <section class="modal activity-modal" role="dialog" aria-modal="true" aria-labelledby="keyboard-help-title">
+      <div class="modal-header"><h2 id="keyboard-help-title">Keyboard shortcuts</h2><button class="btn" id="btn-keyboard-help-close">Close</button></div>
+      <div class="modal-body">
+        <p>Focus a grid cell to use board shortcuts. Forms and buttons keep their normal keyboard controls.</p>
+        <div id="keyboard-help-content"></div>
+        <p>Hold arrows to keep moving. Hint, Check, notes and pause actions run once per key press. Release and press again to repeat an action.</p>
+      </div>
+    </section>
+  </div>
+
   <!-- Keyboard shortcuts -->
   <details class="shortcuts">
     <summary>Keyboard shortcuts</summary>
     <div class="shortcuts-list">
-      <span class="shortcut"><kbd>1</kbd>-<kbd>9</kbd> Digit / Note</span>
+      <span class="shortcut" data-shortcut="digits"><kbd>1</kbd>-<kbd>9</kbd> Digit / Note</span>
       <span class="shortcut"><kbd>0</kbd>/<kbd>Del</kbd> Clear cell</span>
       <span class="shortcut"><kbd>Arrows</kbd> Navigate</span>
-      <span class="shortcut"><kbd>Enter</kbd> Solve / Check</span>
+      <span class="shortcut"><kbd>Home</kbd>/<kbd>End</kbd> First / last cell in row</span>
+      <span class="shortcut" data-shortcut="enter"><kbd>Enter</kbd> <span>Solve / Check</span></span>
       <span class="shortcut"><kbd>Esc</kbd> Close / Cancel hint / Deselect</span>
-      <span class="shortcut"><kbd>N</kbd> Toggle notes</span>
-      <span class="shortcut"><kbd>A</kbd> Auto-notes</span>
-      <span class="shortcut"><kbd>F</kbd> Fill notes once</span>
-      <span class="shortcut"><kbd>H</kbd> Hint preview / Reveal number</span>
-      <span class="shortcut"><kbd>P</kbd> Pause / Resume</span>
-      <span class="shortcut"><kbd>Ctrl/Cmd+Z</kbd> Undo</span>
-      <span class="shortcut"><kbd>Ctrl/Cmd+Shift+Z</kbd> / <kbd>Ctrl+Y</kbd> Redo</span>
-      <span class="shortcut"><kbd>Ctrl/Cmd+I</kbd> Import</span>
+      <span class="shortcut" data-play-only><kbd>N</kbd> Toggle notes</span>
+      <span class="shortcut" data-play-only><kbd>A</kbd> Auto-notes</span>
+      <span class="shortcut" data-play-only><kbd>F</kbd> Fill notes once</span>
+      <span class="shortcut" data-play-only><kbd>H</kbd> Hint preview / Reveal number</span>
+      <span class="shortcut" data-play-only><kbd>P</kbd>/<kbd>Space</kbd> Pause / Resume</span>
+      <span class="shortcut" data-play-only><kbd>Ctrl/Cmd+Z</kbd> Undo</span>
+      <span class="shortcut" data-play-only><kbd>Ctrl/Cmd+Shift+Z</kbd> / <kbd>Ctrl+Y</kbd> Redo</span>
+      <span class="shortcut" data-classic-only><kbd>Ctrl/Cmd+I</kbd> Import</span>
+      <span class="shortcut"><kbd>?</kbd> Keyboard help</span>
     </div>
   </details>
 

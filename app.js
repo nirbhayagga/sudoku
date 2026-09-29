@@ -1,6 +1,7 @@
 import { renderResultSummary } from './result-view.js';
 import { createNavigation } from './navigation.js';
 import { createBoardCell } from './board-view.js';
+import { navigationCell, isRepeatedAction } from './keyboard.js';
 import { arrangePlayerControls } from './player-controls.js';
 import { createHintDiagram } from './hint-diagram.js';
 /**
@@ -362,6 +363,7 @@ function loadBank() {
 
     function onCellKeydown(e, idx) {
         if (e.isComposing) return;
+        if (isRepeatedAction(e)) { e.preventDefault(); return; }
         // Leave browser/OS shortcuts intact, including modified digits and paste.
         if (e.ctrlKey || e.metaKey || e.altKey) {
             const key = e.key.toLowerCase();
@@ -372,13 +374,17 @@ function loadBank() {
             }
             return;
         }
-        const row = Math.floor(idx / 9);
-        const col = idx % 9;
+        const next = navigationCell(e.key, idx, 9);
+        if (next !== null) {
+            e.preventDefault();
+            inputs[next].focus();
+            return;
+        }
         const isLocked = mode === 'play' && wrappers[idx].classList.contains('locked');
         if (gameWon && !isLocked && (/^[0-9]$/.test(e.key) || ['Backspace', 'Delete'].includes(e.key))) reopenCompletedGame();
 
-        // Arrow keys still navigate while paused; nothing may change the board.
-        if (isPlayBlocked() && !e.key.startsWith('Arrow') && !['Tab', 'Escape', 'p', 'P'].includes(e.key)) {
+        // Navigation, help and resuming still work while paused; editing cannot.
+        if (isPlayBlocked() && !['Tab', 'Escape', 'p', 'P', ' ', '?'].includes(e.key)) {
             e.preventDefault();
             return;
         }
@@ -390,10 +396,6 @@ function loadBank() {
         }
 
         switch (e.key) {
-            case 'ArrowUp': e.preventDefault(); if (row > 0) inputs[idx - 9].focus(); break;
-            case 'ArrowDown': e.preventDefault(); if (row < 8) inputs[idx + 9].focus(); break;
-            case 'ArrowLeft': e.preventDefault(); if (col > 0) inputs[idx - 1].focus(); break;
-            case 'ArrowRight': e.preventDefault(); if (col < 8) inputs[idx + 1].focus(); break;
             case 'Tab': break;
 
             case 'Backspace':
@@ -509,6 +511,7 @@ function loadBank() {
                 break;
 
             case 'p': case 'P':
+            case ' ':
                 if (mode === 'play') {
                     e.preventDefault();
                     setPaused(!timerPaused);
@@ -2594,8 +2597,13 @@ function loadBank() {
     }
 
     document.addEventListener('keydown', (e) => {
+        const formField = e.target.closest?.('input:not(.cell-input), textarea, select, [contenteditable]:not([contenteditable="false"])');
+        if (e.key === '?' && !e.ctrlKey && !e.metaKey && !e.altKey && !e.isComposing && !formField && !dialogs.isOpen()) {
+            e.preventDefault();
+            if (!e.repeat) showKeyboardHelp();
+            return;
+        }
         if (document.body.classList.contains('small-board-active')) return;
-        const formField = e.target.closest?.('input:not(.cell-input), textarea, select, [contenteditable="true"]');
         if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && !e.isComposing && e.key.toLowerCase() === 'i' && !formField && !dialogs.isOpen()) {
             e.preventDefault();
             openModal();
@@ -2603,6 +2611,19 @@ function loadBank() {
     });
 
     const shortcuts = document.querySelector('.shortcuts');
+    const keyboardHelp = document.getElementById('keyboard-help-overlay');
+    function showKeyboardHelp() {
+        const otherBoard = document.body.classList.contains('small-board-active');
+        const content = shortcuts.querySelector('.shortcuts-list').cloneNode(true);
+        if (otherBoard) content.querySelectorAll('[data-classic-only]').forEach(el => el.remove());
+        if (!otherBoard && mode === 'solver') content.querySelectorAll('[data-play-only]').forEach(el => el.remove());
+        content.querySelector('[data-shortcut="digits"] kbd:last-of-type').textContent = otherBoard ? boardSize.value : '9';
+        content.querySelector('[data-shortcut="enter"] span').textContent = !otherBoard && mode === 'solver' ? 'Solve' : 'Check / Clear errors';
+        document.getElementById('keyboard-help-content').replaceChildren(content);
+        dialogs.open(keyboardHelp);
+    }
+    document.getElementById('btn-keyboard-help-close').addEventListener('click', () => dialogs.close(keyboardHelp));
+    keyboardHelp.addEventListener('click', e => { if (e.target === keyboardHelp) dialogs.close(keyboardHelp); });
     shortcuts.open = store.getShortcutsOpen(!isTouchDevice);
     let shortcutsWereOpen = shortcuts.open;
     const renderShortcutSummary = () => { shortcuts.querySelector('summary').textContent = `${shortcuts.open ? 'Hide' : 'Show'} keyboard shortcuts`; };

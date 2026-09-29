@@ -1,7 +1,8 @@
 import { PRACTICE_BANK } from './practice-bank.js';
 import { prepareExercise, practiceIdentity } from './practice.js';
 import { applyDeduction } from './reasoning.js';
-import { createBoardCell, renderBoardCell, arrowCell } from './board-view.js';
+import { createBoardCell, renderBoardCell } from './board-view.js';
+import { navigationCell } from './keyboard.js';
 import { TECHNIQUE_LESSONS, patternCells, checkPracticePattern, practiceFeedback } from './practice-coach.js';
 import { practiceHistory, recordPractice } from './learning-history.js';
 import { cellName } from './techniques.js';
@@ -17,7 +18,7 @@ export function createPracticeApp(root, { transfer = () => {} } = {}) {
       <div class="modal-actions"><button class="btn" id="practice-back">Previous step</button><button class="btn" id="practice-forward">Next step</button><button class="btn" id="practice-explain">Show region</button><button class="btn" id="practice-before" hidden>Show before</button></div>
       <p id="practice-proof" hidden></p></div></div>
       <div class="modal-actions"><button class="btn" id="practice-next">Next exercise</button><button class="btn" id="practice-review">Review assisted exercises</button><button class="btn" id="practice-transfer">Play the full source puzzle</button></div>
-      <details class="practice-about"><summary>About these lessons</summary><p>Four verified examples per technique. “Practised” records attempts, not mastery. Candidate marks include preceding verified deductions. An independent result means a correct challenge without guidance or incorrect attempts. Arrow keys select cells; digits answer. In the guided pattern stage, Space selects a cell and digits toggle the pattern digits. The full source puzzle starts from its original givens, before the earlier deductions that lead to this example.</p></details>`;
+      <details class="practice-about"><summary>About these lessons</summary><p>Four verified examples per technique. “Practised” records attempts, not mastery. Candidate marks include preceding verified deductions. An independent result means a correct challenge without guidance or incorrect attempts. Arrow keys select cells without wrapping; Home/End select the first/last cell in the row; digits answer. In the guided pattern stage, Space selects a cell and digits toggle the pattern digits. The full source puzzle starts from its original givens, before the earlier deductions that lead to this example.</p></details>`;
     const $ = id => root.querySelector(`#practice-${id}`), label = type => type.replaceAll('-', ' ');
     let position = 0, prepared, exercise, selected = null, completed = false, page = 0, guidance = 0, patternDone = false, before = false, incorrect = 0, after;
     const chosenCells = new Set(), chosenDigits = new Set(), views = [];
@@ -121,7 +122,7 @@ export function createPracticeApp(root, { transfer = () => {} } = {}) {
     };
     $('grid').addEventListener('keydown', e => {
         if (e.altKey || e.ctrlKey || e.metaKey || e.isComposing) return;
-        const cell = selected ?? Number(e.target.closest('[data-cell]')?.dataset.cell || 0), next = arrowCell(e.key, cell, 9);
+        const cell = selected ?? Number(e.target.closest('[data-cell]')?.dataset.cell || 0), next = navigationCell(e.key, cell, 9);
         if (next !== null) { e.preventDefault(); chooseCell(next); views[next].cell.focus({ preventScroll: true }); }
         else if (/^[1-9]$/.test(e.key)) { e.preventDefault(); answer(e.key); }
     });

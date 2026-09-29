@@ -1663,6 +1663,21 @@ body::before {
     gap: 0.3rem;
 }
 
+#keyboard-help-content {
+    margin-bottom: 1rem;
+}
+
+#keyboard-help-content .shortcuts-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    justify-items: start;
+}
+
+#keyboard-help-content .shortcut {
+    font-size: 0.875rem;
+    flex-wrap: wrap;
+}
+
 kbd {
     display: inline-block;
     padding: 0.12rem 0.35rem;
