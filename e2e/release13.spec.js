@@ -54,6 +54,7 @@ test('practice teaches a verified deduction in a keyboard-accessible dialog', as
 });
 
 for (const rule of ['diagonal','hyper']) test(`${rule} keeps its constraints through import, notes, sharing and print`, async ({page}, info) => {
+    await page.addInitScript(() => Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async () => { throw new Error('Clipboard unavailable'); } } }));
     await page.goto('/'); await chooseBoard(page, rule);
     await expect(page.locator('.small-cell')).toHaveCount(81);
     await expect(page.locator('#small-rules')).toContainText(rule === 'diagonal' ? 'diagonals' : 'four shaded');
@@ -64,6 +65,9 @@ for (const rule of ['diagonal','hyper']) test(`${rule} keeps its constraints thr
     await page.locator('#small-import').click(); await expect(page.locator('#small-status')).toContainText('Imported puzzle.');
     await page.locator('#small-share').click(); const link=await page.locator('#small-text').inputValue();
     expect(new URL(link).searchParams.get('rule')).toBe(rule);
+    await expect(page.locator('#small-tool-status')).toHaveText('Copy the puzzle link below.');
+    await expect(page.locator('#share-overlay')).not.toHaveClass(/active/);
+    await expect(page.locator('#small-text')).toBeVisible();
     await page.locator('[data-tool="print"]').click();
     await page.locator('#small-print').click();
     await expect(page.frameLocator('.small-print-frame').locator('body')).toContainText(rule === 'diagonal' ? 'Diagonal' : 'Hyper');

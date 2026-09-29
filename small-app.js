@@ -315,18 +315,20 @@ export function createSmallApp(root, { openNewGame, openTools, showResult, showS
     const source = () => state[$('source').value === 'board' ? 'board' : 'puzzle'];
     $('export').onclick = () => { $('text').value = formatSizedPuzzle(source(), g, $('format').value); message('Puzzle exported below.'); };
     $('copy').onclick = async () => { message(await copyToClipboard($('text').value) ? 'Copied.' : 'Select and copy the text below.'); };
-    async function sharePuzzle() {
+    async function sharePuzzle({ inline = false } = {}) {
         const link = sizedLink(location.href, state.puzzle, g);
         $('text').value = link;
         if (await copyToClipboard(link)) message('Puzzle link copied.');
         else {
             message('Copy the puzzle link below.');
-            if (showShareLink) showShareLink(link);
-            else { openTools?.(); toolContent.hidden = false; toolContent.open = true; toolContent.querySelector('[data-tool="text"]').click(); }
+            if (!inline) {
+                if (showShareLink) showShareLink(link);
+                else { openTools?.(); toolContent.hidden = false; toolContent.open = true; toolContent.querySelector('[data-tool="text"]').click(); }
+            }
         }
     }
-    $('share').onclick = sharePuzzle;
-    $('pause-share').onclick = sharePuzzle;
+    $('share').onclick = () => sharePuzzle({ inline: true });
+    $('pause-share').onclick = () => sharePuzzle();
     function download(blob, name) { const url = URL.createObjectURL(blob), a = document.createElement('a'); a.href = url; a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(url), 10000); }
     $('png').onclick = async () => { try { download(await sizedPng(source(), g, document), `sudoku-${g.size}x${g.size}.png`); } catch (e) { message(e.message); } };
     $('backup').onclick = async () => { try { settle(); if (!saveSmallData(track, state)) throw new Error('Could not save the current game.'); const { exportCompleteBackup } = await import('./complete-backup.js'); download(new Blob([exportCompleteBackup()], { type: 'application/json' }), 'sudoku-backup.json'); } catch (e) { message(e.message); } };

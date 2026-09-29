@@ -41,7 +41,8 @@ test('returning from Solver continues the saved Classic game after a reload', as
     await expect(page.locator('#pause-panel')).toBeHidden();
 });
 
-test('Classic pause exposes sharing and export without losing progress', async ({ page }, info) => {
+test('Classic pause exposes sharing and export without losing progress', async ({ page, browserName }, info) => {
+    test.slow(browserName === 'webkit', 'Several touch dialogs and a full-page screenshot take longer on WebKit.');
     await page.setViewportSize({ width: 375, height: 664 });
     await page.addInitScript(failClipboard);
     await page.goto('/'); await chooseBoard(page, 'classic'); await classicReady(page);

@@ -26,7 +26,9 @@ test('plays, pauses, restores notes and resumes each board size separately', asy
     await expect(page.locator(`.small-cell[data-cell="${cell}"]`)).toHaveText(answer[cell]);
 });
 
-test('imports, completes, exports, shares and undoes a small puzzle', async ({page}, info) => {
+test('imports, completes, exports, shares and undoes a small puzzle', async ({page, browserName}, info) => {
+    test.slow(browserName === 'webkit', 'The full import, completion, export and print workflow takes longer on WebKit.');
+    await page.addInitScript(() => Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async () => { throw new Error('Clipboard unavailable'); } } }));
     const p=SMALL_BANK[4][0].puzzle, answer=solveSized(p,SMALL_GEOMETRIES[4]).solutions[0];
     await page.goto(`/?size=4&box=2x2&p=${p}`);
     await expect(page.locator('.small-cell')).toHaveCount(16);
@@ -48,6 +50,9 @@ test('imports, completes, exports, shares and undoes a small puzzle', async ({pa
     await (await downloaded).saveAs(`e2e-results/small-${info.project.name}.png`);
     await page.locator('#small-share').click();
     const link=await page.locator('#small-text').inputValue(); expect(new URL(link).searchParams.get('p')).toBe(p);
+    await expect(page.locator('#small-tool-status')).toHaveText('Copy the puzzle link below.');
+    await expect(page.locator('#share-overlay')).not.toHaveClass(/active/);
+    await expect(page.locator('#small-text')).toBeVisible();
     await page.locator('[data-tool="print"]').click();
     await page.locator('#small-print-source').selectOption('consecutive');
     await page.locator('#small-print-unit').selectOption('pages');
