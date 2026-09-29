@@ -1,7 +1,9 @@
 # Controls and sharing
 
-**New game** opens the puzzle chooser. Classic provides difficulty, level, random,
-progression and date-derived daily choices. Quick 6×6, Diagonal and Hyper provide
+**New game** opens the puzzle chooser. In Solver, **Back to game** resumes your
+saved Classic game or opens the chooser if there is no game to resume. The return
+button is hidden during play; use **Resume** to continue a paused game. Classic
+provides difficulty, level, random, progression and date-derived daily choices. Quick 6×6, Diagonal and Hyper provide
 numbered, random and progression games. **Learn** holds the 4×4 introduction and
 technique lessons; **Tools** holds the Classic solver, generator and backup. A daily
 key represents a local calendar date. Scores from all levels in a difficulty
@@ -11,6 +13,8 @@ On desktop, select a cell and type. Touch devices use the on-screen numpad.
 On touch, the manual Notes toggle lives beside Erase. **Notes options** explains
 one-time Fill notes and live Auto-notes. Undo/Redo, Check and Hint stay nearby.
 Pause sits beside the timer; **Puzzle tools** groups export, sharing and reset.
+**Share puzzle** is also directly available while paused and on completion.
+Sharing copies a link to the original puzzle and keeps your local progress.
 Shortcuts are shown by default on keyboard devices and collapsed on touch.
 Show/Hide remembers your choice. Board shortcuts apply with a grid cell focused;
 form fields keep their normal editing behavior. Ctrl shortcuts also accept Cmd
@@ -80,8 +84,8 @@ format avoids space-based alignment, but fonts and narrow message bubbles can
 still change its layout. **Save PNG image** gives a fixed grid for messaging;
 use Print / Save PDF for paper or a document.
 
-Open **Export → Print / save PDF** to print the selected board, or choose a bank
-worksheet from one difficulty. Select **Random, without repeats** or
+Open **Export & print → Print / Save PDF** to print the selected board, or choose
+a bank worksheet from one difficulty. Select **Random, without repeats** or
 **Consecutive levels** beginning at a chosen level. Consecutive follows bank
 positions; it is not a promise of steadily increasing difficulty. Ranges stop
 at the end of the tier, so an oversized request is rejected rather than wrapping.
@@ -111,16 +115,16 @@ Generation stays on your device and can be cancelled. When the budget ends
 without meeting the target, the closest unique puzzle is clearly labelled.
 A timeout does not claim success.
 
-The preview does not replace your board. Choose **Play puzzle**, **Export**, or
-**Print / Save PDF** when ready. Generated puzzles play in the Imported category,
+The preview does not replace your board. Choose **Play puzzle**, **Export & print**,
+or **Print / Save PDF** when ready. Generated puzzles play in the Imported category,
 with normal saves, notes, hints and sharing; they do not submit bank scores.
 
 ## After completion
 
 The result identifies the difficulty, level or generated puzzle, daily date when
 applicable, time, hints, mistakes, clue count, and generated-notes usage. Share and
-Export remain available. **Review puzzle** returns to the board; **Results** opens
-the recorded result again. Undo, edit, and re-solve without recording another win
+**Export & print** remain available. **Review puzzle** returns to the board;
+**Results** opens the recorded result again. Undo, edit, and re-solve without recording another win
 or replacing the original score. The review clock stays stopped. Review edits can
 be saved and resumed in this browser; completed reviews do not support handoff.
 Reset explicitly starts a new attempt with fresh statistics and a running clock.

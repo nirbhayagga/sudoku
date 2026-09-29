@@ -18,10 +18,11 @@ import { formatTime } from './format.js';
 import { planWorksheet } from './printing.js';
 import { fitToViewport } from './layout.js';
 
-export function createSmallApp(root, { openNewGame, openTools, showResult, openStats } = {}) {
+export function createSmallApp(root, { openNewGame, openTools, showResult, showShareLink, openStats } = {}) {
     root.innerHTML = `<div class="small-heading"><h2 id="small-title"></h2><span id="small-clock"></span></div>
       <div class="small-game-summary"><p id="small-identity"></p>
       <button class="btn" id="small-setup-toggle" aria-expanded="false" aria-controls="small-setup-options">Game setup…</button></div>
+      <div id="small-pause-actions" class="modal-actions" hidden><button class="btn" id="small-pause-share">Share puzzle</button></div>
       <div id="small-setup-options" hidden>
         <p id="small-rules"></p><p id="small-progress"></p>
         <div class="small-setup"><label>Challenge <input id="small-level" type="number" min="1" value="1"></label>
@@ -200,6 +201,7 @@ export function createSmallApp(root, { openNewGame, openTools, showResult, openS
         }
         $('notes').setAttribute('aria-pressed', String(notes)); $('auto').setAttribute('aria-pressed', String(state.auto));
         $('pause').textContent = paused ? 'Resume' : 'Pause';
+        $('pause-actions').hidden = !paused;
         resultButton.hidden = !state.completion;
         $('next').hidden = g.size !== 4 && !state.completion;
         $('next').textContent = g.size === 4 ? 'Next example' : state.progression ? 'Continue progression' : 'Next puzzle';
@@ -313,7 +315,18 @@ export function createSmallApp(root, { openNewGame, openTools, showResult, openS
     const source = () => state[$('source').value === 'board' ? 'board' : 'puzzle'];
     $('export').onclick = () => { $('text').value = formatSizedPuzzle(source(), g, $('format').value); message('Puzzle exported below.'); };
     $('copy').onclick = async () => { message(await copyToClipboard($('text').value) ? 'Copied.' : 'Select and copy the text below.'); };
-    $('share').onclick = async () => { const link = sizedLink(location.href, state.puzzle, g); $('text').value = link; message(await copyToClipboard(link) ? 'Puzzle link copied.' : 'Copy the puzzle link below.'); };
+    async function sharePuzzle() {
+        const link = sizedLink(location.href, state.puzzle, g);
+        $('text').value = link;
+        if (await copyToClipboard(link)) message('Puzzle link copied.');
+        else {
+            message('Copy the puzzle link below.');
+            if (showShareLink) showShareLink(link);
+            else { openTools?.(); toolContent.hidden = false; toolContent.open = true; toolContent.querySelector('[data-tool="text"]').click(); }
+        }
+    }
+    $('share').onclick = sharePuzzle;
+    $('pause-share').onclick = sharePuzzle;
     function download(blob, name) { const url = URL.createObjectURL(blob), a = document.createElement('a'); a.href = url; a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(url), 10000); }
     $('png').onclick = async () => { try { download(await sizedPng(source(), g, document), `sudoku-${g.size}x${g.size}.png`); } catch (e) { message(e.message); } };
     $('backup').onclick = async () => { try { settle(); if (!saveSmallData(track, state)) throw new Error('Could not save the current game.'); const { exportCompleteBackup } = await import('./complete-backup.js'); download(new Blob([exportCompleteBackup()], { type: 'application/json' }), 'sudoku-backup.json'); } catch (e) { message(e.message); } };
@@ -387,6 +400,7 @@ export function createSmallApp(root, { openNewGame, openTools, showResult, openS
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flush(); });
     return {
         refreshLayout,
+        share: sharePuzzle,
         flush() { settle(); if (state && !handedOff && !saveSmallData(track, state)) throw new Error('Could not save the current board.'); },
         discard() { active = false; state = null; cancelWork(); },
         identity() { return `${g.size}×${g.size} ${RULE_LABELS[g.rule]} · ${$('identity').textContent}`; },

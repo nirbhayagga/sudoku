@@ -23,8 +23,9 @@ export function createNavigation({ dialogs, classic, other, pause, resume, curre
     const puzzleTools = overlay('puzzle-tools-overlay', 'Puzzle tools', `<p id="puzzle-tools-context"></p><div class="activity-list" id="classic-puzzle-tools"></div><div id="other-puzzle-tools" hidden></div>`);
     const practiceButton = $('btn-practice');
     $('learn-techniques').replaceWith(practiceButton); practiceButton.textContent = 'Technique lessons & practice';
-    const results = overlay('other-result-overlay', 'Puzzle complete', `<p id="other-result-identity"></p><p id="other-result-details"></p><p>Review or undo freely. Your original completion time and statistics stay recorded.</p><div class="modal-actions"><button class="btn" id="other-result-review">Review puzzle</button><button class="btn" id="other-result-tools">Share, export & print</button><button class="btn btn-primary" id="other-result-new">New game</button></div>`);
+    const results = overlay('other-result-overlay', 'Puzzle complete', `<p id="other-result-identity"></p><p id="other-result-details"></p><p>Review or undo freely. Your original completion time and statistics stay recorded.</p><div class="modal-actions"><button class="btn" id="other-result-review">Review puzzle</button><button class="btn" id="other-result-share">Share puzzle</button><button class="btn" id="other-result-tools">Export &amp; print</button><button class="btn btn-primary" id="other-result-new">New game</button></div>`);
     $('other-result-review').onclick = () => dialogs.close(results);
+    $('other-result-share').onclick = () => { dialogs.close(results); return other.share(); };
     $('other-result-tools').onclick = openPuzzleTools;
     $('other-result-new').onclick = openNewGame;
     function showResult(result) {
@@ -34,6 +35,7 @@ export function createNavigation({ dialogs, classic, other, pause, resume, curre
     const nav = document.querySelector('.mode-navigation');
     $('mode-indicator').hidden = true;
     const play = $('tab-play'); play.classList.add('btn');
+    play.title = 'Return to your Classic game or choose a puzzle';
     nav.replaceChildren(play);
     function button(label, action, parent, id) {
         const b = document.createElement('button'); b.type = 'button'; b.className = 'btn'; b.textContent = label;

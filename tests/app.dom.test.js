@@ -71,6 +71,57 @@ describe('initial render', () => {
 });
 
 describe('mode switching', () => {
+    it('uses New game in Play and Back to game only in Solver', () => {
+        expect(app.$('#tab-play').hidden).toBe(true);
+        app.click('#tab-solver');
+        expect(app.$('#tab-play').hidden).toBe(false);
+        expect(app.$('#tab-play').textContent).toBe('Back to game');
+        app.click('#tab-play');
+        expect(app.$('#tab-play').hidden).toBe(true);
+        expect(app.$('#new-game-overlay').classList.contains('active')).toBe(true);
+    });
+
+    it('shares from pause without discarding the saved game', async () => {
+        await startGame(app);
+        const cell = EASY_PUZZLE.indexOf('0');
+        app.type(cell, EASY_SOLUTION[cell]);
+        app.click('#btn-pause');
+        const board = app.readGrid();
+        app.click('#btn-pause-share');
+        await app.tick(0);
+        expect(app.$('#share-overlay').classList.contains('active')).toBe(true);
+        expect(app.$('#share-text').value).toContain('level=1');
+        expect(app.readGrid()).toBe(board);
+        expect(app.$('#pause-panel').hidden).toBe(false);
+    });
+
+    it('continues the saved Classic game when returning from Solver', async () => {
+        await startGame(app);
+        const cell = EASY_PUZZLE.indexOf('0');
+        app.type(cell, EASY_SOLUTION[cell]);
+        const board = app.readGrid();
+        app.click('#nav-tools');
+        expect(app.$('#pause-panel').hidden).toBe(false);
+        app.click('#tab-solver');
+        expect(app.$('#pause-panel').hidden).toBe(true);
+        app.click('#tab-play');
+        expect(app.$('#pause-panel').hidden).toBe(true);
+        expect(app.$('#btn-pause').textContent).toBe('Pause');
+        expect(app.readGrid()).toBe(board);
+        expect(app.$('.resume-banner')).toBeNull();
+        expect(app.$('#status').textContent).toContain('Resumed:');
+    });
+
+    it('clears pause state when starting another Classic game', async () => {
+        await startGame(app);
+        app.click('#btn-pause');
+        expect(app.$('#pause-panel').hidden).toBe(false);
+        await startGame(app, 'easy', 2);
+        expect(app.$('#pause-panel').hidden).toBe(true);
+        expect(app.$('#grid').classList.contains('paused')).toBe(false);
+        expect(app.$('#btn-pause').textContent).toBe('Pause');
+    });
+
     it('shows solver controls in solver mode', () => {
         app.click('#tab-solver');
         expect(app.$('#solver-controls').style.display).not.toBe('none');

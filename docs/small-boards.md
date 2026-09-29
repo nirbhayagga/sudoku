@@ -63,7 +63,7 @@ Using Fill notes or Auto-notes marks assistance even after undo. Older saves
 preserve their saved counters; missing historical note assistance is labelled
 unknown rather than reconstructed.
 
-Play, Learn and Tools remain accessible. Lessons pause this game and return to
+**New game**, **Learn** and **Tools** remain accessible. Lessons pause this game and return to
 it; Tools → Classic 9×9 solver keeps this game saved under its own
 size and rules. Variant boards are never passed to the Classic solver.
 

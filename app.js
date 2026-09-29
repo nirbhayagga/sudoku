@@ -2157,8 +2157,7 @@ function loadBank() {
         timerBaseSeconds = fromSeconds;
         timerSegmentStart = Date.now();
         timerPaused = false;
-        gameTimerEl.classList.remove('paused');
-        gridEl.classList.remove('paused');
+        renderPauseState();
         renderTimer();
         // Twice a second, so a tab returning from the background corrects its
         // display promptly instead of showing a stale value for up to a second.
@@ -2183,16 +2182,20 @@ function loadBank() {
         pausePanel.style.height = `${gridEl.offsetHeight}px`;
     }
 
+    function renderPauseState() {
+        gameTimerEl.classList.toggle('paused', timerPaused);
+        gridEl.classList.toggle('paused', timerPaused);
+        if (btnPause) btnPause.textContent = timerPaused ? 'Resume' : 'Pause';
+        if (pausePanel) {
+            pausePanel.hidden = !timerPaused;
+            positionPausePanel();
+        }
+    }
+
     function setPaused(paused) {
         if (!gameActive || gameWon || paused === timerPaused) return;
         timerPaused = paused;
-        gameTimerEl.classList.toggle('paused', paused);
-        gridEl.classList.toggle('paused', paused);
-        if (btnPause) btnPause.textContent = paused ? 'Resume' : 'Pause';
-        if (pausePanel) {
-            pausePanel.hidden = !paused;
-            positionPausePanel();
-        }
+        renderPauseState();
         if (paused) {
             // Time stops accruing; the interval keeps running but renders the
             // frozen total.
@@ -2509,6 +2512,8 @@ function loadBank() {
 
         mode = newMode;
         stopTimer();
+        timerPaused = false;
+        renderPauseState();
         clearGrid();
         gameActive = false;
         gameWon = false;
@@ -2520,6 +2525,7 @@ function loadBank() {
 
         tabSolver.classList.toggle('active', mode === 'solver');
         tabPlay.classList.toggle('active', mode === 'play');
+        tabPlay.hidden = mode === 'play';
         tabPlay.setAttribute('aria-pressed', String(mode === 'play'));
         tabSolver.setAttribute('aria-pressed', String(mode === 'solver'));
         modeIndicator.classList.toggle('solver', mode === 'solver');
@@ -2633,7 +2639,7 @@ function loadBank() {
         try {
             const { createSmallApp } = await import('./small-app.js');
             if (request !== sizeRequest) return;
-            smallApp ||= createSmallApp(document.getElementById('small-app'), { openNewGame: () => navigation.openNewGame(), openTools: () => navigation.openPuzzleTools(), showResult: result => navigation.showResult(result), openStats });
+            smallApp ||= createSmallApp(document.getElementById('small-app'), { openNewGame: () => navigation.openNewGame(), openTools: () => navigation.openPuzzleTools(), showResult: result => navigation.showResult(result), showShareLink: link => showLinkDialog(link, { title: 'Share this puzzle', hint: 'Copy the link below.' }), openStats });
             document.body.classList.add('small-board-active');
             document.getElementById('small-app').hidden = false;
             document.getElementById('board-rules-control').hidden = true;
@@ -2673,7 +2679,16 @@ function loadBank() {
             setStatus('Classic 9×9 solver. Your other game is saved; choose its size and rules to resume.');
         }
     });
-    tabPlay.addEventListener('click', () => switchMode('play'));
+    tabPlay.addEventListener('click', () => {
+        switchMode('play');
+        if (gameActive) {
+            setPaused(false);
+            return;
+        }
+        const saved = store.loadSavedGame();
+        if (saved) resumeGame(saved);
+        else navigation.openNewGame();
+    });
 
     btnSolve.addEventListener('click', solve);
     btnExample.addEventListener('click', loadSolverExample);
@@ -2685,6 +2700,7 @@ function loadBank() {
     document.querySelector('.print-options').addEventListener('input', updatePrintOptions);
     document.querySelector('.print-options').addEventListener('change', updatePrintOptions);
     if (btnPauseExport) btnPauseExport.addEventListener('click', openExportDialog);
+    document.getElementById('btn-pause-share').addEventListener('click', shareCurrentPuzzle);
     document.getElementById('btn-win-export').addEventListener('click', openExportDialog);
     document.getElementById('btn-win-share').addEventListener('click', async () => {
         dialogs.close(winOverlay);
@@ -3203,6 +3219,7 @@ function loadBank() {
         },
         other: {
             tools: host => smallApp.openTools(host),
+            share: () => smallApp.share(),
             start: async (kind, selection, level) => {
                 const size = kind === '6' ? '6' : '9'; boardSize.value = size;
                 await changeBoardSize(size, null, kind === '6' ? 'classic' : kind);

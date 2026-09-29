@@ -52,7 +52,8 @@ test('shared-puzzle startup stays stable while the bank is delayed', async ({ pa
     await expect(page.locator('.cell-wrapper.locked').first()).toBeVisible();
     await expect(page.locator('#btn-hint')).toBeVisible();
     await expect(page.locator('#theme-toggle')).toBeVisible();
-    await expect(page.locator('#tab-play')).toBeVisible();
+    await expect(page.locator('#tab-play')).toBeHidden();
+    await expect(page.locator('#nav-new-game')).toBeVisible();
     await expect(page.locator('#loading-status')).toHaveCount(0);
 });
 

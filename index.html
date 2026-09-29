@@ -117,7 +117,7 @@
   </label>
   <div class="mode-navigation">
   <div class="mode-toggle" id="mode-toggle">
-    <button class="mode-tab active" data-mode="play" id="tab-play">Play</button>
+    <button class="mode-tab active" data-mode="play" id="tab-play" hidden>Back to game</button>
     <button class="mode-tab" data-mode="solver" id="tab-solver" title="Classic 9×9 solver">Solver</button>
     <div class="mode-indicator" id="mode-indicator"></div>
   </div>
@@ -134,11 +134,12 @@
       <div class="pause-card">
         <p class="pause-title">Paused</p>
         <button class="btn btn-primary" id="btn-pause-resume">Resume</button>
+        <button class="btn" id="btn-pause-share">Share puzzle</button>
         <button class="btn" id="btn-handoff" title="Copy a link that resumes this game, clock and all, on another device">
           Continue on another device
         </button>
-        <button class="btn" id="btn-pause-export" title="Copy this puzzle as text to paste into another solver">
-          Export puzzle
+        <button class="btn" id="btn-pause-export" title="Export puzzle text, save an image or print a worksheet">
+          Export &amp; print
         </button>
       </div>
     </div>
@@ -148,7 +149,7 @@
       <button class="btn btn-primary" id="btn-solve" title="Solve (Enter)">Solve</button>
       <button class="btn" id="btn-example" title="Load example puzzle">Example</button>
       <button class="btn" id="btn-paste" title="Import from text (Ctrl/Cmd+I)">Import</button>
-      <button class="btn" id="btn-export" title="Copy the grid as text">Export</button>
+      <button class="btn" id="btn-export" title="Export puzzle text, save an image or print a worksheet">Export &amp; print</button>
       <button class="btn" id="btn-generate">Generate</button>
       <button class="btn btn-danger" id="btn-clear" title="Clear the grid">Clear</button>
     </div>
@@ -320,7 +321,7 @@
           <p id="generator-settings"></p>
         </details>
         <div class="modal-actions">
-          <button class="btn" id="btn-generator-export">Export</button>
+          <button class="btn" id="btn-generator-export">Export &amp; print</button>
           <button class="btn" id="btn-generator-print">Print / Save PDF</button>
           <button class="btn btn-primary" id="btn-generator-play">Play puzzle</button>
         </div>
@@ -332,7 +333,7 @@
   <!-- Export Modal -->
   <div class="modal-overlay" id="export-overlay">
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="export-title">
-      <div class="modal-header"><h2 id="export-title">Export Puzzle</h2><button class="btn" id="btn-export-close">Close</button></div>
+      <div class="modal-header"><h2 id="export-title">Export &amp; print</h2><button class="btn" id="btn-export-close">Close</button></div>
       <div class="modal-body">
       <div class="export-options">
         <label for="export-source" id="export-source-label">Board:</label>
@@ -410,7 +411,7 @@
       </div>
       <div class="modal-actions">
         <button class="btn" id="btn-win-share">Share puzzle</button>
-        <button class="btn" id="btn-win-export">Export</button>
+        <button class="btn" id="btn-win-export">Export &amp; print</button>
         <button class="btn" id="btn-win-review">Review puzzle</button>
         <button class="btn btn-primary" id="btn-win-next" hidden>Next progression puzzle</button>
         <button class="btn btn-primary" id="btn-win-new">New Game</button>

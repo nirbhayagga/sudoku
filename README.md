@@ -38,7 +38,7 @@ it contains separate CSS, fonts, icons, and license files alongside the script.
 
 ## Play and solve
 
-**Play** keeps Classic 9×9 as the default. **New game** offers Classic,
+Classic 9×9 remains the default. **New game** offers Classic,
 Diagonal, Hyper and a **Quick 6×6** puzzle. Daily, numbered, random and
 self-paced progression choices appear where supported. Diagonal and Hyper each
 have 24 curated puzzles; Quick has 120. **Learn** includes a short 4×4
